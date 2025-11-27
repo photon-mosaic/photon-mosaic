@@ -1,0 +1,40 @@
+[project]
+name = "photon-mosaic"
+version = "0.1.0"
+
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "roiextractors",
+    "pytest>=8.3.5",
+    "ruff>=0.9.9",
+    "tifffile",
+    "natsort",
+    "spikeinterface @ git+https://github.com/alejoe91/spikeinterface.git@31c713065b63da1127762146061ad6d59a151281"
+]
+
+[project.optional-dependencies]
+docs = [
+    'Sphinx',
+    'sphinx-jinja',
+    'furo',
+    'docutils'
+]
+
+full = [
+    "scikit-image",
+    "suite2p"
+]
+
+widgets = [
+    "ipywidgets>=8.0.0",
+    "matplotlib>=3.5.0",
+    "ipympl"
+]
+
+
+[tool.pytest.ini_options]
+pythonpath = ["src", "tests"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
