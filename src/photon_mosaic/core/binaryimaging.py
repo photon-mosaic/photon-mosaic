@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from .baseimaging import BaseImaging, BaseImagingSegment
-from .imaging_tools import write_binary_imaging
+from spikeinterface.core import write_binary
 from spikeinterface.core.job_tools import _shared_job_kwargs_doc
 
 
@@ -96,7 +96,7 @@ class BinaryImaging(BaseImaging):
             Type of the saved data
         {}
         """
-        write_binary_imaging(imaging, file_paths=file_paths, dtype=dtype, **job_kwargs)
+        write_binary(imaging, file_paths=file_paths, dtype=dtype, **job_kwargs)
 
     def is_binary_compatible(self) -> bool:
         return True
@@ -118,7 +118,7 @@ class BinaryImaging(BaseImaging):
         """
         # Close all recording segments
         if hasattr(self, "_recording_segments"):
-            for segment in self._imaging_segments:
+            for segment in self.segments:
                 # This will trigger the __del__ method of the BinaryRecordingSegment
                 # which will close the file handle
                 del segment

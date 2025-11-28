@@ -6,7 +6,7 @@ class MedianFilterImaging(BasePreprocessor):
     def __init__(self, imaging, size: int, **kwargs):
 
         BasePreprocessor.__init__(self, imaging)
-        for parent_segment in imaging._imaging_segments:
+        for parent_segment in imaging.segments:
             segment = MedianFilterImagingSegment(parent_segment, size)
             self.add_imaging_segment(segment)
 

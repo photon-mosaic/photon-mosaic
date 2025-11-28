@@ -6,15 +6,16 @@ import warnings
 
 
 from roiextractors.core_utils import _convert_bytes_to_str, _convert_seconds_to_str
-from spikeinterface.core.base import BaseExtractor, BaseSegment
+from spikeinterface.core.chunkable_tools import write_binary, get_chunks
+from spikeinterface.core.base import BaseExtractor, BaseSegment, ChunkableMixin
 
-from .imaging_tools import write_binary_imaging, get_random_data_chunks
+# from .imaging_tools import write_binary_imaging, get_random_data_chunks
 
 # TODO: frames instead of samples
 # TODO: epoch instead of segment (segmentation is another thing)
 
 
-class BaseImaging(BaseExtractor):
+class BaseImaging(BaseExtractor, ChunkableMixin):
     """Base class for imaging extractors."""
 
     def __init__(self, sampling_frequency: float, shape: tuple | list | np.ndarray, channel_ids: list | None = None):
@@ -24,7 +25,6 @@ class BaseImaging(BaseExtractor):
         self._sampling_frequency = float(sampling_frequency)
         assert len(shape) == 2, "Shape must be a tuple/list/array of length 2 (height, width)"
         self._image_shape = np.array(shape)
-        self._imaging_segments: list[BaseImagingSegment] = []
         self._average_image = None
 
     def _repr_header(self, display_name=True):
@@ -127,6 +127,27 @@ class BaseImaging(BaseExtractor):
     def get_sample_size_in_bytes(self):
         return self.get_num_pixels() * np.dtype(self.get_dtype()).itemsize
 
+    def get_shape(self, segment_index: int | None = None) -> tuple:
+        """Get the shape of the imaging data as (num_samples, height, width).
+
+        Parameters
+        ----------
+        segment_index : int | None
+            The index of the imaging segment. If None and there is only one segment, it defaults to 0.
+
+        Returns
+        -------
+        tuple
+            The shape of the imaging data as (num_samples, height, width).
+        """
+        if segment_index is None:
+            if self.get_num_segments() == 1:
+                segment_index = 0
+            else:
+                raise ValueError("segment_index must be provided for multi-segment imaging data.")
+        num_samples = self.get_num_samples(segment_index=segment_index)
+        return (num_samples, *self.image_shape)
+
     @property
     def sampling_frequency(self):
         return self._sampling_frequency
@@ -150,7 +171,7 @@ class BaseImaging(BaseExtractor):
                 segment_index = 0
             else:
                 raise ValueError("segment_index must be provided for multi-segment imaging data.")
-        return self._imaging_segments[segment_index].get_num_samples()
+        return self.segments[segment_index].get_num_samples()
 
     def get_num_frames(self, segment_index: int | None = None) -> int:
         """Get the total number of frames in the imaging data.
@@ -173,7 +194,7 @@ class BaseImaging(BaseExtractor):
         int
             The number of imaging segments.
         """
-        return len(self._imaging_segments)
+        return len(self.segments)
 
     def get_dtype(self) -> DTypeLike:
         """Get the data type of the video.
@@ -217,7 +238,7 @@ class BaseImaging(BaseExtractor):
                 raise ValueError("segment_index must be provided for multi-segment imaging data.")
         start_frame = start_frame if start_frame is not None else 0
         end_frame = end_frame if end_frame is not None else self.get_num_samples(segment_index=segment_index)
-        return self._imaging_segments[segment_index].get_series(start_frame, end_frame)
+        return self.segments[segment_index].get_series(start_frame, end_frame)
 
     def get_average_image(
         self,
@@ -229,7 +250,7 @@ class BaseImaging(BaseExtractor):
         if self._average_image is not None and not recompute:
             return self._average_image
         else:
-            data = get_random_data_chunks(
+            data = get_chunks(
                 self,
                 num_chunks_per_segment=num_chunks,
                 chunk_duration=chunk_duration,
@@ -247,7 +268,7 @@ class BaseImaging(BaseExtractor):
         imaging_segment : BaseImagingSegment
             The imaging segment to add.
         """
-        self._imaging_segments.append(imaging_segment)
+        self.segments.append(imaging_segment)
         imaging_segment.set_parent_extractor(self)
 
     def get_times(self, segment_index: int | None = None) -> np.ndarray:
@@ -268,7 +289,7 @@ class BaseImaging(BaseExtractor):
                 segment_index = 0
             else:
                 raise ValueError("segment_index must be provided for multi-segment imaging data.")
-        return self._imaging_segments[segment_index].get_times()
+        return self.segments[segment_index].get_times()
 
     def set_times(self, times: ArrayLike, segment_index: int | None = None):
         """Set the timestamps for each frame in the imaging data.
@@ -285,7 +306,7 @@ class BaseImaging(BaseExtractor):
                 segment_index = 0
             else:
                 raise ValueError("segment_index must be provided for multi-segment imaging data.")
-        self._imaging_segments[segment_index].time_vector = np.asarray(times)
+        self.segments[segment_index].time_vector = np.asarray(times)
 
     def get_start_time(self, segment_index=None) -> float:
         """Get the start time of the recording segment.
@@ -301,7 +322,7 @@ class BaseImaging(BaseExtractor):
             The start time in seconds
         """
         segment_index = self._check_segment_index(segment_index)
-        rs = self._imaging_segments[segment_index]
+        rs = self.segments[segment_index]
         return rs.get_start_time()
 
     def get_end_time(self, segment_index=None) -> float:
@@ -318,7 +339,7 @@ class BaseImaging(BaseExtractor):
             The stop time in seconds
         """
         segment_index = self._check_segment_index(segment_index)
-        rs = self._imaging_segments[segment_index]
+        rs = self.segments[segment_index]
         return rs.get_end_time()
 
     def has_time_vector(self, segment_index: Optional[int] = None):
@@ -335,7 +356,7 @@ class BaseImaging(BaseExtractor):
             True if the recording has time vectors, False otherwise
         """
         segment_index = self._check_segment_index(segment_index)
-        rs = self._imaging_segments[segment_index]
+        rs = self.segments[segment_index]
         d = rs.get_times_kwargs()
         return d["time_vector"] is not None
 
@@ -347,7 +368,7 @@ class BaseImaging(BaseExtractor):
         segment's sampling frequency is set to the recording's sampling frequency.
         """
         for segment_index in range(self.get_num_segments()):
-            rs = self._imaging_segments[segment_index]
+            rs = self.segments[segment_index]
             if self.has_time_vector(segment_index):
                 rs.time_vector = None
             rs.t_start = None
@@ -375,7 +396,7 @@ class BaseImaging(BaseExtractor):
             segments_to_shift = (segment_index,)
 
         for segment_index in segments_to_shift:
-            rs = self._imaging_segments[segment_index]
+            rs = self.segments[segment_index]
 
             if self.has_time_vector(segment_index=segment_index):
                 rs.time_vector += shift
@@ -388,13 +409,18 @@ class BaseImaging(BaseExtractor):
         Transform sample index into time in seconds
         """
         segment_index = self._check_segment_index(segment_index)
-        rs = self._imaging_segments[segment_index]
+        rs = self.segments[segment_index]
         return rs.sample_index_to_time(sample_ind)
 
     def time_to_sample_index(self, time_s, segment_index=None):
         segment_index = self._check_segment_index(segment_index)
-        rs = self._imaging_segments[segment_index]
+        rs = self.segments[segment_index]
         return rs.time_to_sample_index(time_s)
+
+    def get_data(self, start_frame: int, end_frame: int, segment_index: int | None = None, **kwargs) -> np.ndarray:
+        return self.get_series(
+            start_frame=start_frame, end_frame=end_frame, segment_index=segment_index
+        )
 
     def is_binary_compatible(self) -> bool:
         """
@@ -420,7 +446,7 @@ class BaseImaging(BaseExtractor):
     def _get_t_starts(self):
         # handle t_starts
         t_starts = []
-        for rs in self._imaging_segments:
+        for rs in self.segments:
             d = rs.get_times_kwargs()
             t_starts.append(d["t_start"])
 
@@ -430,7 +456,7 @@ class BaseImaging(BaseExtractor):
 
     def _get_time_vectors(self):
         time_vectors = []
-        for rs in self._imaging_segments:
+        for rs in self.segments:
             d = rs.get_times_kwargs()
             time_vectors.append(d["time_vector"])
         if all(time_vector is None for time_vector in time_vectors):
@@ -448,7 +474,7 @@ class BaseImaging(BaseExtractor):
             dtype = kwargs.get("dtype", None) or self.get_dtype()
             t_starts = self._get_t_starts()
 
-            write_binary_imaging(self, file_paths=file_paths, dtype=dtype, verbose=verbose, **job_kwargs)
+            write_binary(self, file_paths=file_paths, dtype=dtype, verbose=verbose, **job_kwargs)
 
             from .binaryimaging import BinaryFolderImaging, BinaryImaging
 

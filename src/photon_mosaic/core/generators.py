@@ -220,7 +220,7 @@ class GroundTruthImaging(BaseImaging):
         kernel = np.exp(-tresp / resp_tau)
 
         # add single segment
-        for segment_index, noise_segment in enumerate(self.noise_generator._imaging_segments):
+        for segment_index, noise_segment in enumerate(self.noise_generator.segments):
             gt_segment = GroundTruthImagingSegment(
                 sampling_frequency=sampling_frequency,
                 noise_segment=noise_segment,

@@ -10,7 +10,7 @@ dependencies = [
     "ruff>=0.9.9",
     "tifffile",
     "natsort",
-    "spikeinterface @ git+https://github.com/alejoe91/spikeinterface.git@31c713065b63da1127762146061ad6d59a151281"
+    "spikeinterface @ git+https://github.com/alejoe91/spikeinterface.git@42cace4503653907933ecaafbfe4fa72fde43478"
 ]
 
 [project.optional-dependencies]

@@ -6,7 +6,7 @@ from spikeinterface.core.job_tools import fix_job_kwargs, split_job_kwargs
 
 from photon_mosaic.core import BaseImaging
 from photon_mosaic.core.utils import PathType
-from photon_mosaic.core.imaging_tools import write_binary_imaging
+from spikeinterface.core import write_binary
 
 suite2p_spec = importlib.util.find_spec("suite2p")
 if suite2p_spec is not None:
@@ -67,7 +67,7 @@ def suite2p_segmentation(
     else:
         _, job_kwargs = split_job_kwargs(suite2p_params)
         file_path = Path(folder) / "imaging_binary.dat"
-        write_binary_imaging(
+        write_binary(
             imaging,
             file_paths=file_path,
             add_file_extension=False,

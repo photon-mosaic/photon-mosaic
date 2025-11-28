@@ -74,6 +74,16 @@ class BaseRois(BaseExtractor):
         """
         return self._imaging is not None
 
+    def get_num_segments(self) -> int:
+        """Get the number of segments. Always 1 for BaseRois.
+
+        Returns
+        -------
+        int
+            The number of segments (always 1 for BaseRois).
+        """
+        return 1
+
     @property
     def image_shape(self):
         """Get the shape of the images (height, width).
