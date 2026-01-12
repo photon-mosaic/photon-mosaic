@@ -14,17 +14,17 @@ jobs:
     permissions:
       id-token: write
       contents: write
-    
+
     steps:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: "3.11"
-    
+
     - name: Bump version and push tag
       id: tag_version
       uses: mathieudutour/github-tag-action@v6.2
@@ -32,15 +32,15 @@ jobs:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         default_bump: patch
         release_branches: main
-    
+
     - name: Install build dependencies
       run: |
         python -m pip install --upgrade pip
         pip install build setuptools-scm
-    
+
     - name: Build package
       run: python -m build
-    
+
     - name: Create GitHub Release with auto-generated notes
       uses: ncipollo/release-action@v1
       with:
@@ -50,6 +50,6 @@ jobs:
         generateReleaseNotes: true
         draft: false
         prerelease: false
-    
+
     - name: Publish package to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
