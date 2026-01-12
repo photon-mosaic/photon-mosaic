@@ -28,6 +28,7 @@ jobs:
       run: pre-commit run --all-files
 
   tests:
+    needs: linting
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
