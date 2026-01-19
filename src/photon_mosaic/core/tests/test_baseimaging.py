@@ -66,15 +66,13 @@ def test_random_imaging_shift_times_without_time_vector_updates_start_time():
 def test_random_imaging_set_times_has_time_vector_shift_and_reset():
     num_frames, sf = 9, 30.0
     imaging = generate_random_imaging(num_frames=num_frames, height=5, width=5, sampling_frequency=sf, seed=4)
-    print(imaging.get_num_segments())
 
     base_times = np.arange(num_frames, dtype="float64") / sf + 0.1
-    imaging.set_times(base_times.copy())
+    imaging.set_times(base_times.copy(), with_warning=False)
     assert imaging.has_time_vector() is True
     np.testing.assert_allclose(imaging.get_times(), base_times)
 
     imaging.shift_times(2.0)
-    print(imaging.get_times(), base_times + 2.0)
     np.testing.assert_allclose(imaging.get_times(), base_times + 2.0)
     np.testing.assert_allclose(imaging.get_start_time(), base_times[0] + 2.0)
 

@@ -133,7 +133,6 @@ class NumpyImagingSegment(BaseImagingSegment):
         """
         start = start_frame if start_frame is not None else 0
         end = end_frame if end_frame is not None else self._video.shape[0]
-        print(self._video.shape)
         if self._video.ndim == 4 and plane_indices is not None:
             return self._video[start:end, :, :, plane_indices]
         else:

@@ -39,7 +39,6 @@ def generate_random_imaging(
     videos = []
     for n_frames in num_frames:
         video = rng.random((n_frames, height, width, num_planes))
-        print(video.shape)
         video = np.squeeze(video)
         videos.append(video)
     return NumpyImaging(imaging_series=videos, sampling_frequency=sampling_frequency, plane_ids=plane_ids)

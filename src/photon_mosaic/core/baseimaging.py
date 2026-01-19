@@ -147,7 +147,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         return self._sampling_frequency
 
     def get_sample_size_in_bytes(self):
-        return self.get_num_pixels() * np.dtype(self.get_dtype()).itemsize
+        return self.get_num_pixels() * self.get_num_planes() * np.dtype(self.get_dtype()).itemsize
 
     def get_shape(self, segment_index: int | None = None) -> tuple:
         """Get the shape of the imaging data as (num_samples, height, width).
@@ -285,7 +285,6 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             plane_indices = range(self.get_num_planes())
         else:
             plane_indices = self.ids_to_indices(plane_ids)
-        print(plane_indices)
         return self.segments[segment_index].get_series(start_frame, end_frame, plane_indices)
 
     def get_average_image(
@@ -361,6 +360,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
                 file_paths=file_paths,
                 sampling_frequency=self.get_sampling_frequency(),
                 image_shape=self.image_shape,
+                num_planes=self.get_num_planes(),
                 dtype=dtype,
                 t_starts=t_starts,
                 file_offset=0,

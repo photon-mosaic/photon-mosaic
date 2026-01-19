@@ -81,7 +81,7 @@ class BinaryImaging(BaseImaging):
             else:
                 t_start = t_starts[i]
             imaging_segment = BinaryImagingSegment(
-                file_path, sampling_frequency, t_start, image_shape, dtype, num_planes,file_offset, 
+                file_path, sampling_frequency, t_start, image_shape, dtype, num_planes, file_offset, 
             )
             self.add_imaging_segment(imaging_segment)
 
@@ -96,23 +96,6 @@ class BinaryImaging(BaseImaging):
             "plane_ids": plane_ids,
         }
 
-    @staticmethod
-    def write_imaging(imaging, file_paths, dtype=None, **job_kwargs):
-        """
-        Save the traces of a recording extractor in binary .dat format.
-
-        Parameters
-        ----------
-        recording : RecordingExtractor
-            The recording extractor object to be saved in .dat format
-        file_paths : str
-            The path to the file.
-        dtype : dtype, default: None
-            Type of the saved data
-        {}
-        """
-        write_binary(imaging, file_paths=file_paths, dtype=dtype, **job_kwargs)
-
     def is_binary_compatible(self) -> bool:
         return True
 
@@ -121,12 +104,12 @@ class BinaryImaging(BaseImaging):
             file_paths=self._kwargs["file_paths"],
             dtype=np.dtype(self._kwargs["dtype"]),
             image_shape=self._kwargs["image_shape"],
-            time_axis=self._kwargs["time_axis"],
+            num_planes=self._kwargs["num_planes"],
             file_offset=self._kwargs["file_offset"],
         )
         return d
 
-    def __del__(self):
+    def __del__(self):  # pragma: no cover
         """
         Ensures that all segment resources are properly cleaned up when this recording extractor is deleted.
         Closes any open file handles in the recording segments.
@@ -137,9 +120,6 @@ class BinaryImaging(BaseImaging):
                 # This will trigger the __del__ method of the BinaryRecordingSegment
                 # which will close the file handle
                 del segment
-
-
-BinaryImaging.write_imaging.__doc__ = BinaryImaging.write_imaging.__doc__.format(_shared_job_kwargs_doc)
 
 
 class BinaryImagingSegment(BaseImagingSegment):
@@ -214,7 +194,7 @@ class BinaryImagingSegment(BaseImagingSegment):
 
         return series
 
-    def __del__(self):
+    def __del__(self):  # pragma: no cover
         # Ensure that the file handle is closed when the segment is garbage-collected
         try:
             if hasattr(self, "file") and self.file and not self.file.closed:
