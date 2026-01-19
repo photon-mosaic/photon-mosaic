@@ -14,7 +14,8 @@ from warnings import warn
 import numpy as np
 
 from .baseimaging import BaseImaging, BaseImagingSegment
-from .utils import PathType, FloatType, ArrayType
+from .baserois import BaseRois
+from .utils import FloatType, ArrayType
 
 
 class NumpyImaging(BaseImaging):
@@ -145,3 +146,53 @@ class NumpyImagingSegment(BaseImagingSegment):
             SampleIndex : Number of samples in the signal segment
         """
         return self._video.shape[0]
+
+
+class NumpyRois(BaseRois):
+    """A ROIs object specified by numpy arrays for masks and traces."""
+
+    def __init__(
+        self,
+        roi_image_masks: list[np.ndarray],
+        sampling_frequency: FloatType,
+        roi_ids: ArrayType | None = None,
+    ):
+        """Create a NumpyRois object from numpy arrays.
+
+        Parameters
+        ----------
+        roi_image_masks : np.ndarray
+            Numpy array representing the image masks for each ROI (dimensions: num_rois x height x width).
+        sampling_frequency : FloatType
+            Sampling frequency of the ROIs in Hz.
+        roi_ids : ArrayType | None, default: None
+            Optional array of ROI IDs.
+        """
+        shape = roi_image_masks[0].shape
+        BaseRois.__init__(self, sampling_frequency=sampling_frequency, shape=shape, roi_ids=roi_ids)
+        self._roi_image_masks = roi_image_masks
+
+        self._kwargs = {
+            "roi_image_masks": roi_image_masks,
+            "sampling_frequency": sampling_frequency,
+            "roi_ids": roi_ids,
+        }
+
+    def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> list[np.ndarray]:
+        """Get the image masks for specific ROIs.
+
+        Parameters
+        ----------
+        roi_ids : list[int | str] | None
+            The IDs of the ROIs.
+
+        Returns
+        -------
+        list[np.ndarray]
+            The image masks for the specified ROIs.
+        """
+        if roi_ids is None:
+            return self._roi_image_masks
+        else:
+            roi_indices = self.ids_to_indices(roi_ids)
+            return self._roi_image_masks[roi_indices]

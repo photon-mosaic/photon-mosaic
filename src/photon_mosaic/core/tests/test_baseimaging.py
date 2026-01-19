@@ -1,6 +1,8 @@
 import pytest
 
 import numpy as np
+
+from photon_mosaic.core.numpyimaging import NumpyImaging
 from photon_mosaic.core.generators import generate_random_imaging
 
 

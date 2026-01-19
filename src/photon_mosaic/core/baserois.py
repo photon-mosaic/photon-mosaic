@@ -36,9 +36,6 @@ class BaseRois(BaseExtractor):
         image_shape_repr = f"{image_shape[0]} rows x {image_shape[1]} columns "
         return f"{name}:\n" f"{self.get_num_rois()} ROIs - " f"{image_shape_repr}"
 
-    def __repr__(self):
-        return self._repr_header()
-
     def _repr_html_(self, display_name=True):
         common_style = "margin-left: 10px;"
         border_style = "border:1px solid #ddd; padding:10px;"
@@ -120,8 +117,8 @@ class BaseRois(BaseExtractor):
         """
         return len(self.roi_ids)
 
-    def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> np.ndarray:
-        """Get the image mask for a specific ROI.
+    def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> np.ndarray:  # pragma: no cover
+        """Get the image mask for a specific ROI. The image mask can be binary or weighted.
 
         Parameters
         ----------
