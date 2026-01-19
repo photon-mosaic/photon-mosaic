@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+
 from photon_mosaic.core.numpyimaging import NumpyImaging, NumpyImagingSegment
 
 
