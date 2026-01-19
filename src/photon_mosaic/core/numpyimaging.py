@@ -8,14 +8,11 @@ NumpySegmentationExtractor
     A Segmentation extractor specified by image masks and traces .npy files.
 """
 
-from pathlib import Path
-from warnings import warn
-
 import numpy as np
 
 from .baseimaging import BaseImaging, BaseImagingSegment
 from .baserois import BaseRois
-from .utils import FloatType, ArrayType
+from .utils import ArrayType, FloatType
 
 
 class NumpyImaging(BaseImaging):
@@ -32,8 +29,8 @@ class NumpyImaging(BaseImaging):
         """Create a NumpyImagingExtractor from a numpy array or list of numpy arrays.
 
         If a list of numpy arrays is provided, each array is treated as a separate segment.
-        Individual segments can have one or more planes. In the former case, the shape of each 
-        array should be (num_frames, height, width). In the latter case, the shape should be 
+        Individual segments can have one or more planes. In the former case, the shape of each
+        array should be (num_frames, height, width). In the latter case, the shape should be
         (num_frames, height, width, num_planes).
 
         Parameters
@@ -61,7 +58,9 @@ class NumpyImaging(BaseImaging):
         shapes = []
         for video in videos:
             if len(video.shape) not in [3, 4]:
-                raise ValueError("'timeseries' must be a 3D or 4D numpy array (num_frames, height, width, [num_channels])")
+                raise ValueError(
+                    "'timeseries' must be a 3D or 4D numpy array (num_frames, height, width, [num_channels])"
+                )
             shapes.append(video.shape[1:])
         if not all(shape == shapes[0] for shape in shapes):
             raise ValueError("All segments must have the same image shape (height, width) and number of planes")
@@ -81,7 +80,7 @@ class NumpyImaging(BaseImaging):
             assert len(time_vectors) == num_segments, "Number of time vectors must match number of segments"
         else:
             time_vectors = [None] * num_segments
-        
+
         BaseImaging.__init__(self, shape=(height, width), sampling_frequency=sampling_frequency, plane_ids=plane_ids)
 
         for video, time_vector in zip(videos, time_vectors):
@@ -114,7 +113,9 @@ class NumpyImagingSegment(BaseImagingSegment):
         super().__init__(sampling_frequency=sampling_frequency, time_vector=time_vector)
         self._video = video
 
-    def get_series(self, start_frame: int | None = None, end_frame: int | None = None, plane_indices: list | None = None) -> np.ndarray:
+    def get_series(
+        self, start_frame: int | None = None, end_frame: int | None = None, plane_indices: list | None = None
+    ) -> np.ndarray:
         """Get the raw series, optionally for a subset of samples.
 
         Parameters

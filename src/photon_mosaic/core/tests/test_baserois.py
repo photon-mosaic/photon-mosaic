@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import numpy as np
 import pytest
 
@@ -91,10 +92,7 @@ def test_get_roi_pixel_masks_default_all_rois_and_weights_preserved():
         rois.get_roi_pixel_masks(roi_ids=[12, 999])
 
     # test with weights
-    rois_weighted = generate_rois(
-        weighted=True,
-        **roi_kwargs
-    )
+    rois_weighted = generate_rois(weighted=True, **roi_kwargs)
     pixel_masks_weighted = rois_weighted.get_roi_pixel_masks()
     assert isinstance(pixel_masks_weighted, list)
     assert len(pixel_masks_weighted) == roi_kwargs["num_rois"]
@@ -112,7 +110,7 @@ def test_get_roi_pixel_masks_subset_order_is_respected():
     rois, roi_kwargs = _make_rois_for_tests()
 
     roi_ids = roi_kwargs["roi_ids"]
-    pixel_masks = rois.get_roi_pixel_masks(roi_ids=[roi_ids[1], roi_ids[0]])    
+    pixel_masks = rois.get_roi_pixel_masks(roi_ids=[roi_ids[1], roi_ids[0]])
     assert len(pixel_masks) == 2
 
     all_pixel_masks = rois.get_roi_pixel_masks()

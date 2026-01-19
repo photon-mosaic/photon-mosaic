@@ -1,14 +1,14 @@
 from __future__ import annotations
+
+import json
 import mmap
 import warnings
-import json
 from pathlib import Path
 
 import numpy as np
 
 from .baseimaging import BaseImaging, BaseImagingSegment
-from spikeinterface.core import write_binary
-from spikeinterface.core.job_tools import _shared_job_kwargs_doc
+
 
 # TODO: make it more flexible in terms of specifying axes
 class BinaryImaging(BaseImaging):
@@ -81,7 +81,13 @@ class BinaryImaging(BaseImaging):
             else:
                 t_start = t_starts[i]
             imaging_segment = BinaryImagingSegment(
-                file_path, sampling_frequency, t_start, image_shape, dtype, num_planes, file_offset, 
+                file_path,
+                sampling_frequency,
+                t_start,
+                image_shape,
+                dtype,
+                num_planes,
+                file_offset,
             )
             self.add_imaging_segment(imaging_segment)
 
@@ -145,11 +151,10 @@ class BinaryImagingSegment(BaseImagingSegment):
 
     def get_series(
         self,
-        start_frame: int | None = None,
-        end_frame: int | None = None,
+        start_frame: int,
+        end_frame: int,
         plane_indices: list[int] | None = None,
     ) -> np.ndarray:
-
         # Calculate byte offsets for start and end frames
         start_byte = self.file_offset + start_frame * self.bytes_per_sample
         end_byte = self.file_offset + end_frame * self.bytes_per_sample
@@ -180,7 +185,8 @@ class BinaryImagingSegment(BaseImagingSegment):
         else:
             shape = ((end_frame - start_frame), self.image_shape[0], self.image_shape[1])
 
-        # Now the entire array should correspond to the data between start_frame and end_frame, so we can use it directly
+        # Now the entire array should correspond to the data between start_frame and end_frame,
+        # so we can use it directly
         series = np.ndarray(
             shape=shape,
             dtype=self.dtype,

@@ -1,10 +1,11 @@
-import pytest
 import os
 from pathlib import Path
-import numpy as np
 
-from photon_mosaic.core.generators import generate_random_imaging
+import numpy as np
+import pytest
+
 from photon_mosaic.core.binaryimaging import BinaryFolderImaging, BinaryImaging
+from photon_mosaic.core.generators import generate_random_imaging
 
 
 def _write_binary_file(path: Path, array: np.ndarray, file_offset: int = 0) -> None:
@@ -18,7 +19,7 @@ def _write_binary_file(path: Path, array: np.ndarray, file_offset: int = 0) -> N
 def test_binaryimaging_single_segment_single_plane_roundtrip(tmp_path: Path):
     n_frames, h, w = 11, 3, 4
     dtype = np.uint16
-    data = (np.arange(n_frames * h * w, dtype=dtype).reshape(n_frames, h, w))
+    data = np.arange(n_frames * h * w, dtype=dtype).reshape(n_frames, h, w)
 
     fpath = tmp_path / "video.dat"
     _write_binary_file(fpath, data)
@@ -86,7 +87,7 @@ def test_binaryimaging_with_tstarts(tmp_path: Path):
     dtype = np.float32
 
     data0 = np.arange(4 * h * w, dtype=dtype).reshape(4, h, w)
-    data1 = (np.arange(6 * h * w, dtype=dtype).reshape(6, h, w) + 10)
+    data1 = np.arange(6 * h * w, dtype=dtype).reshape(6, h, w) + 10
 
     f0 = tmp_path / "seg0.dat"
     f1 = tmp_path / "seg1.dat"
@@ -120,7 +121,7 @@ def test_binaryimaging_multiple_segments(tmp_path: Path):
     dtype = np.uint8
 
     data0 = np.arange(5 * h * w, dtype=dtype).reshape(5, h, w)
-    data1 = (np.arange(8 * h * w, dtype=dtype).reshape(8, h, w) + 100)
+    data1 = np.arange(8 * h * w, dtype=dtype).reshape(8, h, w) + 100
 
     f0 = tmp_path / "seg0.dat"
     f1 = tmp_path / "seg1.dat"
@@ -188,7 +189,7 @@ def test_baseimaging_save_binary_with_multiprocessing(tmp_path: Path):
     n_jobs = 2 if (os.cpu_count() or 1) > 1 else 1
 
     # Exercise BaseImaging.save() path with multiprocessing-enabled job kwargs.
-    saved = imaging.save(
+    _ = imaging.save(
         format="binary",
         folder=str(out_folder),
         n_jobs=n_jobs,
@@ -229,7 +230,7 @@ def test_base_imaging_multi_segment_multiplane_save(tmp_path: Path):
     )
 
     out_folder = tmp_path / "multiplane_binary"
-    saved = imaging.save(
+    _ = imaging.save(
         format="binary",
         folder=str(out_folder),
         n_jobs=1,

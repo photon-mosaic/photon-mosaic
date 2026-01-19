@@ -1,16 +1,12 @@
+import numpy as np
 import pytest
 
-import numpy as np
-
-from photon_mosaic.core.numpyimaging import NumpyImaging
 from photon_mosaic.core.generators import generate_random_imaging
 
 
 def test_random_imaging_basic_properties():
     num_frames, h, w, sf = 10, 8, 9, 30.0
-    imaging = generate_random_imaging(
-        num_frames=num_frames, height=h, width=w, sampling_frequency=sf, seed=0
-    )
+    imaging = generate_random_imaging(num_frames=num_frames, height=h, width=w, sampling_frequency=sf, seed=0)
 
     assert imaging.get_num_segments() == 1
     assert imaging.get_num_frames() == num_frames
@@ -115,9 +111,7 @@ def test_baseimaging_multi_segment_requires_segment_index():
     sf = 10.0
     h, w = 3, 4
     num_frames = [10, 20]
-    imaging = generate_random_imaging(
-        num_frames=num_frames, height=h, width=w, sampling_frequency=sf, seed=5
-    )
+    imaging = generate_random_imaging(num_frames=num_frames, height=h, width=w, sampling_frequency=sf, seed=5)
 
     assert imaging.get_num_segments() == 2
 
@@ -140,6 +134,7 @@ def test_baseimaging_multi_segment_requires_segment_index():
     str_html = imaging._repr_html_()
     assert "segments" in str_html
 
+
 def test_get_average_image_caches_and_recompute_replaces():
     imaging = generate_random_imaging(num_frames=25, height=8, width=6, sampling_frequency=30.0, seed=6)
 
@@ -157,6 +152,7 @@ def test_get_average_image_caches_and_recompute_replaces():
 # -------------------------
 # Multi-plane specific tests
 # -------------------------
+
 
 def test_multiplane_basic_shape_and_plane_ids():
     n, h, w, p = 7, 5, 6, 3
@@ -182,7 +178,6 @@ def test_multiplane_basic_shape_and_plane_ids():
 
 
 def test_multiplane_average_image_shape_and_caching():
-
     n, h, w, p = 30, 8, 6, 2
     sf = 30.0
     imaging = generate_random_imaging(
@@ -207,9 +202,7 @@ def test_multiplane_average_image_shape_and_caching():
 
 def test_generate_random_imaging_multiplane_has_expected_plane_dimension_and_selection():
     n, h, w, p = 12, 6, 7, 3
-    imaging = generate_random_imaging(
-        num_frames=n, height=h, width=w, sampling_frequency=20.0, num_planes=p, seed=123
-    )
+    imaging = generate_random_imaging(num_frames=n, height=h, width=w, sampling_frequency=20.0, num_planes=p, seed=123)
 
     assert imaging.get_num_planes() == p
     assert imaging.get_shape() == (n, h, w, p)

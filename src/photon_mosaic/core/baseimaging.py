@@ -1,13 +1,11 @@
+from math import prod
+
 import numpy as np
 from numpy.typing import DTypeLike
-from math import prod
-import warnings
-
-
 from roiextractors.core_utils import _convert_bytes_to_str, _convert_seconds_to_str
-from spikeinterface.core.chunkable_tools import write_binary, get_chunks
 from spikeinterface.core.base import BaseExtractor
 from spikeinterface.core.chunkable import ChunkableMixin, ChunkableSegment
+from spikeinterface.core.chunkable_tools import get_chunks, write_binary
 
 # from .imaging_tools import write_binary_imaging, get_random_data_chunks
 
@@ -18,10 +16,11 @@ from spikeinterface.core.chunkable import ChunkableMixin, ChunkableSegment
 class BaseImaging(BaseExtractor, ChunkableMixin):
     """
     Base class for imaging extractors.
-    
-    The class inherits from `BaseExtractor` and `ChunkableMixin` to provide common functionality for imaging data handling.
 
-    Each BaseImagin instance is associated to a single "channel".
+    The class inherits from `BaseExtractor` and `ChunkableMixin` to provide common functionality
+    for imaging data handling.
+
+    Each `BaseImaging` instance is associated to a single "channel".
     The `_main_ids` attribute is used here for multi-plane imaging objects.
     """
 
@@ -105,7 +104,6 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         html_extra = self._get_common_repr_html(common_style)
         # remove properties from html_extra
         if "<summary><strong>Properties</strong></summary>" in html_extra:
-            start = html_extra.find("<details style='")
             # Find the Properties section specifically
             properties_start = html_extra.find("<summary><strong>Properties</strong></summary>")
             if properties_start != -1:
@@ -174,9 +172,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             return (num_samples, *self.image_shape)
 
     def get_data(self, start_frame: int, end_frame: int, segment_index: int | None = None, **kwargs) -> np.ndarray:
-        return self.get_series(
-            start_frame=start_frame, end_frame=end_frame, segment_index=segment_index
-        )
+        return self.get_series(start_frame=start_frame, end_frame=end_frame, segment_index=segment_index)
 
     def get_num_samples(self, segment_index: int | None = None) -> int:
         """Get the total number of samples (frames) in the imaging data.
@@ -393,10 +389,11 @@ class BaseImagingSegment(ChunkableSegment):
     """
     Abstract class representing a multichannel timeseries, or block of raw ephys traces
     """
-    def get_series( 
+
+    def get_series(
         self,
-        start_frame: int | None = None,
-        end_frame: int | None = None,
+        start_frame: int,
+        end_frame: int,
         plane_indices: list[int] | None = None,
     ) -> np.ndarray:  # pragma: no cover
         """
