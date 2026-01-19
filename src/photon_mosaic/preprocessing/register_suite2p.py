@@ -29,7 +29,7 @@ class Suite2PMotion:
         self.ops = ops
         self.num_segments = len(displacements)
         
-    def get_displacement_at_frames(self, frames, segment_index=0):
+    def get_displacement_at_frames(self, frames, plane_index=0):
         """
         Get displacement for specific frames in a segment.
         
@@ -46,8 +46,8 @@ class Suite2PMotion:
             Array of displacements with shape (n_frames, 2) or (2,) if single frame
         """
         if isinstance(frames, int):
-            return self.displacements[segment_index][frames]
-        return self.displacements[segment_index][frames]
+            return self.displacements[plane_index][frames]
+        return self.displacements[plane_index][frames]
 
 
 def compute_motion_suite2p(imaging, reference_frames=150, batch_size=500, **suite2p_kwargs):
@@ -88,14 +88,15 @@ def compute_motion_suite2p(imaging, reference_frames=150, batch_size=500, **suit
     displacements_per_segment = []
     refAndMasks = None
     
-    # Process each segment
-    for segment_idx, segment in enumerate(imaging.segments):
-        num_frames = segment.get_num_samples()
+    # Process each plane, the last axis of imaging.get_series() is assumed to be planes
+    for plane_index in range(imaging.get_series().shape[-1]):
+        plane = imaging.get_series()[..., plane_index]
+        num_frames = imaging.get_num_samples()
         
         # Compute reference from first segment only (using initial frames)
         if refAndMasks is None:
             n_ref_frames = min(reference_frames, num_frames)
-            ref_frames = segment.get_series(0, n_ref_frames)
+            ref_frames = plane[0:n_ref_frames].compute()
             reference = register.compute_reference(ref_frames)
             refAndMasks = register.compute_reference_masks(reference, ops)
         
@@ -105,7 +106,7 @@ def compute_motion_suite2p(imaging, reference_frames=150, batch_size=500, **suit
         # Process in batches to avoid memory issues
         for start_frame in range(0, num_frames, batch_size):
             end_frame = min(start_frame + batch_size, num_frames)
-            batch_frames = segment.get_series(start_frame, end_frame)
+            batch_frames = plane[start_frame:end_frame].compute()
             
             # Register frames to get displacement information
             _, ymax, xmax, cmax, ymax1, xmax1, cmax1, _ = register.register_frames(
@@ -145,42 +146,42 @@ class RegisterSuite2PImaging(BasePreprocessor):
     def __init__(self, imaging, motion, **kwargs):
         BasePreprocessor.__init__(self, imaging)
         
-        if motion.num_segments != len(imaging.segments):
-            raise ValueError(
-                f"Motion has {motion.num_segments} segments but imaging has "
-                f"{len(imaging.segments)} segments"
-            )
+        # if motion.num_segments != len(imaging.segments):
+        #     raise ValueError(
+        #         f"Motion has {motion.num_segments} segments but imaging has "
+        #         f"{len(imaging.segments)} segments"
+        #     )
         
-        for segment_idx, parent_segment in enumerate(imaging.segments):
-            segment = RegisterSuite2PImagingSegment(
-                parent_segment, motion, segment_idx, **kwargs
-            )
-            self.add_imaging_segment(segment)
+        # for segment_idx, parent_segment in enumerate(imaging.segments):
+        #     segment = RegisterSuite2PImagingSegment(
+        #         parent_segment, motion, segment_idx, **kwargs
+        #     )
+        #     self.add_imaging_segment(segment)
 
         self._kwargs = dict(imaging=imaging, motion=motion, **kwargs)
 
 
-class RegisterSuite2PImagingSegment(BasePreprocessorSegment):
-    """
-    Segment-level preprocessor that applies Suite2P motion correction.
+# class RegisterSuite2PImagingSegment(BasePreprocessorSegment):
+#     """
+#     Segment-level preprocessor that applies Suite2P motion correction.
     
-    Parameters
-    ----------
-    parent_imaging_segment : ImagingSegment
-        The parent imaging segment
-    motion : Suite2PMotion
-        Pre-computed motion object
-    segment_index : int
-        Index of this segment
-    **kwargs : dict
-        Additional keyword arguments
-    """
+#     Parameters
+#     ----------
+#     parent_imaging_segment : ImagingSegment
+#         The parent imaging segment
+#     motion : Suite2PMotion
+#         Pre-computed motion object
+#     segment_index : int
+#         Index of this segment
+#     **kwargs : dict
+#         Additional keyword arguments
+#     """
     
-    def __init__(self, parent_imaging_segment, motion, segment_index, **kwargs):
-        BasePreprocessorSegment.__init__(self, parent_imaging_segment)
-        self.motion = motion
-        self.segment_index = segment_index
-        self.kwargs = kwargs
+#     def __init__(self, parent_imaging_segment, motion, segment_index, **kwargs):
+#         BasePreprocessorSegment.__init__(self, parent_imaging_segment)
+#         self.motion = motion
+#         self.segment_index = segment_index
+#         self.kwargs = kwargs
 
     def get_series(self, start_frame, end_frame):
         """
@@ -202,13 +203,13 @@ class RegisterSuite2PImagingSegment(BasePreprocessorSegment):
         import copy
         
         # Get raw video for this frame range
-        video = self.parent_imaging_segment.get_series(start_frame, end_frame)
+        video = self.imaging.get_series(start_frame, end_frame)
         
         # Get pre-computed displacements for these frames
         frame_indices = np.arange(start_frame, end_frame)
-        displacements = self.motion.get_displacement_at_frames(
-            frame_indices, self.segment_index
-        )
+        # displacements =self.motion.get_displacement_at_frames(
+        #     frame_indices, plane_index=0
+        # )
         
         # Apply registration using pre-computed displacements
         ops = self.motion.ops
@@ -221,14 +222,14 @@ class RegisterSuite2PImagingSegment(BasePreprocessorSegment):
         # Apply the registration with pre-computed shifts
         # Note: We still need to call register_frames, but now it's using 
         # a consistent reference from the full video analysis
-        registered_video, *_ = register.register_frames(
-            self.motion.refAndMasks, registered_video, 
-            rmin=rmin, rmax=rmax, bidiphase=bidiphase, 
-            ops=ops, nZ=nZ
-        )
-        
-        return registered_video
+        for plane_index in range(registered_video.shape[-1]):
+            registered_video[..., plane_index], *_ = register.register_frames(
+                self.motion.refAndMasks[...,plane_index], registered_video[..., plane_index].compute(), 
+                rmin=rmin, rmax=rmax, bidiphase=bidiphase, 
+                ops=ops, nZ=nZ
+            )
 
+        return registered_video
 
 # Convenience function for backwards compatibility
 register_suite2p = RegisterSuite2PImaging

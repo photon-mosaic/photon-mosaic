@@ -23,7 +23,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             channel_ids = [0]  # fake channel
         BaseExtractor.__init__(self, channel_ids)
         self._sampling_frequency = float(sampling_frequency)
-        assert len(shape) == 2, "Shape must be a tuple/list/array of length 2 (height, width)"
+        # assert len(shape) == 2, "Shape must be a tuple/list/array of length 2 (height, width)"
         self._image_shape = np.array(shape)
         self._average_image = None
 

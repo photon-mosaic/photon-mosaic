@@ -1,7 +1,7 @@
 # Import base classes
 from .roiextractors import (
     BaseROIExtractorImaging,
-    BaseROIExtractorImagingSegment,
+    # BaseROIExtractorImagingSegment,
     get_imaging_extractor,
 )
 

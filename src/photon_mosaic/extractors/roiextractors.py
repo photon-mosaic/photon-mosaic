@@ -3,10 +3,10 @@
 import re
 import inspect
 from pathlib import Path
-
+import dask.array as da
 from roiextractors.imagingextractor import ImagingExtractor
 from roiextractors.extractorlist import imaging_extractor_dict, segmentation_extractor_dict
-
+import numpy as np
 from photon_mosaic.core import BaseImaging, BaseImagingSegment, BaseRois
 
 
@@ -16,32 +16,82 @@ class BaseROIExtractorImaging(BaseImaging):
     def __init__(self, imaging_name: str, **kwargs):
         self.roiextractor_imaging_class = imaging_extractor_dict[imaging_name]
 
-        roi_extractor = self.roiextractor_imaging_class(**kwargs)
+        self.roi_extractor = self.roiextractor_imaging_class(**kwargs)
 
-        segment = BaseROIExtractorImagingSegment(roi_extractor)
         BaseImaging.__init__(
             self,
-            shape=roi_extractor.get_sample_shape(),
-            sampling_frequency=roi_extractor.get_sampling_frequency(),
+            shape=self.roi_extractor.get_sample_shape(),
+            sampling_frequency=self.roi_extractor.get_sampling_frequency(),
         )
-        self.add_imaging_segment(segment)
+
         self.name = f"{imaging_name} (ROIExtractors)"
 
         self._kwargs = {"imaging_name": imaging_name, **kwargs}
+    
+    def get_series(
+        self,
+        start_frame: int | None = None,
+        end_frame: int | None = None,
+        segment_index: int | None = None,
+    ) -> np.ndarray:
+        """Get a series of frames from the imaging data.
+
+        Parameters
+        ----------
+        start_sample : int
+            The starting frame index (inclusive).
+        end_sample : int
+            The ending frame index (exclusive).
+        segment_index : int | None
+            The index of the imaging segment. If None and there is only one segment, it defaults to 0.
+
+        Returns
+        -------
+        np.ndarray
+            The requested series of frames as a NumPy array.
+        """
+
+        start_frame = start_frame if start_frame is not None else 0
+        end_frame = end_frame if end_frame is not None else self.get_num_samples(segment_index=segment_index)
+
+        _data = self.roi_extractor.get_series(start_frame, end_frame)
+
+        if _data.shape == 3:
+            # Standardise to 4D data in the presence of only one plane
+            # shape will be (time, height, width) -> (time, height, width, plane)
+            _data = _data[..., np.newaxis]
+
+        _data = da.from_array(
+            _data, 
+            chunks=("auto", -1, -1, "auto")  # Chunk along time axis and plane axis
+            )
+        
+        return _data
+    
+    def get_num_samples(self, segment_index: int | None = None) -> int:
+        return self.roi_extractor.get_num_frames()
+    
+    def get_average_image(self) -> np.ndarray:
+        
+        _data = self.get_series()  # Ensure all data is loaded
+
+        return _data.mean(axis=0).compute()
 
 
-class BaseROIExtractorImagingSegment(BaseImagingSegment):
-    """Base class for ROI extractors that work with BaseImaging data."""
 
-    def __init__(self, roi_extractor_imaging: ImagingExtractor):
-        BaseImagingSegment.__init__(self, sampling_frequency=roi_extractor_imaging.get_sampling_frequency())
-        self.roiextractor_extractor = roi_extractor_imaging
 
-    def get_num_samples(self):
-        return self.roiextractor_extractor.get_num_samples()
+# class BaseROIExtractorImagingSegment(BaseImagingSegment):
+#     """Base class for ROI extractors that work with BaseImaging data."""
 
-    def get_series(self, start_frame=None, end_frame=None):
-        return self.roiextractor_extractor.get_series(start_frame, end_frame)
+#     def __init__(self, roi_extractor_imaging: ImagingExtractor):
+#         BaseImagingSegment.__init__(self, sampling_frequency=roi_extractor_imaging.get_sampling_frequency())
+#         self.roiextractor_extractor = roi_extractor_imaging
+
+#     def get_num_samples(self):
+#         return self.roiextractor_extractor.get_num_samples()
+
+#     def get_series(self, start_frame=None, end_frame=None):
+#         return self.roiextractor_extractor.get_series(start_frame, end_frame)
 
 
 def get_imaging_extractor(file_path: str, imaging_name: str | None = None, **kwargs) -> BaseROIExtractorImaging:
