@@ -19,7 +19,7 @@ class BaseRois(BaseExtractor):
         assert len(shape) == 2, "Shape must be a tuple/list/array of length 2 (height, width)"
         self._image_shape = np.array(shape)
         self._roi_ids = np.array(roi_ids)
-        self._imaging = None
+        self._imaging: BaseImaging | None = None
         # no concept of segments for rois yet, since they are spatial only
 
     def __repr__(self):
@@ -97,12 +97,12 @@ class BaseRois(BaseExtractor):
         return self._sampling_frequency
 
     @property
-    def roi_ids(self) -> ArrayLike:
+    def roi_ids(self) -> np.ndarray:
         """Get the ROI IDs.
 
         Returns
         -------
-        ArrayLike
+        np.ndarray
             The ROI IDs.
         """
         return self._roi_ids
@@ -132,7 +132,7 @@ class BaseRois(BaseExtractor):
         """
         raise NotImplementedError("This method should be implemented in subclasses.")
 
-    def get_roi_pixel_masks(self, roi_ids: list[int | str] | None = None) -> np.ndarray:
+    def get_roi_pixel_masks(self, roi_ids: list[int | str] | None = None) -> list[np.ndarray]:
         """Get the pixel coordinates for a specific ROI.
 
         Parameters
@@ -146,7 +146,7 @@ class BaseRois(BaseExtractor):
             The pixel coordinates for the specified ROIs.
         """
         if roi_ids is None:
-            roi_ids = self.roi_ids
+            roi_ids = self.roi_ids.tolist()
 
         # Get pixel masks from representations
         pixel_masks = []
@@ -199,8 +199,9 @@ class SelectRois(BaseRois):
         self._selected_roi_ids = np.array(roi_ids)
 
         # Validate selected ROI IDs
+        source_roi_ids = rois.roi_ids.tolist()
         for roi_id in self._selected_roi_ids:
-            if roi_id not in rois.roi_ids:
+            if roi_id not in source_roi_ids:
                 raise ValueError(f"ROI ID {roi_id} not found in source ROIs.")
 
         BaseRois.__init__(
@@ -212,14 +213,14 @@ class SelectRois(BaseRois):
         rois.copy_metadata(self, only_main=False, ids=self.roi_ids)
         self._parent = rois
 
-        if rois.has_imaging():
+        if rois._imaging is not None:
             self.register_imaging(rois._imaging)
 
         self._kwargs = dict(rois=rois, roi_ids=roi_ids)
 
     def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> np.ndarray:
         if roi_ids is None:
-            roi_ids = self.roi_ids
+            roi_ids = self.roi_ids.tolist()
 
         # Get masks from source rois
         source_masks = self._source_rois.get_roi_image_masks(roi_ids)

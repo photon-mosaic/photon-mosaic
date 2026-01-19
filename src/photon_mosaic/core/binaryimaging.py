@@ -180,10 +180,16 @@ class BinaryImagingSegment(BaseImagingSegment):
 
         # Create a numpy array using the mmap object as the buffer
         # Note that the shape must be recalculated based on the new data chunk
+        shape: tuple[int, int, int, int]
         if self.num_planes > 1:
-            shape = ((end_frame - start_frame), self.image_shape[0], self.image_shape[1], self.num_planes)
+            shape = (
+                (end_frame - start_frame),
+                self.image_shape[0],
+                self.image_shape[1],
+                self.num_planes,
+            )
         else:
-            shape = ((end_frame - start_frame), self.image_shape[0], self.image_shape[1])
+            shape = ((end_frame - start_frame), self.image_shape[0], self.image_shape[1], 1)
 
         # Now the entire array should correspond to the data between start_frame and end_frame,
         # so we can use it directly
@@ -197,6 +203,8 @@ class BinaryImagingSegment(BaseImagingSegment):
         # Slice planes if needed
         if plane_indices is not None and self.num_planes > 1:
             series = series[:, :, :, plane_indices]
+        elif self.num_planes == 1:
+            series = series[:, :, :, 0]
 
         return series
 

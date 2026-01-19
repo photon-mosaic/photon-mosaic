@@ -218,7 +218,8 @@ def test_baseimaging_save_binary_with_multiprocessing(tmp_path: Path):
 
 
 def test_base_imaging_multi_segment_multiplane_save(tmp_path: Path):
-    n, h, w, p = (15, 30), 5, 5, 3
+    n = (15, 30)
+    h, w, p = 5, 5, 3
     sf = 20.0
     imaging = generate_random_imaging(
         num_frames=n,

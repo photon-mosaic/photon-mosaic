@@ -1,11 +1,11 @@
 from math import prod
 
 import numpy as np
-from numpy.typing import DTypeLike
-from roiextractors.core_utils import _convert_bytes_to_str, _convert_seconds_to_str
 from spikeinterface.core.base import BaseExtractor
 from spikeinterface.core.chunkable import ChunkableMixin, ChunkableSegment
 from spikeinterface.core.chunkable_tools import get_chunks, write_binary
+
+from photon_mosaic.core.utils import DtypeType, _convert_bytes_to_str, _convert_seconds_to_str
 
 # from .imaging_tools import write_binary_imaging, get_random_data_chunks
 
@@ -215,7 +215,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         """
         return len(self.segments)
 
-    def get_dtype(self) -> DTypeLike:
+    def get_dtype(self) -> DtypeType:
         """Get the data type of the video.
 
         Returns

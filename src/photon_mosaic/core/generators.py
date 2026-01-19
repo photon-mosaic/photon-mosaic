@@ -7,7 +7,7 @@ from photon_mosaic.core.numpyimaging import NumpyImaging, NumpyRois
 
 
 def generate_random_imaging(
-    num_frames: int | tuple[int] = 1000,
+    num_frames: int | tuple[int, ...] = 1000,
     height: int = 256,
     width: int = 256,
     sampling_frequency: float = 30.0,
@@ -19,7 +19,7 @@ def generate_random_imaging(
 
     Parameters
     ----------
-    num_frames : int | tuple[int], default: 1000
+    num_frames : int | tuple[int, ...], default: 1000
         Number of frames for each segment in the imaging data.
     height : int, default: 256
         Height of each frame in pixels.

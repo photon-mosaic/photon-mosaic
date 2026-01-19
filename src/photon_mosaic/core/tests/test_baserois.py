@@ -12,7 +12,7 @@ class MockImaging:
         self.sampling_frequency = sampling_frequency
 
 
-def _make_rois_for_tests() -> BaseRois:
+def _make_rois_for_tests() -> tuple[BaseRois, dict]:
     roi_kwargs = dict(
         num_rois=3,
         height=50,
