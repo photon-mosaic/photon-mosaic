@@ -78,22 +78,6 @@ class BaseROIExtractorImaging(BaseImaging):
         return _data.mean(axis=0).compute()
 
 
-
-
-# class BaseROIExtractorImagingSegment(BaseImagingSegment):
-#     """Base class for ROI extractors that work with BaseImaging data."""
-
-#     def __init__(self, roi_extractor_imaging: ImagingExtractor):
-#         BaseImagingSegment.__init__(self, sampling_frequency=roi_extractor_imaging.get_sampling_frequency())
-#         self.roiextractor_extractor = roi_extractor_imaging
-
-#     def get_num_samples(self):
-#         return self.roiextractor_extractor.get_num_samples()
-
-#     def get_series(self, start_frame=None, end_frame=None):
-#         return self.roiextractor_extractor.get_series(start_frame, end_frame)
-
-
 def get_imaging_extractor(file_path: str, imaging_name: str | None = None, **kwargs) -> BaseROIExtractorImaging:
     """Automatically detect and load imaging data from a file.
 
