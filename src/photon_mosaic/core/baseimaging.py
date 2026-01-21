@@ -4,10 +4,9 @@ import numpy as np
 from spikeinterface.core.base import BaseExtractor
 from spikeinterface.core.chunkable import ChunkableMixin, ChunkableSegment
 from spikeinterface.core.chunkable_tools import get_chunks, write_binary
+from spikeinterface.core.core_tools import convert_bytes_to_str, convert_seconds_to_str
 
-from photon_mosaic.core.utils import DtypeType, _convert_bytes_to_str, _convert_seconds_to_str
-
-# from .imaging_tools import write_binary_imaging, get_random_data_chunks
+from photon_mosaic.core.utils import DtypeType
 
 # TODO: frames instead of samples
 # TODO: epoch instead of segment (segmentation is another thing)
@@ -48,11 +47,11 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
 
         # Calculate duration
         durations = [ns / sf_hz for ns in num_samples]
-        duration_repr = [_convert_seconds_to_str(duration) for duration in durations]
+        duration_repr = [convert_seconds_to_str(duration) for duration in durations]
 
         # Calculate memory size using product of all dimensions in image_size
         memory_sizes = [ns * prod(image_shape) * dtype.itemsize for ns in num_samples]
-        memory_repr = [_convert_bytes_to_str(memory_size) for memory_size in memory_sizes]
+        memory_repr = [convert_bytes_to_str(memory_size) for memory_size in memory_sizes]
 
         if self.get_num_segments() == 1:
             num_samples = num_samples[0]
@@ -93,8 +92,8 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
                 duration = self.get_duration(segment_index)
                 memory_size = self.get_memory_size(segment_index)
                 samples_str = f"{samples:,}"
-                duration_str = _convert_seconds_to_str(duration)
-                memory_size_str = _convert_bytes_to_str(memory_size)
+                duration_str = convert_seconds_to_str(duration)
+                memory_size_str = convert_bytes_to_str(memory_size)
                 html_segments += (
                     f"<li> Samples: {samples_str}, Duration: {duration_str}, Memory: {memory_size_str}</li>"
                 )
@@ -139,7 +138,25 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
 
     @property
     def sampling_frequency(self):
+        """Get the sampling frequency of the imaging object.
+
+        Returns
+        -------
+        float
+            The sampling frequency in Hz.
+        """
         return self._sampling_frequency
+
+    @property
+    def num_planes(self):
+        """Get the number of planes in the imaging data.
+
+        Returns
+        -------
+        int
+            The number of planes.
+        """
+        return len(self.plane_ids)
 
     def get_sampling_frequency(self):
         return self._sampling_frequency

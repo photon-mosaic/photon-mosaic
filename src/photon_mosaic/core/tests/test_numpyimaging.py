@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from photon_mosaic.core.numpyimaging import NumpyImaging, NumpyImagingSegment
+from photon_mosaic.core.numpyimaging import NumpyImaging, NumpyImagingSegment, NumpyRois
 
 
 def test_numpyimaging_rejects_invalid_imaging_series_type():
@@ -113,3 +113,24 @@ def test_numpyimagingsegment_get_series_4d_plane_selection():
     out_none_planes = seg.get_series(start_frame=1, end_frame=3, plane_indices=None)
     np.testing.assert_array_equal(out_none_planes, video[1:3, ...])
     assert out_none_planes.shape == (2, 2, 3, 4)
+
+
+def test_numpyrois_mask_shapes():
+    # Create masks with wrong shape
+    good_shapes = [
+        (3, 30, 30),  # 2D masks
+        (4, 20, 20, 5),  # 3D masks
+    ]
+    bad_shape = (5, 30, 30, 10, 2)  # 4D instead of 2D or 3D
+    for shape in good_shapes:
+        masks = np.zeros(shape)
+        rois = NumpyRois(roi_image_masks=masks, sampling_frequency=30.0, roi_ids=None)
+        assert rois.get_num_rois() == shape[0]
+        if len(shape) == 3:
+            assert rois.get_num_planes() == 1
+        else:
+            assert rois.get_num_planes() == shape[3]
+
+    bad_masks = np.zeros(bad_shape)
+    with pytest.raises(ValueError):
+        NumpyRois(roi_image_masks=bad_masks, sampling_frequency=30.0, roi_ids=None)

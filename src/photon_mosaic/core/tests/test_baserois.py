@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import numpy as np
 import pytest
 
@@ -24,8 +22,29 @@ def make_rois_for_tests() -> tuple[BaseRois, dict]:
 
 
 class MockImaging:
-    def __init__(self, sampling_frequency):
+    def __init__(self, sampling_frequency, num_planes: int = 1):
         self.sampling_frequency = sampling_frequency
+        self._num_planes = num_planes
+
+    def get_num_planes(self) -> int:
+        return self._num_planes
+
+
+@pytest.fixture
+def make_rois_for_tests_multiplane() -> tuple[BaseRois, dict]:
+    roi_kwargs = dict(
+        num_rois=3,
+        height=50,
+        width=50,
+        radius_range=(5, 7),
+        sampling_frequency=31.2,
+        roi_ids=[10, 11, 12],
+        num_planes=10,
+    )
+    rois = generate_rois(
+        **roi_kwargs,
+    )
+    return rois, roi_kwargs
 
 
 def test_init_stores_sampling_frequency_shape_and_roi_ids(make_rois_for_tests):
@@ -147,7 +166,7 @@ def test_select_rois_returns_selected_rois_and_masks_match(make_rois_for_tests):
 def test_register_imaging_sets_imaging_and_has_imaging_true(make_rois_for_tests):
     rois, roi_kwargs = make_rois_for_tests
 
-    imaging = MockImaging(roi_kwargs["sampling_frequency"])
+    imaging = MockImaging(roi_kwargs["sampling_frequency"], num_planes=1)
     rois.register_imaging(imaging)
 
     assert rois.has_imaging() is True
@@ -158,6 +177,72 @@ def test_register_imaging_sets_imaging_and_has_imaging_true(make_rois_for_tests)
     assert selected.has_imaging() is True
     assert selected.imaging is imaging
 
-    imaging = MockImaging(35.0)
+    imaging = MockImaging(35.0, num_planes=1)
     with pytest.raises(AssertionError, match="different sampling frequency"):
         rois.register_imaging(imaging)
+
+
+def test_roi_image_masks_multiplane_shape_and_values(make_rois_for_tests_multiplane):
+    rois, roi_kwargs = make_rois_for_tests_multiplane
+
+    assert rois.get_num_planes() == roi_kwargs["num_planes"]
+    assert rois.num_planes == roi_kwargs["num_planes"]
+
+    image_masks = rois.get_roi_image_masks()
+    assert isinstance(image_masks, np.ndarray)
+    assert image_masks.shape == (
+        roi_kwargs["num_rois"],
+        roi_kwargs["height"],
+        roi_kwargs["width"],
+        roi_kwargs["num_planes"],
+    )
+
+    for mask in image_masks:
+        unique_values = np.unique(mask)
+        assert np.all(np.isin(unique_values, [0, 1]))
+
+
+def test_get_roi_pixel_masks_multiplane_has_z_and_weights(make_rois_for_tests_multiplane):
+    rois, roi_kwargs = make_rois_for_tests_multiplane
+    pixel_masks = rois.get_roi_pixel_masks()
+    assert isinstance(pixel_masks, list)
+    assert len(pixel_masks) == roi_kwargs["num_rois"]
+
+    for pm in pixel_masks:
+        assert isinstance(pm, np.ndarray)
+        assert pm.shape[1] == 4  # y, x, z, weight
+        assert len(np.unique(pm[:, 3])) == 1 and np.all(pm[:, 3] == 1)  # not weighted
+        assert np.all(pm[:, 0] >= 0) and np.all(pm[:, 0] < roi_kwargs["height"])
+        assert np.all(pm[:, 1] >= 0) and np.all(pm[:, 1] < roi_kwargs["width"])
+        assert np.all(pm[:, 2] >= 0) and np.all(pm[:, 2] < roi_kwargs["num_planes"])
+
+    rois_weighted = generate_rois(weighted=True, **roi_kwargs)
+    pixel_masks_weighted = rois_weighted.get_roi_pixel_masks()
+    for pm in pixel_masks_weighted:
+        assert pm.shape[1] == 4
+        assert len(np.unique(pm[:, 3])) > 1
+        assert np.all(pm[:, 3] >= 0) and np.all(pm[:, 3] <= 1)
+
+
+def test_select_rois_multiplane_preserves_num_planes(make_rois_for_tests_multiplane):
+    rois, roi_kwargs = make_rois_for_tests_multiplane
+    selected = rois.select_rois([11])
+
+    assert selected.get_num_rois() == 1
+    assert selected.get_num_planes() == roi_kwargs["num_planes"]
+    assert selected.num_planes == roi_kwargs["num_planes"]
+
+    pm = selected.get_roi_pixel_masks()[0]
+    assert pm.shape[1] == 4
+
+
+def test_register_imaging_multiplane_checks_plane_count(make_rois_for_tests_multiplane):
+    rois, roi_kwargs = make_rois_for_tests_multiplane
+
+    ok_imaging = MockImaging(roi_kwargs["sampling_frequency"], num_planes=roi_kwargs["num_planes"])
+    rois.register_imaging(ok_imaging)
+    assert rois.imaging is ok_imaging
+
+    bad_imaging = MockImaging(roi_kwargs["sampling_frequency"], num_planes=roi_kwargs["num_planes"] - 1)
+    with pytest.raises(AssertionError, match="different number of planes"):
+        rois.register_imaging(bad_imaging)

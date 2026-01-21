@@ -169,7 +169,7 @@ def test_multiplane_basic_shape_and_plane_ids():
     )
 
     assert imaging.get_num_segments() == 1
-    assert imaging.get_num_planes() == p
+    assert imaging.get_num_planes() == p and imaging.num_planes == p
     assert np.array_equal(imaging.plane_ids, plane_ids)
     assert imaging.get_shape() == (n, h, w, p)
     assert imaging.get_series().shape == (n, h, w, p)

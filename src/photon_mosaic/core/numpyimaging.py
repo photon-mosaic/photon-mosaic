@@ -153,7 +153,7 @@ class NumpyRois(BaseRois):
 
     def __init__(
         self,
-        roi_image_masks: list[np.ndarray],
+        roi_image_masks: np.ndarray,
         sampling_frequency: FloatType,
         roi_ids: ArrayType | None = None,
     ):
@@ -162,14 +162,35 @@ class NumpyRois(BaseRois):
         Parameters
         ----------
         roi_image_masks : np.ndarray
-            Numpy array representing the image masks for each ROI (dimensions: num_rois x height x width).
+            Numpy array representing the image masks for each ROI
+            Accepted dimensions are: (num_rois x height x width) for single-plane and
+            (num_rois x height x width x num_planes) for multi-plane.
         sampling_frequency : FloatType
             Sampling frequency of the ROIs in Hz.
         roi_ids : ArrayType | None, default: None
-            Optional array of ROI IDs.
+            Optional array of ROI IDs. If None, IDs will be assigned as integers from 0 to num_rois-1.
         """
-        shape = roi_image_masks[0].shape
-        BaseRois.__init__(self, sampling_frequency=sampling_frequency, shape=shape, roi_ids=roi_ids)
+        num_rois = roi_image_masks.shape[0]
+        mask_shape = roi_image_masks[0].shape
+        if len(mask_shape) == 2 or (len(mask_shape) == 3 and mask_shape[2] == 1):
+            num_planes = 1
+        elif len(mask_shape) == 3:
+            num_planes = mask_shape[2]
+        else:
+            raise ValueError(
+                "'roi_image_masks' must contain 2D (height, width) or 3D (height, width, num_planes) masks"
+            )
+        if roi_ids is None:
+            roi_ids = np.arange(num_rois)
+
+        image_shape = mask_shape[:2]
+        BaseRois.__init__(
+            self,
+            sampling_frequency=sampling_frequency,
+            shape=image_shape,
+            roi_ids=roi_ids,
+            num_planes=num_planes,
+        )
         self._roi_image_masks = roi_image_masks
 
         self._kwargs = {
