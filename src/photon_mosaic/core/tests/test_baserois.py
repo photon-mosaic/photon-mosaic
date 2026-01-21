@@ -7,12 +7,8 @@ from photon_mosaic.core.baserois import BaseRois
 from photon_mosaic.core.generators import generate_rois
 
 
-class MockImaging:
-    def __init__(self, sampling_frequency):
-        self.sampling_frequency = sampling_frequency
-
-
-def _make_rois_for_tests() -> tuple[BaseRois, dict]:
+@pytest.fixture
+def make_rois_for_tests() -> tuple[BaseRois, dict]:
     roi_kwargs = dict(
         num_rois=3,
         height=50,
@@ -27,8 +23,13 @@ def _make_rois_for_tests() -> tuple[BaseRois, dict]:
     return rois, roi_kwargs
 
 
-def test_init_stores_sampling_frequency_shape_and_roi_ids():
-    rois, roi_kwargs = _make_rois_for_tests()
+class MockImaging:
+    def __init__(self, sampling_frequency):
+        self.sampling_frequency = sampling_frequency
+
+
+def test_init_stores_sampling_frequency_shape_and_roi_ids(make_rois_for_tests):
+    rois, roi_kwargs = make_rois_for_tests
     assert rois.sampling_frequency == roi_kwargs["sampling_frequency"]
     assert np.all(np.asarray(rois.image_shape) == np.array([roi_kwargs["height"], roi_kwargs["width"]]))
     assert np.all(np.asarray(rois.roi_ids) == np.array(roi_kwargs["roi_ids"]))
@@ -38,8 +39,8 @@ def test_init_stores_sampling_frequency_shape_and_roi_ids():
     assert rois.has_imaging() is False
 
 
-def test_repr_contains_roi_count_and_shape():
-    rois, roi_kwargs = _make_rois_for_tests()
+def test_repr_contains_roi_count_and_shape(make_rois_for_tests):
+    rois, roi_kwargs = make_rois_for_tests
     text = repr(rois)
     assert "ROIs" in text
     assert f"{roi_kwargs['num_rois']} ROIs" in text
@@ -56,8 +57,8 @@ def test_repr_contains_roi_count_and_shape():
     assert f"{roi_kwargs['height']} rows x {roi_kwargs['width']} columns" in text_html
 
 
-def test_roi_image_masks():
-    rois, roi_kwargs = _make_rois_for_tests()
+def test_roi_image_masks(make_rois_for_tests):
+    rois, roi_kwargs = make_rois_for_tests
 
     # This returns an array of shape (num_rois, height, width)
     image_masks = rois.get_roi_image_masks()
@@ -74,8 +75,8 @@ def test_roi_image_masks():
         rois.get_roi_image_masks(roi_ids=[11, 99])
 
 
-def test_get_roi_pixel_masks_default_all_rois_and_weights_preserved():
-    rois, roi_kwargs = _make_rois_for_tests()
+def test_get_roi_pixel_masks_default_all_rois_and_weights_preserved(make_rois_for_tests):
+    rois, roi_kwargs = make_rois_for_tests
     pixel_masks = rois.get_roi_pixel_masks()
     assert isinstance(pixel_masks, list)
     assert len(pixel_masks) == roi_kwargs["num_rois"]
@@ -106,8 +107,8 @@ def test_get_roi_pixel_masks_default_all_rois_and_weights_preserved():
         assert np.all(pm[:, 1] >= 0) and np.all(pm[:, 1] < roi_kwargs["width"])
 
 
-def test_get_roi_pixel_masks_subset_order_is_respected():
-    rois, roi_kwargs = _make_rois_for_tests()
+def test_get_roi_pixel_masks_subset_order_is_respected(make_rois_for_tests):
+    rois, roi_kwargs = make_rois_for_tests
 
     roi_ids = roi_kwargs["roi_ids"]
     pixel_masks = rois.get_roi_pixel_masks(roi_ids=[roi_ids[1], roi_ids[0]])
@@ -124,8 +125,8 @@ def test_get_roi_pixel_masks_subset_order_is_respected():
     assert np.array_equal(pm_second, all_pixel_masks[0])
 
 
-def test_select_rois_returns_selected_rois_and_masks_match():
-    rois, roi_kwargs = _make_rois_for_tests()
+def test_select_rois_returns_selected_rois_and_masks_match(make_rois_for_tests):
+    rois, roi_kwargs = make_rois_for_tests
 
     selected = rois.select_rois([11])
 
@@ -143,8 +144,8 @@ def test_select_rois_returns_selected_rois_and_masks_match():
         _ = rois.select_rois([999])
 
 
-def test_register_imaging_sets_imaging_and_has_imaging_true():
-    rois, roi_kwargs = _make_rois_for_tests()
+def test_register_imaging_sets_imaging_and_has_imaging_true(make_rois_for_tests):
+    rois, roi_kwargs = make_rois_for_tests
 
     imaging = MockImaging(roi_kwargs["sampling_frequency"])
     rois.register_imaging(imaging)
