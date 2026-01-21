@@ -28,7 +28,7 @@ class BinaryImaging(BaseImaging):
     num_planes : int, default: 1
         Number of planes in the imaging data
     plane_ids : list[int] | None, default: None
-        List of plane IDs. If None, defaults to [0, 1, ..., num
+        List of plane IDs. If None, defaults to [0, 1, ..., num_planes]
     time_axis : int, default: 0
         The axis of the time dimension
     t_starts : None or list of float, default: None
@@ -224,7 +224,7 @@ read_binary = BinaryImaging
 
 class BinaryFolderImaging(BinaryImaging):
     """
-    BinaryFolderImaging is an internal format used in spikeinterface.
+    BinaryFolderImaging is an internal format used in photon-mosaic.
     It is a BinaryImaging + metadata contained in a folder.
 
     It is created with the function: `imaging.save(format="binary", folder="/myfolder")`

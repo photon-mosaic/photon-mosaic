@@ -176,7 +176,7 @@ class BaseRois(BaseExtractor):
 
     def register_imaging(self, imaging: BaseImaging):
         """
-        Register an imaging to the sorting. If the sorting and imaging both contain
+        Register an imaging to the ROIs. If the ROIs and imaging both contain
         time information, the imaging's time information will be used.
 
         Parameters

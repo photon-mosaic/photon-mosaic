@@ -16,7 +16,7 @@ from .utils import ArrayType, FloatType
 
 
 class NumpyImaging(BaseImaging):
-    """An single-segment Imaging specified by timeseries .npy or numpy array"""
+    """An single-segment or multi-segment Imaging specified by a numpy array or list of arrays"""
 
     def __init__(
         self,
@@ -59,7 +59,7 @@ class NumpyImaging(BaseImaging):
         for video in videos:
             if len(video.shape) not in [3, 4]:
                 raise ValueError(
-                    "'timeseries' must be a 3D or 4D numpy array (num_frames, height, width, [num_channels])"
+                    "'timeseries' must be a 3D or 4D numpy array (num_frames, height, width, [num_planes])"
                 )
             shapes.append(video.shape[1:])
         if not all(shape == shapes[0] for shape in shapes):
