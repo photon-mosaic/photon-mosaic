@@ -58,7 +58,7 @@ class BinaryImaging(BaseImaging):
                 assert len(plane_ids) == num_planes, "plane_ids length must match num_planes"
         else:
             plane_ids = [0]
-        BaseImaging.__init__(self, sampling_frequency, image_shape, plane_ids=plane_ids)
+        BaseImaging.__init__(self, sampling_frequency, dtype=dtype, shape=image_shape, plane_ids=plane_ids)
 
         if isinstance(file_paths, list):
             # several segment
@@ -87,7 +87,7 @@ class BinaryImaging(BaseImaging):
                 num_planes,
                 file_offset,
             )
-            self.add_imaging_segment(imaging_segment)
+            self.add_segment(imaging_segment)
 
         self._kwargs = {
             "file_paths": [str(Path(e).absolute()) for e in file_path_list],

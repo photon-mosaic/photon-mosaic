@@ -23,14 +23,16 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
     The `_main_ids` attribute is used here for multi-plane imaging objects.
     """
 
-    def __init__(self, sampling_frequency: float, shape: tuple | list | np.ndarray, plane_ids: list | None = None):
+    def __init__(self, sampling_frequency: float, dtype: DtypeType, shape: tuple | list | np.ndarray, plane_ids: list | None = None):
         if plane_ids is None:
             plane_ids = [0]  # dummy single plane
         BaseExtractor.__init__(self, plane_ids)
         self._sampling_frequency = float(sampling_frequency)
         assert len(shape) == 2, "Shape must be a tuple/list/array of length 2 (height, width)"
         self._image_shape = np.array(shape)
+        self._dtype = dtype
         self._average_image = None
+        self._segments_dask = []
 
     def _repr_header(self, display_name=True):
         """Generate text representation of the BaseImaging object."""
@@ -114,6 +116,16 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         html_repr = html_header + html_segments + html_extra
         return html_repr
 
+    def add_segment(self, segment) -> None:
+        import dask.array as da
+
+        darr_segment = da.from_array(
+            segment,
+            asarray=False         # critical: don't auto-coerce eagerly
+        )
+        self._segments_dask.append(darr_segment)
+        BaseExtractor.add_segment(self, segment)
+
     @property
     def image_shape(self):
         """Get the shape of the images (height, width).
@@ -157,6 +169,17 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             The number of planes.
         """
         return len(self.plane_ids)
+
+    @property
+    def dask_segments(self):
+        """Get the Dask arrays for each imaging segment.
+
+        Returns
+        -------
+        list
+            A list of Dask arrays, one for each imaging segment.
+        """
+        return self._segments_dask
 
     def get_sampling_frequency(self):
         return self._sampling_frequency
@@ -240,7 +263,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         dtype: dtype
             Data type of the video.
         """
-        return self.get_series(start_frame=0, end_frame=2, segment_index=0).dtype
+        return self._dtype
 
     def get_num_pixels(self) -> int:
         """Get the number of pixels in the image.
@@ -295,10 +318,21 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         start_frame = start_frame if start_frame is not None else 0
         end_frame = end_frame if end_frame is not None else self.get_num_samples(segment_index=segment_index)
         if plane_ids is None:
-            plane_indices = range(self.get_num_planes())
+            plane_indices = slice(self.get_num_planes())
         else:
             plane_indices = self.ids_to_indices(plane_ids)
-        return self.segments[segment_index].get_series(start_frame, end_frame, plane_indices)
+        return self._segments_dask[segment_index][start_frame:end_frame, ..., plane_indices].compute()
+
+    def __getitem__(self, idx):
+        """
+        Get item(s) from the imaging data using numpy-like indexing.
+
+        The first index corresponds to the segment index, and subsequent indices correspond to
+        frame and spatial dimensions.
+        """
+        segment_index = idx[0] if len(idx) > 0 else 0
+        dask_segment = self._segments_dask[segment_index]
+        return dask_segment[idx[1:]].compute()
 
     def get_average_image(
         self,
@@ -319,17 +353,6 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             )
             self._average_image = np.mean(data, axis=0)
             return self._average_image
-
-    def add_imaging_segment(self, imaging_segment):
-        """Adds an imaging segment.
-
-        Parameters
-        ----------
-        imaging_segment : BaseImagingSegment
-            The imaging segment to add.
-        """
-        self.segments.append(imaging_segment)
-        imaging_segment.set_parent_extractor(self)
 
     def is_binary_compatible(self) -> bool:
         """
@@ -406,6 +429,149 @@ class BaseImagingSegment(ChunkableSegment):
     """
     Abstract class representing a multichannel timeseries, or block of raw ephys traces
     """
+    def __init__(self, dtype, sample_shape, sampling_frequency=None, t_start=None, time_vector=None):
+        super().__init__(sampling_frequency, t_start, time_vector)
+        self._dtype = dtype
+        self._sample_shape = sample_shape
+
+    @property
+    def dtype(self) -> DtypeType:
+        """
+        Data type of the imaging segment.
+
+        Returns
+        -------
+        dtype: dtype
+            Data type of the imaging segment.
+        """
+        return self._dtype
+
+    @property
+    def shape(self) -> tuple:
+        """
+        Shape of the imaging segment as (num_samples, height, width).
+
+        Returns
+        -------
+        tuple
+            Shape of the imaging segment.
+        """
+        return (self.get_num_samples(),) + self._sample_shape
+
+    @property
+    def ndim(self) -> int:
+        """
+        Number of dimensions of the imaging segment.
+
+        Returns
+        -------
+        int
+            Number of dimensions.
+        """
+        return len(self.shape)
+
+    def __getitem__(self, idx):
+        """
+        Implement numpy-like fancy indexing for the imaging segment.
+        
+        Supports indexing along dimensions for both 3D (samples, height, width) 
+        and 4D (samples, height, width, depth) data.
+        
+        Parameters
+        ----------
+        idx : int, slice, tuple, list, np.ndarray
+            Index specification following numpy conventions. Can be:
+            - Single integer: select one frame
+            - Slice: select a range of frames
+            - Tuple of indices: multi-dimensional indexing
+            - List or array: fancy indexing
+            
+        Returns
+        -------
+        np.ndarray
+            The indexed data.
+            
+        Examples
+        --------
+        >>> segment[0]  # First frame
+        >>> segment[10:20]  # Frames 10-20
+        >>> segment[10:20, :, :]  # Frames 10-20, all spatial dims
+        >>> segment[:, 5:10, 5:10]  # All frames, spatial crop
+        >>> segment[[0, 5, 10]]  # Specific frames via fancy indexing
+        """
+        # Get the full data - subclasses should implement get_series efficiently
+        # For now, we need to determine the range from the index
+        
+        # Normalize idx to a tuple
+        if not isinstance(idx, tuple):
+            idx = (idx,)
+        
+        # Determine which frames to retrieve
+        frame_idx = idx[0] if len(idx) > 0 else slice(None)
+        
+        # Convert frame index to start/end range
+        num_samples = self.get_num_samples()
+        
+        if isinstance(frame_idx, int):
+            # Single frame
+            if frame_idx < 0:
+                frame_idx = num_samples + frame_idx
+            start_frame = frame_idx
+            end_frame = frame_idx + 1
+        elif isinstance(frame_idx, slice):
+            # Slice of frames
+            start_frame, end_frame, step = frame_idx.indices(num_samples)
+            # Note: if step != 1, we'll need to handle it after retrieval
+        elif isinstance(frame_idx, (list, np.ndarray)):
+            # Fancy indexing - we need to get data and then index
+            # For efficiency, determine the min/max range
+            frame_array = np.asarray(frame_idx)
+            if frame_array.dtype == bool:
+                # Boolean indexing
+                frame_array = np.where(frame_array)[0]
+            start_frame = 0
+            end_frame = num_samples
+        else:
+            start_frame = 0
+            end_frame = num_samples
+        
+        # Get the data
+        data = self.get_series(start_frame=start_frame, end_frame=end_frame)
+        
+        # Apply the full indexing
+        if isinstance(frame_idx, int):
+            # Already got the right frame, just need to apply spatial indexing
+            result = data[0]  # Remove the frame dimension
+            if len(idx) > 1:
+                # Apply remaining indices to spatial dimensions
+                result = result[idx[1:]]
+        elif isinstance(frame_idx, slice):
+            # Handle step for slice
+            _, _, step = frame_idx.indices(num_samples)
+            if step != 1:
+                data = data[::step]
+            # Apply full indexing
+            if len(idx) > 1:
+                result = data[(slice(None),) + idx[1:]]
+            else:
+                result = data
+        elif isinstance(frame_idx, (list, np.ndarray)):
+            # Fancy indexing for frames
+            frame_array = np.asarray(frame_idx)
+            if frame_array.dtype == bool:
+                frame_array = np.where(frame_array)[0]
+            # Adjust indices if we didn't start from 0
+            adjusted_indices = frame_array - start_frame
+            data = data[adjusted_indices]
+            if len(idx) > 1:
+                result = data[(slice(None),) + idx[1:]]
+            else:
+                result = data
+        else:
+            # Default: apply all indices
+            result = data[idx]
+        
+        return result
 
     def get_series(
         self,

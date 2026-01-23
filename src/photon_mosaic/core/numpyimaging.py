@@ -81,14 +81,16 @@ class NumpyImaging(BaseImaging):
         else:
             time_vectors = [None] * num_segments
 
-        BaseImaging.__init__(self, shape=(height, width), sampling_frequency=sampling_frequency, plane_ids=plane_ids)
+        BaseImaging.__init__(self, shape=(height, width), dtype=video.dtype, sampling_frequency=sampling_frequency, plane_ids=plane_ids)
 
         for video, time_vector in zip(videos, time_vectors):
-            self.add_imaging_segment(
+            self.add_segment(
                 NumpyImagingSegment(
                     video=video,
                     sampling_frequency=self._sampling_frequency,
                     time_vector=time_vector,
+                    sample_shape=video.shape[1:],
+                    dtype=video.dtype,
                 )
             )
 
@@ -109,8 +111,10 @@ class NumpyImagingSegment(BaseImagingSegment):
         video: np.ndarray,
         sampling_frequency: float,
         time_vector: ArrayType | None = None,
+        sample_shape: tuple[int, ...] | None = None,
+        dtype: np.dtype | None = None,
     ):
-        super().__init__(sampling_frequency=sampling_frequency, time_vector=time_vector)
+        super().__init__(sampling_frequency=sampling_frequency, time_vector=time_vector, sample_shape=sample_shape, dtype=dtype)
         self._video = video
 
     def get_series(
