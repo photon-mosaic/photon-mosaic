@@ -67,16 +67,7 @@ def test_numpyimaging_time_vectors_length_must_match_num_segments():
         NumpyImaging(imaging_series=[v1, v2], sampling_frequency=10.0, time_vectors=tv)
 
 
-def test_numpyimaging_plane_ids_generated_for_4d_video_and_validated():
-    # 4D video: (frames, height, width, planes)
-    video = np.zeros((4, 6, 7, 3), dtype=np.float32)
-
-    im = NumpyImaging(imaging_series=video, sampling_frequency=20.0, plane_ids=None)
-    assert im._kwargs["plane_ids"] == [0, 1, 2]
-
-    with pytest.raises(AssertionError, match="plane_ids length must match num_planes"):
-        NumpyImaging(imaging_series=video, sampling_frequency=20.0, plane_ids=[0, 1])
-
+# Plane ids argument has been removed
 
 def test_numpyimagingsegment_get_num_samples():
     video = np.zeros((11, 2, 3), dtype=np.float32)
@@ -85,7 +76,7 @@ def test_numpyimagingsegment_get_num_samples():
 
 
 def test_numpyimagingsegment_get_series_3d_basic_slicing():
-    video = np.arange(5 * 3 * 4, dtype=np.int32).reshape(5, 3, 4)
+    video = np.arange(5 * 3 * 4, dtype=np.int32).reshape(5, 3, 4, 1)
     seg = NumpyImagingSegment(video=video, sampling_frequency=1.0)
 
     out_all = seg.get_series()

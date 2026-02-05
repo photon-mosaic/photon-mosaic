@@ -23,13 +23,15 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
     The `_main_ids` attribute is used here for multi-plane imaging objects.
     """
 
-    def __init__(self, sampling_frequency: float, shape: tuple | list | np.ndarray, plane_ids: list | None = None):
-        if plane_ids is None:
-            plane_ids = [0]  # dummy single plane
-        BaseExtractor.__init__(self, plane_ids)
+    def __init__(self, sampling_frequency: float, shape: tuple | list | np.ndarray):
+        # Should we allow users to provide 2D shape (H, W) for single plane imaging?
+        if len(shape) == 2:
+            shape = (shape[0], shape[1], 1)
+        assert len(shape) == 3, "Shape must be a tuple/list/array of length 3 (height, width, planes)"
+
+        BaseExtractor.__init__(self, range(0, shape[2]))
         self._sampling_frequency = float(sampling_frequency)
-        assert len(shape) == 2, "Shape must be a tuple/list/array of length 2 (height, width)"
-        self._image_shape = np.array(shape)
+        self._image_shape = np.array(shape) # Image is intended as a volume (H, W, planes)
         self._average_image = None
 
     def _repr_header(self, display_name=True):
@@ -162,10 +164,10 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         return self._sampling_frequency
 
     def get_sample_size_in_bytes(self):
-        return self.get_num_pixels() * self.get_num_planes() * np.dtype(self.get_dtype()).itemsize
+        return self.get_num_pixels() * np.dtype(self.get_dtype()).itemsize
 
     def get_shape(self, segment_index: int | None = None) -> tuple:
-        """Get the shape of the imaging data as (num_samples, height, width).
+        """Get the shape of the imaging data as (num_samples, height, width, planes).
 
         Parameters
         ----------
@@ -175,7 +177,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         Returns
         -------
         tuple
-            The shape of the imaging data as (num_samples, height, width).
+            The shape of the imaging data as (num_samples, height, width, planes).
         """
         if segment_index is None:
             if self.get_num_segments() == 1:
@@ -183,11 +185,9 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             else:
                 raise ValueError("segment_index must be provided for multi-segment imaging data.")
         num_samples = self.get_num_samples(segment_index=segment_index)
-        if self.get_num_planes() > 1:
-            return (num_samples, *self.image_shape, self.get_num_planes())
-        else:
-            return (num_samples, *self.image_shape)
-
+        
+        return (num_samples, *self.image_shape)
+        
     def get_data(self, start_frame: int, end_frame: int, segment_index: int | None = None, **kwargs) -> np.ndarray:
         return self.get_series(start_frame=start_frame, end_frame=end_frame, segment_index=segment_index)
 
@@ -307,6 +307,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         chunk_size: int | None = None,
         recompute: bool = False,
     ) -> np.ndarray:
+        #  we will get the average volume image across the given frames
         if self._average_image is not None and not recompute:
             return self._average_image
         else:
@@ -373,7 +374,6 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
                 file_paths=file_paths,
                 sampling_frequency=self.get_sampling_frequency(),
                 image_shape=self.image_shape,
-                num_planes=self.get_num_planes(),
                 dtype=dtype,
                 t_starts=t_starts,
                 file_offset=0,

@@ -14,8 +14,8 @@ def test_generate_random_imaging_int_vs_singleton_tuple_same_output():
     assert imaging_int.get_num_segments() == 1
     assert imaging_tuple.get_num_segments() == 1
 
-    np.testing.assert_allclose(imaging_int.get_series(), imaging_tuple.get_series())
-    assert imaging_int.get_shape() == imaging_tuple.get_shape() == (n, h, w)
+    np.testing.assert_array_equal(imaging_int.get_series(), imaging_tuple.get_series())
+    assert imaging_int.get_shape() == imaging_tuple.get_shape() == (n, h, w, 1)
 
 
 def test_generate_random_imaging_multisegment_shapes_and_reproducibility_multiplane():
@@ -58,9 +58,9 @@ def test_generate_random_imaging_num_planes_1_returns_3d_series():
     imaging = generate_random_imaging(num_frames=n, height=h, width=w, sampling_frequency=10.0, num_planes=1, seed=0)
 
     series = imaging.get_series()
-    assert series.shape == (n, h, w)
-    assert series.ndim == 3
-    assert imaging.get_shape() == (n, h, w)
+    assert series.shape == (n, h, w, 1)
+    assert series.ndim == 4
+    assert imaging.get_shape() == (n, h, w, 1)  
 
 
 def test_generate_rois_default_roi_ids_and_deterministic_masks():

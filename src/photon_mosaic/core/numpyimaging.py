@@ -23,7 +23,6 @@ class NumpyImaging(BaseImaging):
         imaging_series: ArrayType | list[ArrayType],
         sampling_frequency: FloatType,
         time_vectors: ArrayType | list[ArrayType] | None = None,
-        plane_ids: list[int] | None = None,
         seed=None,
     ):
         """Create a NumpyImagingExtractor from a numpy array or list of numpy arrays.
@@ -41,8 +40,6 @@ class NumpyImaging(BaseImaging):
             Sampling frequency of the video in Hz.
         time_vectors: ArrayType | list[ArrayType] | None, default: None
             Optional time vector(s) for the video.
-        plane_ids: list[int] | None, default: None
-            Optional list of plane IDs for the video.
         """
         if isinstance(imaging_series, np.ndarray):
             videos = [imaging_series]
@@ -61,18 +58,12 @@ class NumpyImaging(BaseImaging):
                 raise ValueError(
                     "'timeseries' must be a 3D or 4D numpy array (num_frames, height, width, [num_planes])"
                 )
+            if len(video.shape) == 3:
+                video = video[:, :, :, np.newaxis]  # Add a planes dimension
             shapes.append(video.shape[1:])
         if not all(shape == shapes[0] for shape in shapes):
-            raise ValueError("All segments must have the same image shape (height, width) and number of planes")
-        height, width = shapes[0][0:2]
-        num_planes = shapes[0][2] if len(shapes[0]) == 3 else 1
-
-        if num_planes > 1:
-            if plane_ids is None:
-                plane_ids = list(range(num_planes))
-            else:
-                assert len(plane_ids) == num_planes, "plane_ids length must match num_planes"
-
+            raise ValueError("All segments must have the same image shape (height, width, planes)")
+        
         # Check consistency of time vectors
         if time_vectors is not None:
             if num_segments == 1 and isinstance(time_vectors, np.ndarray):
@@ -81,7 +72,7 @@ class NumpyImaging(BaseImaging):
         else:
             time_vectors = [None] * num_segments
 
-        BaseImaging.__init__(self, shape=(height, width), sampling_frequency=sampling_frequency, plane_ids=plane_ids)
+        BaseImaging.__init__(self, shape=shapes[0], sampling_frequency=sampling_frequency)
 
         for video, time_vector in zip(videos, time_vectors):
             self.add_imaging_segment(
@@ -96,7 +87,6 @@ class NumpyImaging(BaseImaging):
             "imaging_series": imaging_series,
             "sampling_frequency": self._sampling_frequency,
             "time_vectors": time_vectors,
-            "plane_ids": plane_ids,
             "seed": seed,
         }
 
@@ -134,10 +124,8 @@ class NumpyImagingSegment(BaseImagingSegment):
         """
         start = start_frame if start_frame is not None else 0
         end = end_frame if end_frame is not None else self._video.shape[0]
-        if self._video.ndim == 4 and plane_indices is not None:
-            return self._video[start:end, :, :, plane_indices]
-        else:
-            return self._video[start:end, ...]
+        return self._video[start:end, :, :, plane_indices] if plane_indices is not None else self._video[start:end]
+        
 
     def get_num_samples(self) -> int:
         """Returns the number of samples in this signal segment
