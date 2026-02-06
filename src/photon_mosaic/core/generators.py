@@ -3,7 +3,7 @@
 import numpy as np
 
 from photon_mosaic.core import BaseRois
-from photon_mosaic.core.numpyimaging import NumpyImaging, NumpyRois
+from photon_mosaic.core.arrayimaging import ArrayImaging, NumpyRois
 
 
 def generate_random_imaging(
@@ -14,7 +14,7 @@ def generate_random_imaging(
     num_planes: int = 1,
     plane_ids: list[int] | None = None,
     seed: int | None = None,
-) -> NumpyImaging:
+) -> ArrayImaging:
     """Generate a random NumpyImaging object for testing.
 
     Parameters
@@ -42,7 +42,7 @@ def generate_random_imaging(
         if num_planes == 1:
             video = video[..., 0]
         videos.append(video)
-    return NumpyImaging(imaging_series=videos, sampling_frequency=sampling_frequency, plane_ids=plane_ids)
+    return ArrayImaging(imaging_series=videos, sampling_frequency=sampling_frequency, plane_ids=plane_ids)
 
 
 def generate_rois(

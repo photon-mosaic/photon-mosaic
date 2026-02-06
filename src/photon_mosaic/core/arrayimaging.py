@@ -13,9 +13,9 @@ import numpy as np
 from .baseimaging import BaseImaging, BaseImagingSegment
 from .baserois import BaseRois
 from .utils import ArrayType, FloatType
+import dask.array as da
 
-
-class NumpyImaging(BaseImaging):
+class ArrayImaging(BaseImaging):
     """An single-segment or multi-segment Imaging specified by a numpy array or list of arrays"""
 
     def __init__(
@@ -44,12 +44,12 @@ class NumpyImaging(BaseImaging):
         plane_ids: list[int] | None, default: None
             Optional list of plane IDs for the video.
         """
-        if isinstance(imaging_series, np.ndarray):
+        if isinstance(imaging_series, np.ndarray | da.Array):
             videos = [imaging_series]
         elif isinstance(imaging_series, list) and all(isinstance(ts, np.ndarray) for ts in imaging_series):
             videos = imaging_series
         else:
-            raise ValueError("'timeseries' must be a numpy array or a list of numpy arrays")
+            raise ValueError("'timeseries' must be a numpy array or dask array, or a list of them")
 
         num_segments = len(videos)
         self._sampling_frequency = float(sampling_frequency)
@@ -84,13 +84,24 @@ class NumpyImaging(BaseImaging):
         BaseImaging.__init__(self, shape=(height, width), sampling_frequency=sampling_frequency, plane_ids=plane_ids)
 
         for video, time_vector in zip(videos, time_vectors):
-            self.add_imaging_segment(
-                NumpyImagingSegment(
-                    video=video,
-                    sampling_frequency=self._sampling_frequency,
-                    time_vector=time_vector,
+            if type(video) is np.ndarray:
+                self.add_imaging_segment(
+                    NumpyImagingSegment(
+                        video=video,
+                        sampling_frequency=self._sampling_frequency,
+                        time_vector=time_vector,
+                    )
                 )
-            )
+            elif type(video) is da.Array:
+                self.add_imaging_segment(
+                    DaskImagingSegment(
+                        video=video,
+                        sampling_frequency=self._sampling_frequency,
+                        time_vector=time_vector,
+                    )
+                )
+            else:
+                raise ValueError("Each segment must be a numpy array or a dask array")
 
         self._kwargs = {
             "imaging_series": imaging_series,
@@ -130,6 +141,59 @@ class NumpyImagingSegment(BaseImagingSegment):
         Returns
         -------
         series: np.ndarray
+            The raw series for the specified frame range.
+        """
+        start = start_frame if start_frame is not None else 0
+        end = end_frame if end_frame is not None else self._video.shape[0]
+        if self._video.ndim == 4 and plane_indices is not None:
+            return self._video[start:end, :, :, plane_indices]
+        else:
+            return self._video[start:end, ...]
+
+    def get_num_samples(self) -> int:
+        """Returns the number of samples in this signal segment
+
+        Returns:
+            SampleIndex : Number of samples in the signal segment
+        """
+        return self._video.shape[0]
+    
+class DaskImagingSegment(BaseImagingSegment):
+    """A single segment of an Imaging specified by a dask array"""
+
+    def __init__(
+        self,
+        video: da.Array,
+        sampling_frequency: float,
+        time_vector: ArrayType | None = None,
+    ):
+        super().__init__(sampling_frequency=sampling_frequency, time_vector=time_vector)
+        assert isinstance(video, da.Array), "'video' must be a dask array"
+        assert len(video.shape) in [3, 4], "'video' must be a 3D or 4D dask array (num_frames, height, width, [num_planes])"
+        #  check if the chunking is as expected
+        if len(video.shape) == 4:
+            # for now we raise an error
+            assert set(video.chunks[3]) == {1}
+            # we could also rechunk and drop a warning
+        self._video = video
+
+    def get_series(
+        self, start_frame: int | None = None, end_frame: int | None = None, plane_indices: list | None = None
+    ) -> da.Array:
+        """Get the raw series, optionally for a subset of samples.
+
+        Parameters
+        ----------
+        start_frame : int | None, default: None
+            start frame index, or zero if None
+        end_frame : int | None, default: None
+            end frame, or number of frames if None
+        plane_indices : list | None, default: None
+            List of plane indices to include, or all planes if None
+
+        Returns
+        -------
+        series: da.Array
             The raw series for the specified frame range.
         """
         start = start_frame if start_frame is not None else 0
