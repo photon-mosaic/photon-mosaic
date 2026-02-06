@@ -1,5 +1,6 @@
 [project]
 name = "photon-mosaic"
+<<<<<<< HEAD
 version = "0.1.0"
 
 readme = "README.md"
@@ -38,3 +39,104 @@ pythonpath = ["src", "tests"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+=======
+authors = [
+    {name = "Laura Porta", email= "l.porta@ucl.ac.uk"},
+    {name = "Arielle Leon", email= "ariellel@alleninstitute.org"},
+    {name = "Alessio Buccino", email= "alejoe9187@gmail.com"},
+    {name = "Alessandro Felder", email= "a.felder@ucl.ac.uk"},
+]
+description = "Library for modular calcium imaging analysis"
+readme = "README.md"
+requires-python = ">=3.10.0"
+dynamic = ["version"]
+dependencies = [
+    "spikeinterface @ git+https://github.com/alejoe91/spikeinterface.git@04f44e85ca848722bc60447aeadb5178c70c652b"
+]
+
+license = {text = "MIT License"}
+
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "License :: OSI Approved :: MIT License",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/photon-mosaic/photon-mosaic"
+"Bug Tracker" = "https://github.com/photon-mosaic/photon-mosaic/issues"
+"Documentation" = "https://github.com/photon-mosaic/photon-mosaic"
+"Source Code" = "https://github.com/photon-mosaic/photon-mosaic"
+"User Support" = "https://github.com/photon-mosaic/photon-mosaic/issues"
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "coverage",
+  "tox",
+  "mypy",
+  "pre-commit",
+  "ruff",
+  "setuptools-scm",
+]
+
+[build-system]
+requires = [
+    "setuptools>=64",
+    "wheel",
+    "setuptools-scm[toml]>=8",
+]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["photon_mosaic*"]
+exclude = ["tests*"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=photon_mosaic"
+
+[tool.ruff]
+line-length = 120
+exclude = ["__init__.py", "build", ".eggs"]
+fix = true
+
+[tool.ruff.lint]
+select = ["I", "E", "F"]
+
+[tool.mypy]
+ignore_missing_imports = true
+
+[tool.setuptools_scm]
+# This section is intentionally left empty
+# setuptools_scm will automatically infer the version from git tags
+
+[tool.codespell]
+skip = '.git'
+check-hidden = true
+
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+envlist = py{311,312}
+
+[gh-actions]
+python =
+    3.11: py311
+    3.12: py312
+
+[testenv]
+extras =
+    dev
+commands =
+    pytest -v --color=yes --cov=photon_mosaic --cov-report=xml
+"""
+>>>>>>> ec85f572a0d1c537d92a7f2308f0202c0de7f6ba

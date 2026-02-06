@@ -1,421 +1,135 @@
-"""Toy example ImagingExtractor and SegmentationExtractor for testing.
-
-Functions
----------
-toy_example
-    Create a toy example of an ImagingExtractor and a SegmentationExtractor.
-"""
+"""Module to generate synthetic imaging and ROI objects for testing purposes."""
 
 import numpy as np
 
-from .baseimaging import BaseImaging, BaseImagingSegment
-from .numpyimaging import NumpyImaging
+from photon_mosaic.core import BaseRois
+from photon_mosaic.core.numpyimaging import NumpyImaging, NumpyRois
 
 
-def _gaussian(x, mu, sigma):
-    """Compute classical gaussian with parameters x, mu, sigma."""
-    return 1 / np.sqrt(2 * np.pi * sigma) * np.exp(-((x - mu) ** 2) / sigma)
-
-
-def _generate_rois(
-    num_units=10,
-    height=100,
-    width=100,
-    roi_size=4,
-    min_dist=5,
-    mode="uniform",
-    seed=None,
-):  # TODO: mode --> literal type
-    """Generate ROIs with given parameters.
+def generate_random_imaging(
+    num_frames: int | tuple[int, ...] = 1000,
+    height: int = 256,
+    width: int = 256,
+    sampling_frequency: float = 30.0,
+    num_planes: int = 1,
+    plane_ids: list[int] | None = None,
+    seed: int | None = None,
+) -> NumpyImaging:
+    """Generate a random NumpyImaging object for testing.
 
     Parameters
     ----------
-    num_units: int
-        Number of ROIs
-    size_x: int
-        Size of x dimension (pixels)
-    size_y: int
-        Size of y dimension (pixels)
-    roi_size: int
-        Size of ROI in x and y dimension (pixels)
-    min_dist: int
-        Minimum distance between ROI centers (pixels)
-    mode: str
-        'uniform' or 'gaussian'.
-        If 'uniform', ROI values are uniform and equal to 1.
-        If 'gaussian', ROI values are gaussian modulated
+    num_frames : int | tuple[int, ...], default: 1000
+        Number of frames for each segment in the imaging data.
+    height : int, default: 256
+        Height of each frame in pixels.
+    width : int, default: 256
+        Width of each frame in pixels.
+    sampling_frequency : float, default: 30.0
+        Sampling frequency in Hz.
 
     Returns
     -------
-    roi_pixels: list
-        List of pixel coordinates for each ROI
-    image: np.ndarray
-        Image with ROIs
-    means: list
-        List of mean coordinates for each ROI
+    NumpyImaging
+        A NumpyImaging object containing the generated random imaging data.
     """
-    image = np.zeros((height, width))
-    max_iter = 1000
-
-    count = 0
-    it = 0
-    means = []
-
-    rng = np.random.default_rng(seed=seed)
-
-    while count < num_units:
-        mean_x = rng.integers(0, height - 1)
-        mean_y = rng.integers(0, width - 1)
-
-        mean_ = np.array([mean_x, mean_y])
-
-        if len(means) == 0:
-            means.append(mean_)
-            count += 1
-        else:
-            dists = np.array([np.linalg.norm(mean_ - m) for m in means])
-
-            if np.all(dists > min_dist):
-                means.append(mean_)
-                count += 1
-
-        it += 1
-
-        if it >= max_iter:
-            raise Exception("Could not fit ROIs given 'min_dist'")
-
-    roi_pixels = []
-    for m, mean in enumerate(means):
-        # print(f"ROI {m + 1}/{num_units}")
-        pixels = []
-        for i in np.arange(height):
-            for j in np.arange(width):
-                p = np.array([i, j])
-
-                if np.linalg.norm(p - mean) < roi_size:
-                    pixels.append(p)
-                    if mode == "uniform":
-                        image[i, j] = 1
-                    elif mode == "gaussian":
-                        image[i, j] = _gaussian(i, mean[0], roi_size) + _gaussian(j, mean[1], roi_size)
-                    else:
-                        raise Exception("'mode' can be 'uniform' or 'gaussian'")
-        roi_pixels.append(np.array(pixels))
-
-    return roi_pixels, image, means
+    if isinstance(num_frames, int):
+        num_frames = (num_frames,)
+    rng = np.random.default_rng(seed)
+    videos = []
+    for n_frames in num_frames:
+        video = rng.random((n_frames, height, width, num_planes))
+        if num_planes == 1:
+            video = video[..., 0]
+        videos.append(video)
+    return NumpyImaging(imaging_series=videos, sampling_frequency=sampling_frequency, plane_ids=plane_ids)
 
 
-class NoiseGeneratorImaging(BaseImaging):
-
-    def __init__(
-        self, sampling_frequency=30, durations=[10], height=100, width=100, noise_std=0.05, seed=None, **noise_kwargs
-    ):
-        from spikeinterface.core.generate import NoiseGeneratorRecording
-
-        super().__init__(sampling_frequency=sampling_frequency, shape=(height, width))
-        self.noise_generator_recording = NoiseGeneratorRecording(
-            num_channels=self.get_num_pixels(),
-            sampling_frequency=sampling_frequency,
-            durations=durations,
-            noise_levels=noise_std,
-            seed=seed,
-            noise_block_size=100,
-            **noise_kwargs,
-        )
-        seed = self.noise_generator_recording._kwargs["seed"]
-
-        for segment_index in range(len(durations)):
-            self.add_imaging_segment(
-                NoiseGeneratorImagingSegment(
-                    sampling_frequency=sampling_frequency,
-                    noise_generator=self.noise_generator_recording,
-                    segment_index=segment_index,
-                    image_shape=self.image_shape,
-                )
-            )
-
-        self._kwargs = dict(
-            sampling_frequency=sampling_frequency,
-            durations=durations,
-            height=height,
-            width=width,
-            noise_std=noise_std,
-            seed=seed,
-        )
-        self._kwargs.update(noise_kwargs)
-
-
-class NoiseGeneratorImagingSegment(BaseImagingSegment):
-
-    def __init__(self, sampling_frequency, noise_generator, segment_index, image_shape):
-        super().__init__(sampling_frequency=sampling_frequency)
-        self.noise_generator = noise_generator
-        self.segment_index = segment_index
-        self.image_shape = image_shape
-
-    def get_num_samples(self):
-        return self.noise_generator.get_num_samples(segment_index=self.segment_index)
-
-    def get_series(self, start_frame, end_frame):
-        traces = self.noise_generator.get_traces(
-            start_frame=start_frame, end_frame=end_frame, segment_index=self.segment_index
-        )
-        video_shape = (traces.shape[0], self.image_shape[0], self.image_shape[1])
-        return traces.reshape(video_shape)
-
-
-class GroundTruthImaging(BaseImaging):
-
-    def __init__(
-        self,
-        durations=[10],
-        num_rois=10,
-        height=100,
-        width=100,
-        roi_size=4,
-        min_dist=5,
-        mode="uniform",
-        sampling_frequency=30.0,
-        sorting_sampling_frequency=30_000,
-        decay_time=0.5,
-        noise_std=0.05,
-        seed=None,
-    ):
-        from spikeinterface.core.generate import generate_sorting
-
-        if seed is None:
-            seed = np.random.default_rng(seed=None).integers(0, 2**63)
-
-        assert (
-            np.mod(sorting_sampling_frequency, sampling_frequency) == 0
-        ), "sorting_sampling_frequency needs to be a multiple of sorting_frequency"
-
-        # generate ROIs
-        num_rois = int(num_rois)
-        roi_pixels, roi_values, _ = _generate_rois(
-            num_units=num_rois, height=height, width=width, roi_size=roi_size, min_dist=min_dist, mode=mode, seed=seed
-        )
-
-        self.noise_generator = NoiseGeneratorImaging(
-            durations=durations, height=height, width=width, noise_std=noise_std, seed=seed
-        )
-
-        self.sorting = generate_sorting(
-            durations=durations, num_units=num_rois, sampling_frequency=sorting_sampling_frequency, seed=seed
-        )
-
-        self.noise_generator = NoiseGeneratorImaging(
-            durations=durations,
-            height=height,
-            width=width,
-            noise_std=noise_std,
-        )
-
-        super().__init__(sampling_frequency=sampling_frequency, shape=(height, width))
-
-        # create decaying response
-        resp_samples = int(decay_time * sorting_sampling_frequency)
-        resp_tau = resp_samples / 5
-        tresp = np.arange(resp_samples)
-        kernel = np.exp(-tresp / resp_tau)
-
-        # add single segment
-        for segment_index, noise_segment in enumerate(self.noise_generator.segments):
-            gt_segment = GroundTruthImagingSegment(
-                sampling_frequency=sampling_frequency,
-                noise_segment=noise_segment,
-                segment_index=segment_index,
-                sorting=self.sorting,
-                roi_pixels=roi_pixels,
-                roi_values=roi_values,
-                kernel=kernel,
-            )
-            self.add_imaging_segment(gt_segment)
-
-        self._kwargs = dict(
-            durations=durations,
-            num_rois=num_rois,
-            height=height,
-            width=width,
-            roi_size=roi_size,
-            min_dist=min_dist,
-            mode=mode,
-            sampling_frequency=sampling_frequency,
-            sorting_sampling_frequency=sorting_sampling_frequency,
-            decay_time=decay_time,
-            noise_std=noise_std,
-        )
-
-
-class GroundTruthImagingSegment(BaseImagingSegment):
-    def __init__(
-        self, sampling_frequency, segment_index, noise_segment, sorting, roi_pixels, roi_values, kernel, min_samples=10
-    ):
-        super().__init__(sampling_frequency=sampling_frequency)
-        self.noise_segment = noise_segment
-        self.segment_index = segment_index
-        self.sorting = sorting
-        self.roi_pixels = roi_pixels
-        self.roi_values = roi_values
-        self.kernel_high_res = kernel
-        self.decimation_factor = int(self.sorting.sampling_frequency // self.sampling_frequency)
-        self.min_samples = min_samples
-
-    def get_num_samples(self):
-        return self.noise_segment.get_num_samples()
-
-    def get_series(self, start_frame, end_frame):
-        if (end_frame - start_frame) < self.min_samples:
-            end_frame_ = self.min_samples - (end_frame - start_frame)
-        else:
-            end_frame_ = end_frame
-
-        noise = self.noise_segment.get_series(start_frame, end_frame_)
-        fluo_hr = np.zeros((len(self.roi_pixels), (end_frame_ - start_frame) * self.decimation_factor))
-        t_start = max(0, start_frame / self.sampling_frequency)  # - self.kernel_duration)
-        t_stop = end_frame_ / self.sampling_frequency
-        sorting_sliced = self.sorting.time_slice(t_start, t_stop)
-        resp = self.kernel_high_res
-        num_hr_frames = fluo_hr.shape[1]
-        for u_i, unit_id in enumerate(sorting_sliced.unit_ids):
-            spike_train = sorting_sliced.get_unit_spike_train(
-                unit_id,
-                segment_index=self.segment_index,
-            )
-            for spike_index in spike_train:  # TODO build a local function that generates frames with spikes
-                if spike_index + len(resp) < num_hr_frames:
-                    fluo_hr[u_i, spike_index : spike_index + len(resp)] += resp
-                else:
-                    fluo_hr[u_i, spike_index:] = resp[: num_hr_frames - spike_index]
-
-        # now decimate
-        fluo_traces = fluo_hr[:, :: self.decimation_factor]
-
-        # generate video
-        fluo_video = np.zeros((noise.shape))
-        for roi_pixels, fluo_trace in zip(self.roi_pixels, fluo_traces):
-            for pixel in roi_pixels:
-                fluo_video[:, *pixel] += fluo_trace * self.roi_values[*pixel]
-
-        video = fluo_video + noise
-        return video[: (end_frame - start_frame)]
-
-
-generate_gt_video = GroundTruthImaging
-
-
-def generate_ground_truth_video(
-    duration=10,
-    num_rois=10,
-    size_x=100,
-    size_y=100,
-    roi_size=4,
-    min_dist=5,
-    mode="uniform",
-    sampling_frequency=30.0,
-    decay_time=0.5,
-    noise_std=0.05,
-):
-    """Create a toy example of an ImagingExtractor and a SegmentationExtractor.
+def generate_rois(
+    num_rois: int = 20,
+    height: int = 256,
+    width: int = 256,
+    radius_range: tuple[int, int] | tuple[int, int, int] = (5, 15),
+    sampling_frequency: float = 30.0,
+    roi_ids: np.ndarray | None = None,
+    weighted: bool = False,
+    num_planes: int = 1,
+    seed: int | None = None,
+) -> BaseRois:
+    """Generate circular ROIs for testing.
 
     Parameters
     ----------
-    duration: float
-        Duration in s
-    num_rois: int
-        Number of ROIs
-    size_x: int
-        Size of x dimension (pixels)
-    size_y: int
-        Size of y dimension (pixels)
-    roi_size: int
-        Size of ROI in x and y dimension (pixels)
-    min_dist: int
-        Minimum distance between ROI centers (pixels)
-    mode: str
-        'uniform' or 'gaussian'.
-        If 'uniform', ROI values are uniform and equal to 1.
-        If 'gaussian', ROI values are gaussian modulated
-    sampling_frequency: float
-        The sampling rate
-    decay_time: float
-        Decay time of fluorescence response
-    noise_std: float
-        Standard deviation of added gaussian noise
-
-    Returns
-    -------
-    imag: NumpyImagingExtractor
-        The output imaging extractor
-    seg: NumpySegmentationExtractor
-        The output segmentation extractor
+    num_rois : int, default: 20
+        Number of ROIs to generate, by default 20
+    height : int, default: 256
+        Height of the imaging field, by default 256
+    width : int, default: 256
+        Width of the imaging field, by default 256
+    radius_range : tuple[int, int] | tuple[int, int, int], default: (5, 15)
+        Range of radii for the circular ROIs, by default (5, 15) (for 2D).
+        If num_planes > 1 and a tuple of three ints is provided, the third int is used as the radius for the
+        z-dimension. If a tuple of two ints is provided, the depth radius will be half of the num_planes.
+    sampling_frequency : float, default: 30.
+        Sampling frequency, by default 30.0
+    roi_ids : np.ndarray | None, default: None
+        Array of ROI IDs. If None, defaults to np.arange(num_rois)
+    weighted : bool, default: False
+        Whether to create weighted masks (values between 0 and 1) or binary masks (0 or 1), by default False
+    num_planes : int, default: 1
+        Number of planes for the ROIs, by default 1 (2D masks). If >1, creates 3D masks.
     """
-    # generate ROIs
-    num_rois = int(num_rois)
-    roi_pixels, im, means = _generate_rois(
-        num_units=num_rois,
-        size_x=size_x,
-        size_y=size_y,
-        roi_size=roi_size,
-        min_dist=min_dist,
-        mode=mode,
-    )
+    if num_planes == 1:
+        roi_masks = np.zeros((num_rois, height, width))
+        rng = np.random.default_rng(seed)
+    else:
+        roi_masks = np.zeros((num_rois, height, width, num_planes))
+        rng = np.random.default_rng(seed)
+        if len(radius_range) == 2:
+            depth_radius = max(1, num_planes // 2)
+        else:
+            depth_radius = radius_range[2]
 
-    from spikeinterface.core import generate_sorting
+    assert radius_range[0] < radius_range[1], "Invalid radius range"
+    assert radius_range[1] < width - radius_range[1], "ROIs may not fit in the image with the given radius range"
+    assert radius_range[1] < height - radius_range[1], "ROIs may not fit in the image with the given radius range"
 
-    sort = generate_sorting(durations=[duration], num_units=num_rois, sampling_frequency=sampling_frequency)
+    for roi_idx in range(num_rois):
+        center_x = rng.integers(radius_range[1], width - radius_range[1])
+        center_y = rng.integers(radius_range[1], height - radius_range[1])
+        radius = rng.integers(radius_range[0], radius_range[1])
 
-    # create decaying response
-    resp_samples = int(decay_time * sampling_frequency)
-    resp_tau = resp_samples / 5
-    tresp = np.arange(resp_samples)
-    resp = np.exp(-tresp / resp_tau)
+        if num_planes == 1:
+            y, x = np.ogrid[:height, :width]
+            mask = (x - center_x) ** 2 + (y - center_y) ** 2 <= radius**2
 
-    num_frames = int(sampling_frequency * duration)
+            if not weighted:
+                roi_masks[roi_idx] = mask
+            else:
+                # Create a weighted mask with values decreasing from center to edge
+                distance_from_center = np.sqrt((x - center_x) ** 2 + (y - center_y) ** 2)
+                weighted_mask = np.clip(1 - (distance_from_center / radius), 0, 1) * mask
+                roi_masks[roi_idx] = weighted_mask
+        else:
+            # Choose z-center so the ROI fits in depth; fall back to middle plane if too shallow
+            if num_planes > 2 * depth_radius:
+                center_z = rng.integers(depth_radius, num_planes - depth_radius)
+            else:
+                center_z = num_planes // 2
 
-    # convolve response with ROIs
-    # TODO: optimize this and make it lazy
-    raw = np.zeros((num_rois, num_frames))  # TODO Change to new standard formatting with time in first axis
-    deconvolved = np.zeros((num_rois, num_frames))  # TODO Change to new standard formatting with time in first axis
-    frames = num_frames
-    for u_i in range(num_rois):
-        unit_id = sort.unit_ids[u_i]
-        for s in sort.get_unit_spike_train(unit_id):  # TODO build a local function that generates frames with spikes
-            if s < num_frames:
-                if s + len(resp) < frames:
-                    raw[u_i, s : s + len(resp)] += resp
-                else:
-                    raw[u_i, s:] = resp[: frames - s]
-                deconvolved[u_i, s] = 1
+            y, x, z = np.ogrid[:height, :width, :num_planes]
 
-    # generate video
-    video = np.zeros((frames, size_x, size_y))
-    for rp, t in zip(roi_pixels, raw):
-        for r in rp:
-            video[:, r[0], r[1]] += t * im[r[0], r[1]]
+            # Ellipsoidal ROI: (dx^2+dy^2)/r^2 + dz^2/drz^2 <= 1
+            dx2_dy2 = (x - center_x) ** 2 + (y - center_y) ** 2
+            dz2 = (z - center_z) ** 2
+            ellipsoid_distance = np.sqrt((dx2_dy2 / (radius**2)) + (dz2 / (depth_radius**2)))
+            mask = ellipsoid_distance <= 1
 
-    # normalize video
-    video /= np.max(video)
+            if not weighted:
+                roi_masks[roi_idx] = mask
+            else:
+                weighted_mask = np.clip(1 - ellipsoid_distance, 0, 1) * mask
+                roi_masks[roi_idx] = weighted_mask
 
-    # add noise
-    video += noise_std * np.abs(np.random.randn(*video.shape))
-
-    # instantiate imaging and segmentation extractors
-    imag = NumpyImaging(timeseries=video, sampling_frequency=sampling_frequency)
-
-    # create image masks
-    image_masks = np.zeros((size_x, size_y, num_rois))
-    for rois_i, roi in enumerate(roi_pixels):
-        for r in roi:
-            image_masks[r[0], r[1], rois_i] += im[r[0], r[1]]
-
-    # seg = NumpySegmentationExtractor(
-    #     image_masks=image_masks,
-    #     raw=raw,
-    #     deconvolved=deconvolved,
-    #     neuropil=neuropil,
-    #     sampling_frequency=float(sampling_frequency),
-    # )
-    seg = None
-
-    return imag, seg
+    roi_ids = np.arange(num_rois) if roi_ids is None else roi_ids
+    return NumpyRois(roi_image_masks=roi_masks, roi_ids=roi_ids, sampling_frequency=sampling_frequency)
