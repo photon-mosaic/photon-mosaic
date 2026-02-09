@@ -82,7 +82,7 @@ def test_numpyimagingepoch_get_num_samples():
 
 
 def test_numpyimagingepoch_get_series_3d_basic_slicing():
-    video = np.arange(5 * 3 * 4, dtype=np.int32).reshape(5, 3, 4)
+    video = np.arange(5 * 3 * 4, dtype=np.int32).reshape(5, 3, 4, 1)
     seg = NumpyImagingEpoch(video=video, sampling_frequency=1.0)
 
     out_all = seg.get_series()
