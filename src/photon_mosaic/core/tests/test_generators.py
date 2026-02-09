@@ -60,7 +60,7 @@ def test_generate_random_imaging_num_planes_1_returns_3d_series():
     series = imaging.get_series()
     assert series.shape == (n, h, w, 1)
     assert series.ndim == 4
-    assert imaging.get_shape() == (n, h, w, 1)  
+    assert imaging.get_shape() == (n, h, w, 1)
 
 
 def test_generate_rois_default_roi_ids_and_deterministic_masks():
