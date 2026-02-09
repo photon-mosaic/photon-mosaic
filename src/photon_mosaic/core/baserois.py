@@ -13,16 +13,16 @@ class BaseRois(BaseExtractor):
         sampling_frequency: float,
         shape: tuple | list | np.ndarray,
         roi_ids: ArrayLike,
-        num_planes: int = 1,
     ):
         BaseExtractor.__init__(self, roi_ids)
         self._sampling_frequency = float(sampling_frequency)
-        assert len(shape) == 2, "Shape must be a tuple/list/array of length 2 (height, width)"
-        self._image_shape = np.array(shape)
-        self._num_planes = num_planes
+        if len(shape) == 2:
+            shape = (shape[0], shape[1], 1)
+        self._shape = tuple(shape)
+        self._num_planes = shape[2]
         self._roi_ids = np.array(roi_ids)
         self._imaging: BaseImaging | None = None
-        # no concept of segments for rois yet, since they are spatial only
+        # no concept of epochs for rois, since they are spatial only
 
     def __repr__(self):
         return self._repr_header()
@@ -33,10 +33,10 @@ class BaseRois(BaseExtractor):
             name = f"{self.name} ({self.__class__.__name__})"
         else:
             name = self.__class__.__name__
-        image_shape = self.image_shape
+        shape = self._shape
         # Format shape string based on whether data is volumetric or not
-        image_shape_repr = f"{image_shape[0]} rows x {image_shape[1]} columns "
-        return f"{name}:\n" f"{self.get_num_rois()} ROIs - " f"{image_shape_repr}"
+        shape_repr = f"{shape[0]} rows x {shape[1]} columns "
+        return f"{name}:\n" f"{self.get_num_rois()} ROIs - " f"{shape_repr}"
 
     def _repr_html_(self, display_name=True):
         common_style = "margin-left: 10px;"
@@ -73,26 +73,16 @@ class BaseRois(BaseExtractor):
         """
         return self._imaging is not None
 
-    def get_num_segments(self) -> int:
-        """Get the number of segments. Always 1 for BaseRois.
-
-        Returns
-        -------
-        int
-            The number of segments (always 1 for BaseRois).
-        """
-        return 1
-
     @property
-    def image_shape(self):
-        """Get the shape of the images (height, width).
+    def shape(self):
+        """Get the shape of the ROIs (height, width, planes).
 
         Returns
         -------
         tuple
-            The shape of the images as (height, width).
+            The shape of the ROIs as (height, width, planes).
         """
-        return self._image_shape
+        return self._shape
 
     @property
     def sampling_frequency(self):
@@ -209,7 +199,7 @@ class BaseRois(BaseExtractor):
         Parameters
         ----------
         imaging : BaseImaging
-            Imaging with the same number of segments as current sorting.
+            Imaging with the same number of planes as the ROIs.
             Assigned to self._imaging.
         """
         assert (
@@ -237,9 +227,8 @@ class SelectRois(BaseRois):
         BaseRois.__init__(
             self,
             sampling_frequency=rois.sampling_frequency,
-            shape=rois.image_shape,
+            shape=rois.shape,
             roi_ids=self._selected_roi_ids,
-            num_planes=rois.get_num_planes(),
         )
         rois.copy_metadata(self, only_main=False, ids=self.roi_ids)
         self._parent = rois

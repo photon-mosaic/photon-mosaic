@@ -1,125 +1,116 @@
-"""Imaging and Segmentation Extractors for .npy files.
+"""Imaging and ROI classes for in-memory arrays (numpy and dask).
 
 Classes
 -------
-NumpyImagingExtractor
-    An ImagingExtractor specified by timeseries .npy file, sampling frequency, and channel names.
-NumpySegmentationExtractor
-    A Segmentation extractor specified by image masks and traces .npy files.
+ArrayImaging
+    An Imaging specified by numpy or dask arrays, sampling frequency, and channel names.
+NumpyRois
+    A ROIs specified by image masks .npy files.
 """
 
 import numpy as np
+from numpy.typing import ArrayLike
 
-from .baseimaging import BaseImaging, BaseImagingSegment
-from .baserois import BaseRois
-from .utils import ArrayType, FloatType
 import dask.array as da
 
+from .baseimaging import BaseImaging, BaseImagingEpoch
+from .baserois import BaseRois
+
 class ArrayImaging(BaseImaging):
-    """An single-segment or multi-segment Imaging specified by a numpy array or list of arrays"""
+    """A single- or multi-epoch Imaging specified by numpy or dask arrays"""
 
     def __init__(
         self,
-        imaging_series: ArrayType | list[ArrayType],
-        sampling_frequency: FloatType,
-        time_vectors: ArrayType | list[ArrayType] | None = None,
-        plane_ids: list[int] | None = None,
+        imaging_series: ArrayLike | list[ArrayLike],
+        sampling_frequency: float,
+        time_vectors: ArrayLike | list[ArrayLike] | None = None,
         seed=None,
     ):
-        """Create a NumpyImagingExtractor from a numpy array or list of numpy arrays.
+        """Create an ArrayImaging from a numpy/dask array or list of arrays.
 
-        If a list of numpy arrays is provided, each array is treated as a separate segment.
-        Individual segments can have one or more planes. In the former case, the shape of each
+        If a list of arrays is provided, each array is treated as a separate epoch.
+        Individual epochs can have one or more planes. In the former case, the shape of each
         array should be (num_frames, height, width). In the latter case, the shape should be
         (num_frames, height, width, num_planes).
 
         Parameters
         ----------
-        imaging_series: ArrayType | list[ArrayType]
-            Numpy array or list of numpy arrays representing the video.
-        sampling_frequency: FloatType
+        imaging_series: ArrayLike | list[ArrayLike]
+            Numpy/dask array or list of arrays representing the video.
+        sampling_frequency: float
             Sampling frequency of the video in Hz.
-        time_vectors: ArrayType | list[ArrayType] | None, default: None
+        time_vectors: ArrayLike | list[ArrayLike] | None, default: None
             Optional time vector(s) for the video.
-        plane_ids: list[int] | None, default: None
-            Optional list of plane IDs for the video.
         """
-        if isinstance(imaging_series, np.ndarray | da.Array):
+        if isinstance(imaging_series, (np.ndarray, da.Array)):
             videos = [imaging_series]
-        elif isinstance(imaging_series, list) and all(isinstance(ts, np.ndarray) for ts in imaging_series):
+        elif isinstance(imaging_series, list) and all(
+            isinstance(ts, (np.ndarray, da.Array)) for ts in imaging_series
+        ):
             videos = imaging_series
         else:
             raise ValueError("'timeseries' must be a numpy array or dask array, or a list of them")
 
-        num_segments = len(videos)
+        num_epochs = len(videos)
         self._sampling_frequency = float(sampling_frequency)
 
-        # Check that all shapes and number of planes are consistent across segments
+        # Check that all shapes and number of planes are consistent across epochs
         shapes = []
         for video in videos:
             if len(video.shape) not in [3, 4]:
                 raise ValueError(
                     "'timeseries' must be a 3D or 4D numpy array (num_frames, height, width, [num_planes])"
                 )
+            if len(video.shape) == 3:
+                video = video[:, :, :, np.newaxis]  # Add a planes dimension
             shapes.append(video.shape[1:])
         if not all(shape == shapes[0] for shape in shapes):
-            raise ValueError("All segments must have the same image shape (height, width) and number of planes")
-        height, width = shapes[0][0:2]
-        num_planes = shapes[0][2] if len(shapes[0]) == 3 else 1
-
-        if num_planes > 1:
-            if plane_ids is None:
-                plane_ids = list(range(num_planes))
-            else:
-                assert len(plane_ids) == num_planes, "plane_ids length must match num_planes"
+            raise ValueError("All epochs must have the same image shape (height, width, planes)")
 
         # Check consistency of time vectors
         if time_vectors is not None:
-            if num_segments == 1 and isinstance(time_vectors, np.ndarray):
+            if num_epochs == 1 and isinstance(time_vectors, np.ndarray):
                 time_vectors = [time_vectors]
-            assert len(time_vectors) == num_segments, "Number of time vectors must match number of segments"
+            assert len(time_vectors) == num_epochs, "Number of time vectors must match number of epochs"
         else:
-            time_vectors = [None] * num_segments
+            time_vectors = [None] * num_epochs
 
-        BaseImaging.__init__(self, shape=(height, width), sampling_frequency=sampling_frequency, plane_ids=plane_ids)
+        BaseImaging.__init__(self, shape=shapes[0], sampling_frequency=sampling_frequency)
 
         for video, time_vector in zip(videos, time_vectors):
-            if type(video) is np.ndarray:
-                self.add_imaging_segment(
-                    NumpyImagingSegment(
-                        video=video,
-                        sampling_frequency=self._sampling_frequency,
-                        time_vector=time_vector,
-                    )
-                )
-            elif type(video) is da.Array:
-                self.add_imaging_segment(
-                    DaskImagingSegment(
+            if isinstance(video, da.Array):
+                self.add_epoch(
+                    DaskImagingEpoch(
                         video=video,
                         sampling_frequency=self._sampling_frequency,
                         time_vector=time_vector,
                     )
                 )
             else:
-                raise ValueError("Each segment must be a numpy array or a dask array")
+                self.add_epoch(
+                    NumpyImagingEpoch(
+                        video=video,
+                        sampling_frequency=self._sampling_frequency,
+                        time_vector=time_vector,
+                    )
+                )
 
         self._kwargs = {
             "imaging_series": imaging_series,
             "sampling_frequency": self._sampling_frequency,
             "time_vectors": time_vectors,
-            "plane_ids": plane_ids,
             "seed": seed,
         }
 
 
-class NumpyImagingSegment(BaseImagingSegment):
-    """A single segment of an Imaging specified by a numpy array"""
+class NumpyImagingEpoch(BaseImagingEpoch):
+    """A single epoch of an Imaging specified by a numpy array"""
 
     def __init__(
         self,
         video: np.ndarray,
         sampling_frequency: float,
-        time_vector: ArrayType | None = None,
+        time_vector: ArrayLike | None = None,
     ):
         super().__init__(sampling_frequency=sampling_frequency, time_vector=time_vector)
         self._video = video
@@ -145,31 +136,32 @@ class NumpyImagingSegment(BaseImagingSegment):
         """
         start = start_frame if start_frame is not None else 0
         end = end_frame if end_frame is not None else self._video.shape[0]
-        if self._video.ndim == 4 and plane_indices is not None:
-            return self._video[start:end, :, :, plane_indices]
-        else:
-            return self._video[start:end, ...]
+        return self._video[start:end, :, :, plane_indices] if plane_indices is not None else self._video[start:end]
 
     def get_num_samples(self) -> int:
-        """Returns the number of samples in this signal segment
+        """Returns the number of samples in this signal epoch
 
-        Returns:
-            SampleIndex : Number of samples in the signal segment
+        Returns
+        -------
+        int
+            Number of samples in the signal epoch
         """
         return self._video.shape[0]
     
-class DaskImagingSegment(BaseImagingSegment):
-    """A single segment of an Imaging specified by a dask array"""
+class DaskImagingEpoch(BaseImagingEpoch):
+    """A single epoch of an Imaging specified by a dask array"""
 
     def __init__(
         self,
         video: da.Array,
         sampling_frequency: float,
-        time_vector: ArrayType | None = None,
+        time_vector: ArrayLike | None = None,
     ):
         super().__init__(sampling_frequency=sampling_frequency, time_vector=time_vector)
         assert isinstance(video, da.Array), "'video' must be a dask array"
-        assert len(video.shape) in [3, 4], "'video' must be a 3D or 4D dask array (num_frames, height, width, [num_planes])"
+        assert len(video.shape) in [3, 4], (
+            "'video' must be a 3D or 4D dask array (num_frames, height, width, [num_planes])"
+        )
         #  check if the chunking is as expected
         if len(video.shape) == 4:
             # for now we raise an error
@@ -193,7 +185,7 @@ class DaskImagingSegment(BaseImagingSegment):
 
         Returns
         -------
-        series: da.Array
+        series : da.Array
             The raw series for the specified frame range.
         """
         start = start_frame if start_frame is not None else 0
@@ -204,10 +196,12 @@ class DaskImagingSegment(BaseImagingSegment):
             return self._video[start:end, ...]
 
     def get_num_samples(self) -> int:
-        """Returns the number of samples in this signal segment
+        """Returns the number of samples in this signal epoch
 
-        Returns:
-            SampleIndex : Number of samples in the signal segment
+        Returns
+        -------
+        int
+            Number of samples in the signal epoch
         """
         return self._video.shape[0]
 
@@ -217,43 +211,36 @@ class NumpyRois(BaseRois):
 
     def __init__(
         self,
-        roi_image_masks: np.ndarray,
-        sampling_frequency: FloatType,
-        roi_ids: ArrayType | None = None,
+        roi_image_masks: ArrayLike,
+        sampling_frequency: float,
+        roi_ids: ArrayLike | None = None,
     ):
         """Create a NumpyRois object from numpy arrays.
 
         Parameters
         ----------
-        roi_image_masks : np.ndarray
+        roi_image_masks : ArrayLike
             Numpy array representing the image masks for each ROI
             Accepted dimensions are: (num_rois x height x width) for single-plane and
             (num_rois x height x width x num_planes) for multi-plane.
-        sampling_frequency : FloatType
+        sampling_frequency : float
             Sampling frequency of the ROIs in Hz.
-        roi_ids : ArrayType | None, default: None
+        roi_ids : ArrayLike | None, default: None
             Optional array of ROI IDs. If None, IDs will be assigned as integers from 0 to num_rois-1.
         """
         num_rois = roi_image_masks.shape[0]
         mask_shape = roi_image_masks[0].shape
-        if len(mask_shape) == 2 or (len(mask_shape) == 3 and mask_shape[2] == 1):
-            num_planes = 1
-        elif len(mask_shape) == 3:
-            num_planes = mask_shape[2]
-        else:
-            raise ValueError(
-                "'roi_image_masks' must contain 2D (height, width) or 3D (height, width, num_planes) masks"
-            )
+        if len(mask_shape) not in [2, 3]:
+            raise ValueError("Each ROI mask must be a 2D (height x width) or 3D (height x width x planes) array")
+
         if roi_ids is None:
             roi_ids = np.arange(num_rois)
 
-        image_shape = mask_shape[:2]
         BaseRois.__init__(
             self,
             sampling_frequency=sampling_frequency,
-            shape=image_shape,
+            shape=mask_shape,
             roi_ids=roi_ids,
-            num_planes=num_planes,
         )
         self._roi_image_masks = roi_image_masks
 

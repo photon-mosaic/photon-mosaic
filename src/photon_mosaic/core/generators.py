@@ -1,4 +1,4 @@
-"""Module to generate synthetic imaging and ROI objects for testing purposes."""
+"""Module to generate synthetic imaging and ROI objects for testing and example purposes."""
 
 import numpy as np
 
@@ -10,17 +10,16 @@ def generate_random_imaging(
     num_frames: int | tuple[int, ...] = 1000,
     height: int = 256,
     width: int = 256,
-    sampling_frequency: float = 30.0,
     num_planes: int = 1,
-    plane_ids: list[int] | None = None,
+    sampling_frequency: float = 30.0,
     seed: int | None = None,
 ) -> ArrayImaging:
-    """Generate a random NumpyImaging object for testing.
+    """Generate a random ArrayImaging object for testing.
 
     Parameters
     ----------
     num_frames : int | tuple[int, ...], default: 1000
-        Number of frames for each segment in the imaging data.
+        Number of frames for each epoch in the imaging data.
     height : int, default: 256
         Height of each frame in pixels.
     width : int, default: 256
@@ -30,8 +29,8 @@ def generate_random_imaging(
 
     Returns
     -------
-    NumpyImaging
-        A NumpyImaging object containing the generated random imaging data.
+    ArrayImaging
+        An ArrayImaging object containing the generated random imaging data.
     """
     if isinstance(num_frames, int):
         num_frames = (num_frames,)
@@ -39,10 +38,8 @@ def generate_random_imaging(
     videos = []
     for n_frames in num_frames:
         video = rng.random((n_frames, height, width, num_planes))
-        if num_planes == 1:
-            video = video[..., 0]
         videos.append(video)
-    return ArrayImaging(imaging_series=videos, sampling_frequency=sampling_frequency, plane_ids=plane_ids)
+    return ArrayImaging(imaging_series=videos, sampling_frequency=sampling_frequency)
 
 
 def generate_rois(

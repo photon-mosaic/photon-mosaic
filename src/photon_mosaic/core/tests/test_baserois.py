@@ -50,10 +50,9 @@ def make_rois_for_tests_multiplane() -> tuple[BaseRois, dict]:
 def test_init_stores_sampling_frequency_shape_and_roi_ids(make_rois_for_tests):
     rois, roi_kwargs = make_rois_for_tests
     assert rois.sampling_frequency == roi_kwargs["sampling_frequency"]
-    assert np.all(np.asarray(rois.image_shape) == np.array([roi_kwargs["height"], roi_kwargs["width"]]))
+    assert np.all(np.asarray(rois.shape) == np.array([roi_kwargs["height"], roi_kwargs["width"], 1]))
     assert np.all(np.asarray(rois.roi_ids) == np.array(roi_kwargs["roi_ids"]))
     assert rois.get_num_rois() == roi_kwargs["num_rois"]
-    assert rois.get_num_segments() == 1
     assert rois.imaging is None
     assert rois.has_imaging() is False
 
@@ -151,7 +150,7 @@ def test_select_rois_returns_selected_rois_and_masks_match(make_rois_for_tests):
 
     assert selected.get_num_rois() == 1
     assert np.all(np.asarray(selected.roi_ids) == np.array([11]))
-    assert np.all(np.asarray(selected.image_shape) == np.array([roi_kwargs["height"], roi_kwargs["width"]]))
+    assert np.all(np.asarray(selected.shape) == np.array([roi_kwargs["height"], roi_kwargs["width"], 1]))
     assert selected.sampling_frequency == rois.sampling_frequency
 
     # ensure it proxies masks from the source

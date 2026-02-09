@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from photon_mosaic.core.arrayimaging import ArrayImaging, NumpyImagingSegment
+from photon_mosaic.core.arrayimaging import ArrayImaging, NumpyImagingEpoch
 import dask.array as da
 
 @pytest.fixture(scope="module")
