@@ -46,19 +46,10 @@ class BinaryImaging(BaseImaging):
         sampling_frequency,
         image_shape,
         dtype,
-        num_planes: int = 1,
-        plane_ids: list[int] | None = None,
         t_starts=None,
         file_offset=0,
     ):
-        if num_planes > 1:
-            if plane_ids is None:
-                plane_ids = list(range(num_planes))
-            else:
-                assert len(plane_ids) == num_planes, "plane_ids length must match num_planes"
-        else:
-            plane_ids = [0]
-        BaseImaging.__init__(self, sampling_frequency, image_shape, plane_ids=plane_ids)
+        BaseImaging.__init__(self, sampling_frequency, image_shape)
 
         if isinstance(file_paths, list):
             # several segment
@@ -84,7 +75,6 @@ class BinaryImaging(BaseImaging):
                 t_start,
                 image_shape,
                 dtype,
-                num_planes,
                 file_offset,
             )
             self.add_imaging_segment(imaging_segment)
@@ -96,8 +86,6 @@ class BinaryImaging(BaseImaging):
             "image_shape": image_shape,
             "dtype": dtype.str,
             "file_offset": file_offset,
-            "num_planes": num_planes,
-            "plane_ids": plane_ids,
         }
 
     def is_binary_compatible(self) -> bool:
@@ -108,7 +96,6 @@ class BinaryImaging(BaseImaging):
             file_paths=self._kwargs["file_paths"],
             dtype=np.dtype(self._kwargs["dtype"]),
             image_shape=self._kwargs["image_shape"],
-            num_planes=self._kwargs["num_planes"],
             file_offset=self._kwargs["file_offset"],
         )
         return d
@@ -127,17 +114,16 @@ class BinaryImaging(BaseImaging):
 
 
 class BinaryImagingSegment(BaseImagingSegment):
-    def __init__(self, file_path, sampling_frequency, t_start, image_shape, dtype, num_planes, file_offset):
+    def __init__(self, file_path, sampling_frequency, t_start, image_shape, dtype, file_offset):
         BaseImagingSegment.__init__(self, sampling_frequency=sampling_frequency, t_start=t_start)
         self.image_shape = image_shape
         self.dtype = np.dtype(dtype)
         self.file_offset = file_offset
         self.file_path = file_path
         self.file = open(self.file_path, "rb")
-        self.bytes_per_sample = np.prod(image_shape) * num_planes * self.dtype.itemsize
+        self.bytes_per_sample = np.prod(image_shape) * self.dtype.itemsize
         self.data_size_in_bytes = Path(file_path).stat().st_size - file_offset
         self.num_samples = self.data_size_in_bytes // self.bytes_per_sample
-        self.num_planes = num_planes
 
     def get_num_samples(self) -> int:
         """Returns the number of samples in this signal block
@@ -179,16 +165,15 @@ class BinaryImagingSegment(BaseImagingSegment):
         # Create a numpy array using the mmap object as the buffer
         # Note that the shape must be recalculated based on the new data chunk
         shape: tuple[int, int, int, int]
-        if self.num_planes > 1:
-            shape = (
-                (end_frame - start_frame),
-                self.image_shape[0],
-                self.image_shape[1],
-                self.num_planes,
-            )
-        else:
-            shape = ((end_frame - start_frame), self.image_shape[0], self.image_shape[1], 1)
-
+        shape = (
+            (end_frame - start_frame),
+            self.image_shape[0],
+            self.image_shape[1],
+            self.image_shape[2], 
+            # We could also read only the specific planes here
+            # if we implemented more complex memory mapping offsets
+        )
+        
         # Now the entire array should correspond to the data between start_frame and end_frame,
         # so we can use it directly
         series = np.ndarray(
@@ -199,11 +184,8 @@ class BinaryImagingSegment(BaseImagingSegment):
         )
 
         # Slice planes if needed
-        if plane_indices is not None and self.num_planes > 1:
-            series = series[:, :, :, plane_indices]
-        elif self.num_planes == 1:
-            series = series[:, :, :, 0]
-
+        series = series[:, :, :, plane_indices] if plane_indices is not None else series
+        
         return series
 
     def __del__(self):  # pragma: no cover

@@ -12,7 +12,6 @@ def generate_random_imaging(
     width: int = 256,
     sampling_frequency: float = 30.0,
     num_planes: int = 1,
-    plane_ids: list[int] | None = None,
     seed: int | None = None,
 ) -> NumpyImaging:
     """Generate a random NumpyImaging object for testing.
@@ -39,10 +38,8 @@ def generate_random_imaging(
     videos = []
     for n_frames in num_frames:
         video = rng.random((n_frames, height, width, num_planes))
-        if num_planes == 1:
-            video = video[..., 0]
         videos.append(video)
-    return NumpyImaging(imaging_series=videos, sampling_frequency=sampling_frequency, plane_ids=plane_ids)
+    return NumpyImaging(imaging_series=videos, sampling_frequency=sampling_frequency)
 
 
 def generate_rois(
