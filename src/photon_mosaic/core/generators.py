@@ -10,8 +10,8 @@ def generate_random_imaging(
     num_frames: int | tuple[int, ...] = 1000,
     height: int = 256,
     width: int = 256,
-    sampling_frequency: float = 30.0,
     num_planes: int = 1,
+    sampling_frequency: float = 30.0,
     seed: int | None = None,
 ) -> NumpyImaging:
     """Generate a random NumpyImaging object for testing.

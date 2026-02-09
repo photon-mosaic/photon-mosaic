@@ -69,6 +69,7 @@ def test_numpyimaging_time_vectors_length_must_match_num_segments():
 
 # Plane ids argument has been removed
 
+
 def test_numpyimagingsegment_get_num_samples():
     video = np.zeros((11, 2, 3), dtype=np.float32)
     seg = NumpyImagingSegment(video=video, sampling_frequency=5.0)
@@ -109,18 +110,15 @@ def test_numpyimagingsegment_get_series_4d_plane_selection():
 def test_numpyrois_mask_shapes():
     # Create masks with wrong shape
     good_shapes = [
-        (3, 30, 30),  # 2D masks
-        (4, 20, 20, 5),  # 3D masks
+        (3, 30, 30, 1),  # 1 plane
+        (4, 20, 20, 5),  # multi-plane
     ]
     bad_shape = (5, 30, 30, 10, 2)  # 4D instead of 2D or 3D
     for shape in good_shapes:
         masks = np.zeros(shape)
         rois = NumpyRois(roi_image_masks=masks, sampling_frequency=30.0, roi_ids=None)
         assert rois.get_num_rois() == shape[0]
-        if len(shape) == 3:
-            assert rois.get_num_planes() == 1
-        else:
-            assert rois.get_num_planes() == shape[3]
+        assert rois.get_num_planes() == shape[3]
 
     bad_masks = np.zeros(bad_shape)
     with pytest.raises(ValueError):

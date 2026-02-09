@@ -192,8 +192,8 @@ def test_multiplane_average_image_shape_and_caching():
         num_frames=n,
         height=h,
         width=w,
-        sampling_frequency=sf,
         num_planes=p,
+        sampling_frequency=sf,
         seed=42,
     )
 

@@ -159,24 +159,17 @@ class NumpyRois(BaseRois):
         """
         num_rois = roi_image_masks.shape[0]
         mask_shape = roi_image_masks[0].shape
-        if len(mask_shape) == 2 or (len(mask_shape) == 3 and mask_shape[2] == 1):
-            num_planes = 1
-        elif len(mask_shape) == 3:
-            num_planes = mask_shape[2]
-        else:
-            raise ValueError(
-                "'roi_image_masks' must contain 2D (height, width) or 3D (height, width, num_planes) masks"
-            )
+        if len(mask_shape) not in [2, 3]:
+            raise ValueError("Each ROI mask must be a 2D (height x width) or 3D (height x width x planes) array")
+
         if roi_ids is None:
             roi_ids = np.arange(num_rois)
 
-        image_shape = mask_shape[:2]
         BaseRois.__init__(
             self,
             sampling_frequency=sampling_frequency,
-            shape=image_shape,
+            shape=mask_shape,
             roi_ids=roi_ids,
-            num_planes=num_planes,
         )
         self._roi_image_masks = roi_image_masks
 
