@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from photon_mosaic.core.numpyimaging import NumpyImaging, NumpyImagingSegment, NumpyRois
+from photon_mosaic.core.numpyimaging import NumpyImaging, NumpyImagingEpoch, NumpyRois
 
 
 def test_numpyimaging_rejects_invalid_imaging_series_type():
@@ -18,16 +18,16 @@ def test_numpyimaging_accepts_single_3d_array_and_wraps_time_vector():
     assert isinstance(im._sampling_frequency, float)
     assert im._sampling_frequency == 10.0
 
-    # time_vectors ndarray should be wrapped into a list for a single segment
+    # time_vectors ndarray should be wrapped into a list for a single epoch
     assert "time_vectors" in im._kwargs
     assert isinstance(im._kwargs["time_vectors"], list)
     assert len(im._kwargs["time_vectors"]) == 1
     np.testing.assert_allclose(im._kwargs["time_vectors"][0], t)
 
-    assert len(im.segments) == 1
+    assert len(im.epochs) == 1
 
 
-def test_numpyimaging_defaults_time_vectors_to_none_per_segment():
+def test_numpyimaging_defaults_time_vectors_to_none_per_epoch():
     v1 = np.zeros((3, 4, 5), dtype=np.uint8)
     v2 = np.zeros((7, 4, 5), dtype=np.uint8)
 
@@ -36,7 +36,7 @@ def test_numpyimaging_defaults_time_vectors_to_none_per_segment():
     assert isinstance(im._kwargs["time_vectors"], list)
     assert im._kwargs["time_vectors"] == [None, None]
 
-    assert len(im.segments) == 2
+    assert len(im.epochs) == 2
 
 
 def test_numpyimaging_rejects_non_3d_or_4d_videos():
@@ -50,7 +50,7 @@ def test_numpyimaging_rejects_non_3d_or_4d_videos():
         NumpyImaging(imaging_series=bad5d, sampling_frequency=1.0)
 
 
-def test_numpyimaging_rejects_inconsistent_shapes_across_segments():
+def test_numpyimaging_rejects_inconsistent_shapes_across_epochs():
     v1 = np.zeros((5, 8, 9), dtype=np.float32)
     v2 = np.zeros((5, 8, 10), dtype=np.float32)  # different width
 
@@ -58,7 +58,7 @@ def test_numpyimaging_rejects_inconsistent_shapes_across_segments():
         NumpyImaging(imaging_series=[v1, v2], sampling_frequency=10.0)
 
 
-def test_numpyimaging_time_vectors_length_must_match_num_segments():
+def test_numpyimaging_time_vectors_length_must_match_num_epochs():
     v1 = np.zeros((5, 8, 9), dtype=np.float32)
     v2 = np.zeros((6, 8, 9), dtype=np.float32)
 
@@ -70,15 +70,15 @@ def test_numpyimaging_time_vectors_length_must_match_num_segments():
 # Plane ids argument has been removed
 
 
-def test_numpyimagingsegment_get_num_samples():
+def test_numpyimagingepoch_get_num_samples():
     video = np.zeros((11, 2, 3), dtype=np.float32)
-    seg = NumpyImagingSegment(video=video, sampling_frequency=5.0)
+    seg = NumpyImagingEpoch(video=video, sampling_frequency=5.0)
     assert seg.get_num_samples() == 11
 
 
-def test_numpyimagingsegment_get_series_3d_basic_slicing():
+def test_numpyimagingepoch_get_series_3d_basic_slicing():
     video = np.arange(5 * 3 * 4, dtype=np.int32).reshape(5, 3, 4, 1)
-    seg = NumpyImagingSegment(video=video, sampling_frequency=1.0)
+    seg = NumpyImagingEpoch(video=video, sampling_frequency=1.0)
 
     out_all = seg.get_series()
     np.testing.assert_array_equal(out_all, video)
@@ -91,9 +91,9 @@ def test_numpyimagingsegment_get_series_3d_basic_slicing():
     np.testing.assert_array_equal(out_pi, video[0:2, ...])
 
 
-def test_numpyimagingsegment_get_series_4d_plane_selection():
+def test_numpyimagingepoch_get_series_4d_plane_selection():
     video = np.arange(6 * 2 * 3 * 4, dtype=np.int32).reshape(6, 2, 3, 4)
-    seg = NumpyImagingSegment(video=video, sampling_frequency=1.0)
+    seg = NumpyImagingEpoch(video=video, sampling_frequency=1.0)
 
     out_all = seg.get_series()
     np.testing.assert_array_equal(out_all, video)

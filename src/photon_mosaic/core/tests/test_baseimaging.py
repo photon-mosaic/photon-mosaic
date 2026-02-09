@@ -9,7 +9,7 @@ def test_random_imaging_basic_properties():
     num_frames, h, w, sf = 10, 8, 9, 30.0
     imaging = generate_random_imaging(num_frames=num_frames, height=h, width=w, sampling_frequency=sf, seed=0)
 
-    assert imaging.get_num_segments() == 1
+    assert imaging.get_num_epochs() == 1
     assert imaging.get_num_frames() == num_frames
     assert imaging.get_num_samples() == num_frames
     assert tuple(imaging.shape) == (h, w, 1)
@@ -85,7 +85,7 @@ def test_random_imaging_repr_contains_expected_fields():
     s = repr(imaging)
     assert "rows x" in s
     assert "columns" in s
-    assert "segments" in s
+    assert "epochs" in s
     assert "dtype" in s
     assert "Hz" in s
 
@@ -103,7 +103,7 @@ def test_random_imaging_repr_contains_expected_fields():
     s_html = imaging._repr_html_()
     assert "rows x" in s_html
     assert "columns" in s_html
-    assert "segments" in s_html
+    assert "epochs" in s_html
     assert "dtype" in s_html
     assert "Hz" in s_html
 
@@ -116,13 +116,13 @@ def test_baseimaging_constructor_with_2d_dhape():
     assert base_imaging.shape == (50, 50, 1)
 
 
-def test_baseimaging_multi_segment_requires_segment_index():
+def test_baseimaging_multi_epoch_requires_epoch_index():
     sf = 10.0
     h, w = 3, 4
     num_frames = [10, 20]
     imaging = generate_random_imaging(num_frames=num_frames, height=h, width=w, sampling_frequency=sf, seed=5)
 
-    assert imaging.get_num_segments() == 2
+    assert imaging.get_num_epochs() == 2
 
     with pytest.raises(ValueError):
         _ = imaging.get_num_samples()
@@ -133,16 +133,15 @@ def test_baseimaging_multi_segment_requires_segment_index():
     with pytest.raises(ValueError):
         _ = imaging.get_shape()
 
-    # Works when segment_index is provided
-    assert imaging.get_num_samples(segment_index=0) == 10
-    assert imaging.get_num_samples(segment_index=1) == 20
-    assert imaging.get_total_samples() == 30
-    assert imaging.get_series(segment_index=1).shape == (20, h, w, 1)
+    # Works when epoch_index is provided
+    assert imaging.get_num_frames(epoch_index=0) == 10
+    assert imaging.get_num_frames(epoch_index=1) == 20
+    assert imaging.get_total_frames() == 30
+    assert imaging.get_series(epoch_index=1).shape == (20, h, w, 1)
     assert imaging.get_shape(segment_index=0) == (10, h, w, 1)
-
     # Run repr_html
     str_html = imaging._repr_html_()
-    assert "segments" in str_html
+    assert "epochs" in str_html
 
 
 def test_get_average_image_caches_and_recompute_replaces():
@@ -176,7 +175,7 @@ def test_multiplane_basic_shape_and_plane_ids():
         seed=0,
     )
 
-    assert imaging.get_num_segments() == 1
+    assert imaging.get_num_epochs() == 1
     assert imaging.get_num_planes() == p and imaging.num_planes == p
     assert np.array_equal(imaging.plane_ids, list(range(p)))
     assert imaging.get_shape() == (n, h, w, p)

@@ -53,7 +53,6 @@ def test_init_stores_sampling_frequency_shape_and_roi_ids(make_rois_for_tests):
     assert np.all(np.asarray(rois.shape) == np.array([roi_kwargs["height"], roi_kwargs["width"], 1]))
     assert np.all(np.asarray(rois.roi_ids) == np.array(roi_kwargs["roi_ids"]))
     assert rois.get_num_rois() == roi_kwargs["num_rois"]
-    assert rois.get_num_segments() == 1
     assert rois.imaging is None
     assert rois.has_imaging() is False
 

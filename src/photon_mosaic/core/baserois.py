@@ -22,7 +22,7 @@ class BaseRois(BaseExtractor):
         self._num_planes = shape[2]
         self._roi_ids = np.array(roi_ids)
         self._imaging: BaseImaging | None = None
-        # no concept of segments for rois, since they are spatial only
+        # no concept of epochs for rois, since they are spatial only
 
     def __repr__(self):
         return self._repr_header()
@@ -72,16 +72,6 @@ class BaseRois(BaseExtractor):
             True if an imaging is registered, False otherwise.
         """
         return self._imaging is not None
-
-    def get_num_segments(self) -> int:
-        """Get the number of segments. Always 1 for BaseRois.
-
-        Returns
-        -------
-        int
-            The number of segments (always 1 for BaseRois).
-        """
-        return 1
 
     @property
     def shape(self):
@@ -209,7 +199,7 @@ class BaseRois(BaseExtractor):
         Parameters
         ----------
         imaging : BaseImaging
-            Imaging with the same number of segments as current sorting.
+            Imaging with the same number of planes as the ROIs.
             Assigned to self._imaging.
         """
         assert (
