@@ -1,9 +1,16 @@
 """Module to generate synthetic imaging and ROI objects for testing and example purposes."""
 
+from pathlib import Path
+
 import numpy as np
 
 from photon_mosaic.core import BaseRois
 from photon_mosaic.core.arrayimaging import ArrayImaging, NumpyRois
+
+
+# ---------------------------------------------------------------------------
+# In-memory generators
+# ---------------------------------------------------------------------------
 
 
 def generate_random_imaging(
@@ -40,6 +47,155 @@ def generate_random_imaging(
         video = rng.random((n_frames, height, width, num_planes))
         videos.append(video)
     return ArrayImaging(imaging_series=videos, sampling_frequency=sampling_frequency)
+
+
+
+def write_random_npy(
+    path: str | Path,
+    shape: tuple,
+    dtype=np.uint16,
+    seed: int = 0,
+) -> Path:
+    """Write a ``.npy`` file filled with random data.
+
+    Data is written one frame at a time via an on-disk memory-mapped
+    ``.npy`` file so that peak RAM usage stays bounded regardless of the
+    total dataset size.
+
+    Parameters
+    ----------
+    path : str or Path
+        Destination ``.npy`` file path (will be created / overwritten).
+    shape : tuple
+        ``(num_frames, height, width, num_planes)``
+    dtype : numpy dtype
+        Element data type.
+    seed : int
+        RNG seed for reproducibility.
+
+    Returns
+    -------
+    Path
+        The path that was written to.
+    """
+    rng = np.random.default_rng(seed)
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Create a memory-mapped .npy file on disk
+    mmap = np.lib.format.open_memmap(
+        str(path), mode="w+", dtype=dtype, shape=shape
+    )
+
+    num_frames = shape[0]
+    frame_shape = shape[1:]  # (H, W, P)
+    for i in range(num_frames):
+        mmap[i] = rng.integers(0, 4000, size=frame_shape, dtype=dtype)
+
+    # Flush to disk and release the memmap
+    del mmap
+    return path
+
+
+def write_random_binary(
+    path: str | Path,
+    shape: tuple,
+    dtype=np.uint16,
+    seed: int = 0,
+) -> Path:
+    """Write a contiguous raw binary file filled with random data.
+
+    The file is written one frame at a time so that peak memory usage stays
+    bounded regardless of the total dataset size.
+
+    Parameters
+    ----------
+    path : str or Path
+        Destination file path (will be created / overwritten).
+    shape : tuple
+        ``(num_frames, height, width, num_planes)``
+    dtype : numpy dtype
+        Element data type.
+    seed : int
+        RNG seed for reproducibility.
+
+    Returns
+    -------
+    Path
+        The path that was written to.
+    """
+    rng = np.random.default_rng(seed)
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    num_frames = shape[0]
+    frame_shape = shape[1:]  # (H, W, P)
+
+    with open(path, "wb") as f:
+        for _ in range(num_frames):
+            frame = rng.integers(0, 4000, size=frame_shape, dtype=dtype)
+            f.write(frame.tobytes())
+
+    return path
+
+
+def write_random_zarr(
+    path: str | Path,
+    shape: tuple,
+    dtype=np.uint16,
+    chunks: tuple | None = None,
+    seed: int = 0,
+) -> Path:
+    """Write a zarr store filled with random data.
+
+    Data is written one temporal chunk at a time to keep memory bounded.
+
+    Parameters
+    ----------
+    path : str or Path
+        Destination ``.zarr`` directory.
+    shape : tuple
+        ``(num_frames, height, width, num_planes)``
+    dtype : numpy dtype
+        Element data type.
+    chunks : tuple | None
+        Zarr chunk layout.  Defaults to ``(100, H, W, 1)`` — chunked
+        along *both* time and planes, which is the layout that lets dask
+        load a single plane without touching the others.
+    seed : int
+        RNG seed for reproducibility.
+
+    Returns
+    -------
+    Path
+        The path that was written to.
+    """
+    import zarr
+
+    rng = np.random.default_rng(seed)
+    path = Path(path)
+
+    num_frames, height, width, num_planes = shape
+    if chunks is None:
+        chunks = (100, height, width, 1)
+
+    z = zarr.open(
+        str(path),
+        mode="w",
+        shape=shape,
+        dtype=dtype,
+        chunks=chunks,
+    )
+
+    # Write in temporal slabs matching the temporal chunk size
+    t_chunk = chunks[0]
+    for t0 in range(0, num_frames, t_chunk):
+        t1 = min(t0 + t_chunk, num_frames)
+        slab = rng.integers(0, 4000, size=(t1 - t0, height, width, num_planes), dtype=dtype)
+        z[t0:t1] = slab
+
+    return path
+
 
 
 def generate_rois(
@@ -130,3 +286,4 @@ def generate_rois(
 
     roi_ids = np.arange(num_rois) if roi_ids is None else roi_ids
     return NumpyRois(roi_image_masks=roi_masks, roi_ids=roi_ids, sampling_frequency=sampling_frequency)
+

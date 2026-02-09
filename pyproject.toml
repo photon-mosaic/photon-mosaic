@@ -63,6 +63,10 @@ exclude = ["tests*"]
 
 [tool.pytest.ini_options]
 addopts = "--cov=photon_mosaic"
+markers = [
+    "small: benchmarks on small datasets that fit in RAM",
+    "large: benchmarks on large datasets (>16 GB) that do NOT fit in RAM",
+]
 
 [tool.ruff]
 line-length = 120
