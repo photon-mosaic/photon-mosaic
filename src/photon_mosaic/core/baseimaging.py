@@ -32,7 +32,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
 
     def _repr_header(self, display_name=True):
         """Generate text representation of the BaseImaging object."""
-        num_samples = [self.get_num_samples(segment_index=i) for i in range(self.get_num_segments())]
+        num_frames = [self.get_num_frames(epoch_index=i) for i in range(self.get_num_epochs())]
         shape = self._shape
         dtype = self.get_dtype()
         sf_hz = self.sampling_frequency
@@ -44,15 +44,15 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             sampling_frequency_repr = f"{sf_hz:0.1f} Hz"
 
         # Calculate duration
-        durations = [ns / sf_hz for ns in num_samples]
+        durations = [ns / sf_hz for ns in num_frames]
         duration_repr = [convert_seconds_to_str(duration) for duration in durations]
 
         # Calculate memory size using product of all dimensions in image_size
-        memory_sizes = [ns * prod(shape) * dtype.itemsize for ns in num_samples]
+        memory_sizes = [ns * prod(shape) * dtype.itemsize for ns in num_frames]
         memory_repr = [convert_bytes_to_str(memory_size) for memory_size in memory_sizes]
 
-        if self.get_num_segments() == 1:
-            num_samples = num_samples[0]
+        if self.get_num_epochs() == 1:
+            num_frames = num_frames[0]
             duration_repr = duration_repr[0]
             memory_repr = memory_repr[0]
 
@@ -66,7 +66,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         return (
             f"{name}:\n"
             f"{sampling_frequency_repr} - "
-            f"{self.get_num_segments()} segments - "
+            f"{self.get_num_epochs()} epochs - "
             f"{shape_repr} - "
             f"{duration_repr} - "
             f"{dtype} dtype - "
@@ -82,21 +82,19 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
 
         html_header = f"<div style='{border_style}'><strong>{self._repr_header(display_name)}</strong></div>"
 
-        html_segments = ""
-        if self.get_num_segments() > 1:
-            html_segments += f"<details style='{common_style}'>  <summary><strong>Segments</strong></summary><ol>"
-            for segment_index in range(self.get_num_segments()):
-                samples = self.get_num_samples(segment_index)
-                duration = self.get_duration(segment_index)
-                memory_size = self.get_memory_size(segment_index)
+        html_epochs = ""
+        if self.get_num_epochs() > 1:
+            html_epochs += f"<details style='{common_style}'>  <summary><strong>Epochs</strong></summary><ol>"
+            for epoch_index in range(self.get_num_epochs()):
+                samples = self.get_num_samples(epoch_index)
+                duration = self.get_duration(epoch_index)
+                memory_size = self.get_memory_size(epoch_index)
                 samples_str = f"{samples:,}"
                 duration_str = convert_seconds_to_str(duration)
                 memory_size_str = convert_bytes_to_str(memory_size)
-                html_segments += (
-                    f"<li> Samples: {samples_str}, Duration: {duration_str}, Memory: {memory_size_str}</li>"
-                )
+                html_epochs += f"<li> Samples: {samples_str}, Duration: {duration_str}, Memory: {memory_size_str}</li>"
 
-            html_segments += "</ol></details>"
+            html_epochs += "</ol></details>"
 
         html_extra = self._get_common_repr_html(common_style)
         # remove properties from html_extra
@@ -109,7 +107,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
                 # Find the end of that details section
                 details_end = html_extra.find("</details>", properties_start) + len("</details>")
                 html_extra = html_extra[:details_start] + html_extra[details_end:]
-        html_repr = html_header + html_segments + html_extra
+        html_repr = html_header + html_epochs + html_extra
         return html_repr
 
     @property
@@ -156,6 +154,27 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         """
         return len(self.plane_ids)
 
+    @property
+    def epochs(self):
+        """Get the epochs (segments) of the imaging data.
+
+        Returns
+        -------
+        list
+            A list of epochs (segments) in the imaging data.
+        """
+        return self.segments
+
+    def add_epoch(self, epoch: "BaseImagingEpoch"):
+        """Add an epoch (segment) to the imaging data.
+
+        Parameters
+        ----------
+        epoch : BaseImagingEpoch
+            The epoch (segment) to add to the imaging data.
+        """
+        self.add_segment(epoch)
+
     def get_sampling_frequency(self):
         return self._sampling_frequency
 
@@ -164,6 +183,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
 
     def get_shape(self, segment_index: int | None = None) -> tuple:
         """Get the shape of the imaging data as (num_samples, height, width, planes).
+        Used internally for SpikeInterface chunk processing.
 
         Parameters
         ----------
@@ -176,7 +196,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             The shape of the imaging data as (num_samples, height, width, planes).
         """
         if segment_index is None:
-            if self.get_num_segments() == 1:
+            if self.get_num_epochs() == 1:
                 segment_index = 0
             else:
                 raise ValueError("segment_index must be provided for multi-segment imaging data.")
@@ -185,7 +205,23 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         return (num_samples, *self.shape)
 
     def get_data(self, start_frame: int, end_frame: int, segment_index: int | None = None, **kwargs) -> np.ndarray:
-        return self.get_series(start_frame=start_frame, end_frame=end_frame, segment_index=segment_index)
+        """Internal function to return data for SpikeInterface chunk processing.
+
+        Parameters
+        ----------
+        start_frame : int
+            The starting frame index (inclusive).
+        end_frame : int
+            The ending frame index (exclusive).
+        segment_index : int | None, optional
+            The index of the imaging segment. If None and there is only one segment, it defaults to 0.
+
+        Returns
+        -------
+        np.ndarray
+            The requested series of frames as a NumPy array, with shape (num_samples, height, width, planes).
+        """
+        return self.get_series(start_frame=start_frame, end_frame=end_frame, epoch_index=segment_index)
 
     def get_num_samples(self, segment_index: int | None = None) -> int:
         """Get the number of samples (frames) in the imaging segment.
@@ -200,23 +236,13 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             The number of samples (frames) in the segment.
         """
         if segment_index is None:
-            if self.get_num_segments() == 1:
+            if self.get_num_epochs() == 1:
                 segment_index = 0
             else:
                 raise ValueError("segment_index must be provided for multi-segment imaging data.")
         return self.segments[segment_index].get_num_samples()
 
-    def get_total_samples(self) -> int:
-        """Get the total number of samples (frames) across all segments.
-
-        Returns
-        -------
-        int
-            The total number of samples (frames) across all segments.
-        """
-        return sum(self.get_num_samples(segment_index=i) for i in range(self.get_num_segments()))
-
-    def get_num_frames(self, segment_index: int | None = None) -> int:
+    def get_num_frames(self, epoch_index: int | None = None) -> int:
         """Get the total number of frames in the imaging data.
 
         Parameters
@@ -227,15 +253,37 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         int
             The total number of frames.
         """
-        return self.get_num_samples(segment_index=segment_index)
+        return self.get_num_samples(segment_index=epoch_index)
 
-    def get_num_segments(self) -> int:
+    def get_total_frames(self) -> int:
+        """Get the total number of frames across all segments.
+
+        Returns
+        -------
+        int
+            The total number of frames across all segments.
+        """
+        return self.get_total_samples()
+
+    def get_num_segments(self) -> int:  # pragma: no cover
         """Get the number of imaging segments.
+        This is needed for SpikeInterface compatibility, but the photon-mosaic nomenclature is
+        "epochs" instead. Use `get_num_epochs()` is preferred.
 
         Returns
         -------
         int
             The number of imaging segments.
+        """
+        return len(self.segments)
+
+    def get_num_epochs(self) -> int:
+        """Get the number of imaging epochs.
+
+        Returns
+        -------
+        int
+            The number of imaging epochs.
         """
         return len(self.segments)
 
@@ -247,7 +295,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         dtype: dtype
             Data type of the video.
         """
-        return self.get_series(start_frame=0, end_frame=2, segment_index=0).dtype
+        return self.get_series(start_frame=0, end_frame=2, epoch_index=0).dtype
 
     def get_num_pixels(self) -> int:
         """Get the number of pixels in the image.
@@ -274,7 +322,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         start_frame: int | None = None,
         end_frame: int | None = None,
         plane_ids: list[int] | None = None,
-        segment_index: int | None = None,
+        epoch_index: int | None = None,
     ) -> np.ndarray:
         """Get a series of frames from the imaging data.
 
@@ -286,7 +334,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             The ending frame index (exclusive).
         plane_ids : list[int] | None
             The list of plane IDs to include. If None, all planes are included.
-        segment_index : int | None
+        epoch_index : int | None
             The index of the imaging segment. If None and there is only one segment, it defaults to 0.
 
         Returns
@@ -294,18 +342,18 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         np.ndarray
             The requested series of frames as a NumPy array.
         """
-        if segment_index is None:
-            if self.get_num_segments() == 1:
-                segment_index = 0
+        if epoch_index is None:
+            if self.get_num_epochs() == 1:
+                epoch_index = 0
             else:
-                raise ValueError("segment_index must be provided for multi-segment imaging data.")
+                raise ValueError("epoch_index must be provided for multi-segment imaging data.")
         start_frame = start_frame if start_frame is not None else 0
-        end_frame = end_frame if end_frame is not None else self.get_num_samples(segment_index=segment_index)
+        end_frame = end_frame if end_frame is not None else self.get_num_frames(epoch_index=epoch_index)
         if plane_ids is None:
             plane_indices = range(self.get_num_planes())
         else:
             plane_indices = self.ids_to_indices(plane_ids)
-        return self.segments[segment_index].get_series(start_frame, end_frame, plane_indices)
+        return self.epochs[epoch_index].get_series(start_frame, end_frame, plane_indices)
 
     def get_average_image(
         self,
@@ -375,7 +423,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
 
         if format == "binary":
             folder = kwargs["folder"]
-            file_paths = [folder / f"video_cached_seg{i}.raw" for i in range(self.get_num_segments())]
+            file_paths = [folder / f"video_cached_seg{i}.raw" for i in range(self.get_num_epochs())]
             dtype = kwargs.get("dtype", None) or self.get_dtype()
             t_starts = self._get_t_starts()
 
@@ -407,18 +455,18 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         else:
             raise ValueError(f"format {format} not supported")
 
-        for segment_index in range(self.get_num_segments()):
-            if self.has_time_vector(segment_index):
+        for epoch_index in range(self.get_num_epochs()):
+            if self.has_time_vector(epoch_index):
                 # the use of get_times is preferred since timestamps are converted to array
-                time_vector = self.get_times(segment_index=segment_index)
-                cached.set_times(time_vector, segment_index=segment_index)
+                time_vector = self.get_times(segment_index=epoch_index)
+                cached.set_times(time_vector, segment_index=epoch_index)
 
         return cached
 
 
-class BaseImagingSegment(ChunkableSegment):
+class BaseImagingEpoch(ChunkableSegment):
     """
-    Abstract class representing a multichannel timeseries, or block of raw ephys traces
+    Abstract class representing a video epoch.
     """
 
     def get_series(

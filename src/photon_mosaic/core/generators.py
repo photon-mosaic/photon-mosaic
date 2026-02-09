@@ -19,7 +19,7 @@ def generate_random_imaging(
     Parameters
     ----------
     num_frames : int | tuple[int, ...], default: 1000
-        Number of frames for each segment in the imaging data.
+        Number of frames for each epoch in the imaging data.
     height : int, default: 256
         Height of each frame in pixels.
     width : int, default: 256

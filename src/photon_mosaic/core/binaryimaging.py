@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from .baseimaging import BaseImaging, BaseImagingSegment
+from .baseimaging import BaseImaging, BaseImagingEpoch
 
 
 class BinaryImaging(BaseImaging):
@@ -29,7 +29,7 @@ class BinaryImaging(BaseImaging):
     time_axis : int, default: 0
         The axis of the time dimension
     t_starts : None or list of float, default: None
-        Times in seconds of the first sample for each segment
+        Times in seconds of the first sample for each epoch. If None, defaults to 0 for all epochs.
     file_offset : int, default: 0
         Number of bytes in the file to offset by during memmap instantiation.
 
@@ -51,10 +51,10 @@ class BinaryImaging(BaseImaging):
         BaseImaging.__init__(self, sampling_frequency, shape)
 
         if isinstance(file_paths, list):
-            # several segment
+            # several epochs
             file_path_list = [Path(p) for p in file_paths]
         else:
-            # one segment
+            # one epoch
             file_path_list = [Path(file_paths)]
 
         if t_starts is not None:
@@ -68,7 +68,7 @@ class BinaryImaging(BaseImaging):
                 t_start = None
             else:
                 t_start = t_starts[i]
-            imaging_segment = BinaryImagingSegment(
+            imaging_epoch = BinaryImagingEpoch(
                 file_path,
                 sampling_frequency,
                 t_start,
@@ -76,7 +76,7 @@ class BinaryImaging(BaseImaging):
                 dtype,
                 file_offset,
             )
-            self.add_segment(imaging_segment)
+            self.add_epoch(imaging_epoch)
 
         self._kwargs = {
             "file_paths": [str(Path(e).absolute()) for e in file_path_list],
@@ -101,20 +101,20 @@ class BinaryImaging(BaseImaging):
 
     def __del__(self):  # pragma: no cover
         """
-        Ensures that all segment resources are properly cleaned up when this imaging extractor is deleted.
-        Closes any open file handles in the imaging segments.
+        Ensures that all epoch resources are properly cleaned up when this imaging extractor is deleted.
+        Closes any open file handles in the imaging epochs.
         """
-        # Close all imaging segments
-        if hasattr(self, "_segments"):
-            for segment in self.segments:
-                # This will trigger the __del__ method of the BinaryImagingSegment
+        # Close all imaging epochs
+        if hasattr(self, "epochs"):
+            for epoch in self.epochs:
+                # This will trigger the __del__ method of the BaseImagingEpoch
                 # which will close the file handle
-                del segment
+                del epoch
 
 
-class BinaryImagingSegment(BaseImagingSegment):
+class BinaryImagingEpoch(BaseImagingEpoch):
     def __init__(self, file_path, sampling_frequency, t_start, shape, dtype, file_offset):
-        BaseImagingSegment.__init__(self, sampling_frequency=sampling_frequency, t_start=t_start)
+        BaseImagingEpoch.__init__(self, sampling_frequency=sampling_frequency, t_start=t_start)
         self.shape = shape
         self.dtype = np.dtype(dtype)
         self.file_offset = file_offset
@@ -188,12 +188,12 @@ class BinaryImagingSegment(BaseImagingSegment):
         return series
 
     def __del__(self):  # pragma: no cover
-        # Ensure that the file handle is closed when the segment is garbage-collected
+        # Ensure that the file handle is closed when the epoch is garbage-collected
         try:
             if hasattr(self, "file") and self.file and not self.file.closed:
                 self.file.close()
         except Exception as e:
-            warnings.warn(f"Error closing file handle in BinaryImagingSegment: {e}")
+            warnings.warn(f"Error closing file handle in BaseImagingEpoch: {e}")
             pass
 
 

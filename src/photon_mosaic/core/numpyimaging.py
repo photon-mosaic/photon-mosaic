@@ -1,22 +1,22 @@
-"""Imaging and Segmentation Extractors for in-memory numpy arrays.
+"""Imaging and ROI classes for in-memory numpy arrays.
 
 Classes
 -------
-NumpyImagingExtractor
-    An ImagingExtractor specified by timeseries .npy file, sampling frequency, and channel names.
-NumpySegmentationExtractor
-    A Segmentation extractor specified by image masks and traces .npy files.
+NumpyImaging
+    An Imaging specified by timeseries .npy file, sampling frequency, and channel names.
+NumpyRois
+    A ROIs specified by image masks and traces .npy files.
 """
 
 import numpy as np
 from numpy.typing import ArrayLike
 
-from .baseimaging import BaseImaging, BaseImagingSegment
+from .baseimaging import BaseImaging, BaseImagingEpoch
 from .baserois import BaseRois
 
 
 class NumpyImaging(BaseImaging):
-    """An single-segment or multi-segment Imaging specified by a numpy array or list of arrays"""
+    """An single- or multi-epoch Imaging specified by a numpy array or list of arrays"""
 
     def __init__(
         self,
@@ -27,8 +27,8 @@ class NumpyImaging(BaseImaging):
     ):
         """Create a NumpyImagingExtractor from a numpy array or list of numpy arrays.
 
-        If a list of numpy arrays is provided, each array is treated as a separate segment.
-        Individual segments can have one or more planes. In the former case, the shape of each
+        If a list of numpy arrays is provided, each array is treated as a separate epoch.
+        Individual epochs can have one or more planes. In the former case, the shape of each
         array should be (num_frames, height, width). In the latter case, the shape should be
         (num_frames, height, width, num_planes).
 
@@ -48,10 +48,10 @@ class NumpyImaging(BaseImaging):
         else:
             raise ValueError("'timeseries' must be a numpy array or a list of numpy arrays")
 
-        num_segments = len(videos)
+        num_epochs = len(videos)
         self._sampling_frequency = float(sampling_frequency)
 
-        # Check that all shapes and number of planes are consistent across segments
+        # Check that all shapes and number of planes are consistent across epochs
         shapes = []
         for video in videos:
             if len(video.shape) not in [3, 4]:
@@ -62,21 +62,20 @@ class NumpyImaging(BaseImaging):
                 video = video[:, :, :, np.newaxis]  # Add a planes dimension
             shapes.append(video.shape[1:])
         if not all(shape == shapes[0] for shape in shapes):
-            raise ValueError("All segments must have the same image shape (height, width, planes)")
+            raise ValueError("All epochs must have the same image shape (height, width, planes)")
 
         # Check consistency of time vectors
         if time_vectors is not None:
-            if num_segments == 1 and isinstance(time_vectors, np.ndarray):
+            if num_epochs == 1 and isinstance(time_vectors, np.ndarray):
                 time_vectors = [time_vectors]
-            assert len(time_vectors) == num_segments, "Number of time vectors must match number of segments"
+            assert len(time_vectors) == num_epochs, "Number of time vectors must match number of epochs"
         else:
-            time_vectors = [None] * num_segments
-
+            time_vectors = [None] * num_epochs
         BaseImaging.__init__(self, shape=shapes[0], sampling_frequency=sampling_frequency)
 
         for video, time_vector in zip(videos, time_vectors):
-            self.add_segment(
-                NumpyImagingSegment(
+            self.add_epoch(
+                NumpyImagingEpoch(
                     video=video,
                     sampling_frequency=self._sampling_frequency,
                     time_vector=time_vector,
@@ -91,8 +90,8 @@ class NumpyImaging(BaseImaging):
         }
 
 
-class NumpyImagingSegment(BaseImagingSegment):
-    """A single segment of an Imaging specified by a numpy array"""
+class NumpyImagingEpoch(BaseImagingEpoch):
+    """A single epoch of an Imaging specified by a numpy array"""
 
     def __init__(
         self,
@@ -127,10 +126,12 @@ class NumpyImagingSegment(BaseImagingSegment):
         return self._video[start:end, :, :, plane_indices] if plane_indices is not None else self._video[start:end]
 
     def get_num_samples(self) -> int:
-        """Returns the number of samples in this signal segment
+        """Returns the number of samples in this signal epoch
 
-        Returns:
-            SampleIndex : Number of samples in the signal segment
+        Returns
+        -------
+        int
+            Number of samples in the signal epoch
         """
         return self._video.shape[0]
 
