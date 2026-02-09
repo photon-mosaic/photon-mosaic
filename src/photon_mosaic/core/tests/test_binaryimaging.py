@@ -19,21 +19,21 @@ def _write_binary_file(path: Path, array: np.ndarray, file_offset: int = 0) -> N
 def test_binaryimaging_single_segment_single_plane_roundtrip(tmp_path: Path):
     n_frames, h, w = 11, 3, 4
     dtype = np.uint16
-    data = np.arange(n_frames * h * w, dtype=dtype).reshape(n_frames, h, w, 1) 
-    
+    data = np.arange(n_frames * h * w, dtype=dtype).reshape(n_frames, h, w, 1)
+
     fpath = tmp_path / "video.dat"
     _write_binary_file(fpath, data)
 
     imaging = BinaryImaging(
         file_paths=str(fpath),
         sampling_frequency=10.0,
-        image_shape=(h, w, 1),
+        shape=(h, w, 1),
         dtype=dtype,
     )
 
     assert imaging.get_num_segments() == 1
     assert imaging.get_num_frames() == n_frames
-    assert tuple(imaging.image_shape) == (h, w, 1)
+    assert tuple(imaging.shape) == (h, w, 1)
     assert imaging.is_binary_compatible()
     binary_desc = imaging.get_binary_description()
     assert binary_desc is not None
@@ -61,7 +61,7 @@ def test_binaryimaging_multi_plane_and_plane_selection(tmp_path: Path):
     imaging = BinaryImaging(
         file_paths=str(fpath),
         sampling_frequency=20.0,
-        image_shape=(h, w, p),
+        shape=(h, w, p),
         dtype=dtype,
     )
 
@@ -96,7 +96,7 @@ def test_binaryimaging_with_tstarts(tmp_path: Path):
     imaging = BinaryImaging(
         file_paths=[str(f0), str(f1)],
         sampling_frequency=10.0,
-        image_shape=(h, w, 1),
+        shape=(h, w, 1),
         dtype=dtype,
         t_starts=t_starts,
     )
@@ -127,7 +127,7 @@ def test_binaryimaging_multiple_segments(tmp_path: Path):
     imaging = BinaryImaging(
         file_paths=[str(f0), str(f1)],
         sampling_frequency=5.0,
-        image_shape=(h, w, 1),
+        shape=(h, w, 1),
         dtype=dtype,
     )
 
@@ -153,7 +153,7 @@ def test_binaryimaging_file_offset(tmp_path: Path):
     imaging = BinaryImaging(
         file_paths=str(fpath),
         sampling_frequency=30.0,
-        image_shape=(h, w, 1),
+        shape=(h, w, 1),
         dtype=dtype,
         file_offset=file_offset,
     )
@@ -174,7 +174,7 @@ def test_baseimaging_save_binary_with_multiprocessing(tmp_path: Path):
     imaging = BinaryImaging(
         file_paths=str(src_path),
         sampling_frequency=10.0,
-        image_shape=(h, w, 1),
+        shape=(h, w, 1),
         dtype=dtype,
     )
 

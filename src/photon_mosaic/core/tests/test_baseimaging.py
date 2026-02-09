@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+from photon_mosaic.core.baseimaging import BaseImaging
 from photon_mosaic.core.generators import generate_random_imaging
 
 
@@ -11,7 +12,7 @@ def test_random_imaging_basic_properties():
     assert imaging.get_num_segments() == 1
     assert imaging.get_num_frames() == num_frames
     assert imaging.get_num_samples() == num_frames
-    assert tuple(imaging.image_shape) == (h, w, 1)
+    assert tuple(imaging.shape) == (h, w, 1)
     assert imaging.get_shape() == (num_frames, h, w, 1)
 
     dt = imaging.get_dtype()
@@ -107,6 +108,14 @@ def test_random_imaging_repr_contains_expected_fields():
     assert "Hz" in s_html
 
 
+def test_baseimaging_constructor_with_2d_dhape():
+    shape = (50, 50)
+    sampling_frequency = 15.0
+    base_imaging = BaseImaging(sampling_frequency=sampling_frequency, shape=shape)
+
+    assert base_imaging.shape == (50, 50, 1)
+
+
 def test_baseimaging_multi_segment_requires_segment_index():
     sf = 10.0
     h, w = 3, 4
@@ -127,6 +136,7 @@ def test_baseimaging_multi_segment_requires_segment_index():
     # Works when segment_index is provided
     assert imaging.get_num_samples(segment_index=0) == 10
     assert imaging.get_num_samples(segment_index=1) == 20
+    assert imaging.get_total_samples() == 30
     assert imaging.get_series(segment_index=1).shape == (20, h, w, 1)
     assert imaging.get_shape(segment_index=0) == (10, h, w, 1)
 
@@ -211,4 +221,3 @@ def test_generate_random_imaging_multiplane_has_expected_plane_dimension_and_sel
     sel = imaging.get_series(plane_ids=[1])
     assert sel.shape == (n, h, w, 1)
     np.all(sel[..., 0] == full[..., 1])
-    

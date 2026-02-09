@@ -8,10 +8,9 @@ import numpy as np
 from .baseimaging import BaseImaging, BaseImagingSegment
 
 
-# TODO: make it more flexible in terms of specifying axes
 class BinaryImaging(BaseImaging):
     """
-    RecordingExtractor for a binary format
+    ImagingExtractor for a binary format
 
     Parameters
     ----------
@@ -19,8 +18,8 @@ class BinaryImaging(BaseImaging):
         Path to the binary file
     sampling_frequency : float
         The sampling frequency
-    image_shape : tuple(int, int)
-        Image height and width
+    shape : tuple(int, int) | tuple(int, int, int)
+        Image height, width, and optionally number of planes
     dtype : str or dtype
         The dtype of the binary file
     num_planes : int, default: 1
@@ -36,7 +35,7 @@ class BinaryImaging(BaseImaging):
 
     Returns
     -------
-    recording : BinaryImaging
+    imaging : BinaryImaging
         The imaging object
     """
 
@@ -44,12 +43,12 @@ class BinaryImaging(BaseImaging):
         self,
         file_paths,
         sampling_frequency,
-        image_shape,
+        shape,
         dtype,
         t_starts=None,
         file_offset=0,
     ):
-        BaseImaging.__init__(self, sampling_frequency, image_shape)
+        BaseImaging.__init__(self, sampling_frequency, shape)
 
         if isinstance(file_paths, list):
             # several segment
@@ -73,17 +72,17 @@ class BinaryImaging(BaseImaging):
                 file_path,
                 sampling_frequency,
                 t_start,
-                image_shape,
+                shape,
                 dtype,
                 file_offset,
             )
-            self.add_imaging_segment(imaging_segment)
+            self.add_segment(imaging_segment)
 
         self._kwargs = {
             "file_paths": [str(Path(e).absolute()) for e in file_path_list],
             "sampling_frequency": sampling_frequency,
             "t_starts": t_starts,
-            "image_shape": image_shape,
+            "shape": shape,
             "dtype": dtype.str,
             "file_offset": file_offset,
         }
@@ -95,33 +94,33 @@ class BinaryImaging(BaseImaging):
         d = dict(
             file_paths=self._kwargs["file_paths"],
             dtype=np.dtype(self._kwargs["dtype"]),
-            image_shape=self._kwargs["image_shape"],
+            shape=self._kwargs["shape"],
             file_offset=self._kwargs["file_offset"],
         )
         return d
 
     def __del__(self):  # pragma: no cover
         """
-        Ensures that all segment resources are properly cleaned up when this recording extractor is deleted.
-        Closes any open file handles in the recording segments.
+        Ensures that all segment resources are properly cleaned up when this imaging extractor is deleted.
+        Closes any open file handles in the imaging segments.
         """
-        # Close all recording segments
-        if hasattr(self, "_recording_segments"):
+        # Close all imaging segments
+        if hasattr(self, "_segments"):
             for segment in self.segments:
-                # This will trigger the __del__ method of the BinaryRecordingSegment
+                # This will trigger the __del__ method of the BinaryImagingSegment
                 # which will close the file handle
                 del segment
 
 
 class BinaryImagingSegment(BaseImagingSegment):
-    def __init__(self, file_path, sampling_frequency, t_start, image_shape, dtype, file_offset):
+    def __init__(self, file_path, sampling_frequency, t_start, shape, dtype, file_offset):
         BaseImagingSegment.__init__(self, sampling_frequency=sampling_frequency, t_start=t_start)
-        self.image_shape = image_shape
+        self.shape = shape
         self.dtype = np.dtype(dtype)
         self.file_offset = file_offset
         self.file_path = file_path
         self.file = open(self.file_path, "rb")
-        self.bytes_per_sample = np.prod(image_shape) * self.dtype.itemsize
+        self.bytes_per_sample = np.prod(shape) * self.dtype.itemsize
         self.data_size_in_bytes = Path(file_path).stat().st_size - file_offset
         self.num_samples = self.data_size_in_bytes // self.bytes_per_sample
 
@@ -167,13 +166,13 @@ class BinaryImagingSegment(BaseImagingSegment):
         shape: tuple[int, int, int, int]
         shape = (
             (end_frame - start_frame),
-            self.image_shape[0],
-            self.image_shape[1],
-            self.image_shape[2], 
+            self.shape[0],
+            self.shape[1],
+            self.shape[2],
             # We could also read only the specific planes here
             # if we implemented more complex memory mapping offsets
         )
-        
+
         # Now the entire array should correspond to the data between start_frame and end_frame,
         # so we can use it directly
         series = np.ndarray(
@@ -185,7 +184,7 @@ class BinaryImagingSegment(BaseImagingSegment):
 
         # Slice planes if needed
         series = series[:, :, :, plane_indices] if plane_indices is not None else series
-        
+
         return series
 
     def __del__(self):  # pragma: no cover
@@ -249,7 +248,7 @@ class BinaryFolderImaging(BinaryImaging):
         d = dict(
             file_paths=self._bin_kwargs["file_paths"],
             dtype=np.dtype(self._bin_kwargs["dtype"]),
-            image_shape=self._bin_kwargs["image_shape"],
+            shape=self._bin_kwargs["shape"],
             file_offset=self._bin_kwargs["file_offset"],
         )
         return d

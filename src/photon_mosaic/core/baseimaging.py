@@ -1,15 +1,11 @@
 from math import prod
 
 import numpy as np
+from numpy.typing import ArrayLike, DTypeLike
 from spikeinterface.core.base import BaseExtractor
 from spikeinterface.core.chunkable import ChunkableMixin, ChunkableSegment
 from spikeinterface.core.chunkable_tools import get_chunks, write_binary
 from spikeinterface.core.core_tools import convert_bytes_to_str, convert_seconds_to_str
-
-from photon_mosaic.core.utils import DtypeType
-
-# TODO: frames instead of samples
-# TODO: epoch instead of segment (segmentation is another thing)
 
 
 class BaseImaging(BaseExtractor, ChunkableMixin):
@@ -23,21 +19,21 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
     The `_main_ids` attribute is used here for multi-plane imaging objects.
     """
 
-    def __init__(self, sampling_frequency: float, shape: tuple | list | np.ndarray):
+    def __init__(self, sampling_frequency: float, shape: tuple | list | ArrayLike):
         # Should we allow users to provide 2D shape (H, W) for single plane imaging?
         if len(shape) == 2:
             shape = (shape[0], shape[1], 1)
         assert len(shape) == 3, "Shape must be a tuple/list/array of length 3 (height, width, planes)"
-
-        BaseExtractor.__init__(self, range(0, shape[2]))
+        num_planes = shape[2]
+        BaseExtractor.__init__(self, range(0, num_planes))
         self._sampling_frequency = float(sampling_frequency)
-        self._image_shape = np.array(shape) # Image is intended as a volume (H, W, planes)
+        self._shape = tuple(shape)  # Image is intended as a volume (H, W, planes)
         self._average_image = None
 
     def _repr_header(self, display_name=True):
         """Generate text representation of the BaseImaging object."""
         num_samples = [self.get_num_samples(segment_index=i) for i in range(self.get_num_segments())]
-        image_shape = self.image_shape
+        shape = self._shape
         dtype = self.get_dtype()
         sf_hz = self.sampling_frequency
 
@@ -52,7 +48,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         duration_repr = [convert_seconds_to_str(duration) for duration in durations]
 
         # Calculate memory size using product of all dimensions in image_size
-        memory_sizes = [ns * prod(image_shape) * dtype.itemsize for ns in num_samples]
+        memory_sizes = [ns * prod(shape) * dtype.itemsize for ns in num_samples]
         memory_repr = [convert_bytes_to_str(memory_size) for memory_size in memory_sizes]
 
         if self.get_num_segments() == 1:
@@ -66,12 +62,12 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             name = self.__class__.__name__
 
         # Format shape string based on whether data is volumetric or not
-        image_shape_repr = f"{image_shape[0]} rows x {image_shape[1]} columns "
+        shape_repr = f"{shape[0]} rows x {shape[1]} columns "
         return (
             f"{name}:\n"
             f"{sampling_frequency_repr} - "
             f"{self.get_num_segments()} segments - "
-            f"{image_shape_repr} - "
+            f"{shape_repr} - "
             f"{duration_repr} - "
             f"{dtype} dtype - "
             f"{memory_repr}"
@@ -117,7 +113,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         return html_repr
 
     @property
-    def image_shape(self):
+    def shape(self):
         """Get the shape of the images (height, width).
 
         Returns
@@ -125,7 +121,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         tuple
             The shape of the images as (height, width).
         """
-        return self._image_shape
+        return self._shape
 
     @property
     def plane_ids(self):
@@ -185,22 +181,23 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             else:
                 raise ValueError("segment_index must be provided for multi-segment imaging data.")
         num_samples = self.get_num_samples(segment_index=segment_index)
-        
-        return (num_samples, *self.image_shape)
-        
+
+        return (num_samples, *self.shape)
+
     def get_data(self, start_frame: int, end_frame: int, segment_index: int | None = None, **kwargs) -> np.ndarray:
         return self.get_series(start_frame=start_frame, end_frame=end_frame, segment_index=segment_index)
 
     def get_num_samples(self, segment_index: int | None = None) -> int:
-        """Get the total number of samples (frames) in the imaging data.
+        """Get the number of samples (frames) in the imaging segment.
 
         Parameters
         ----------
-
+        segment_index : int | None
+            The index of the imaging segment. If None and there is only one segment, it defaults to 0.
         Returns
         -------
         int
-            The total number of samples (frames).
+            The number of samples (frames) in the segment.
         """
         if segment_index is None:
             if self.get_num_segments() == 1:
@@ -208,6 +205,16 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             else:
                 raise ValueError("segment_index must be provided for multi-segment imaging data.")
         return self.segments[segment_index].get_num_samples()
+
+    def get_total_samples(self) -> int:
+        """Get the total number of samples (frames) across all segments.
+
+        Returns
+        -------
+        int
+            The total number of samples (frames) across all segments.
+        """
+        return sum(self.get_num_samples(segment_index=i) for i in range(self.get_num_segments()))
 
     def get_num_frames(self, segment_index: int | None = None) -> int:
         """Get the total number of frames in the imaging data.
@@ -232,7 +239,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         """
         return len(self.segments)
 
-    def get_dtype(self) -> DtypeType:
+    def get_dtype(self) -> DTypeLike:
         """Get the data type of the video.
 
         Returns
@@ -250,7 +257,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         int
             Number of pixels in the image.
         """
-        return np.prod(self.image_shape)
+        return np.prod(self.shape)
 
     def get_num_planes(self) -> int:
         """Get the number of planes in the imaging data.
@@ -307,7 +314,25 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         chunk_size: int | None = None,
         recompute: bool = False,
     ) -> np.ndarray:
-        #  we will get the average volume image across the given frames
+        """Compute the average image across all frames in the imaging data.
+
+        Parameters
+        ----------
+        num_chunks : int, default: 20
+            The number of chunks to use for computing the average image. The data will be divided into
+            this many chunks, and the average will be computed across the chunks to save memory.
+        chunk_duration : str, default: "1s"
+            The duration of each chunk, specified as a string (e.g., "1s" for 1 second, "500ms" for 500 milliseconds).
+        chunk_size : int | None, default: None
+            The number of frames in each chunk. If specified, this will override the chunk_duration.
+        recompute : bool, default: False
+            If True, forces recomputation of the average image even if it has been computed before.
+
+        Returns
+        -------
+        np.ndarray
+            The average image (height, width, num_planes)computed across sampled frames in the imaging data.
+        """
         if self._average_image is not None and not recompute:
             return self._average_image
         else:
@@ -321,37 +346,27 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             self._average_image = np.mean(data, axis=0)
             return self._average_image
 
-    def add_imaging_segment(self, imaging_segment):
-        """Adds an imaging segment.
-
-        Parameters
-        ----------
-        imaging_segment : BaseImagingSegment
-            The imaging segment to add.
-        """
-        self.segments.append(imaging_segment)
-        imaging_segment.set_parent_extractor(self)
-
     def is_binary_compatible(self) -> bool:
         """
-        Checks if the recording is "binary" compatible.
-        To be used before calling `rec.get_binary_description()`
+        Checks if the imaging object is "binary" compatible.
+        To be used before calling `imaging.get_binary_description()`
 
         Returns
         -------
         bool
-            True if the underlying recording is binary
+            True if the underlying imaging object is binary
         """
         # has to be changed in subclass if yes
         return False
 
-    def get_binary_description(self):  # pragma: no cover
+    def get_binary_description(self) -> dict:  # pragma: no cover
         """
-        When `rec.is_binary_compatible()` is True
+        When `imaging.is_binary_compatible()` is True
         this returns a dictionary describing the binary format.
         """
-        if not self.is_binary_compatible:
+        if not self.is_binary_compatible():
             raise NotImplementedError
+        return {}
 
     def _save(self, format="binary", verbose: bool = False, **save_kwargs):  # pragma: no cover
         from spikeinterface.core.job_tools import split_job_kwargs
@@ -368,12 +383,12 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
 
             from .binaryimaging import BinaryFolderImaging, BinaryImaging
 
-            # This is created so it can be saved as json because the `BinaryFolderRecording` requires it loading
-            # See the __init__ of `BinaryFolderRecording`
+            # This is created so it can be saved as json because the `BinaryFolderImaging` requires it loading
+            # See the __init__ of `BinaryFolderImaging`
             binary_imaging = BinaryImaging(
                 file_paths=file_paths,
                 sampling_frequency=self.get_sampling_frequency(),
-                image_shape=self.image_shape,
+                shape=self.shape,
                 dtype=dtype,
                 t_starts=t_starts,
                 file_offset=0,
@@ -387,7 +402,6 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         elif format == "zarr":
             raise NotImplementedError
         elif format == "nwb":
-            # TODO implement a format based on zarr
             raise NotImplementedError
 
         else:

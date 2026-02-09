@@ -1,4 +1,4 @@
-"""Module to generate synthetic imaging and ROI objects for testing purposes."""
+"""Module to generate synthetic imaging and ROI objects for testing and example purposes."""
 
 import numpy as np
 

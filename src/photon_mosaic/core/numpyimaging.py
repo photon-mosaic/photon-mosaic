@@ -9,10 +9,10 @@ NumpySegmentationExtractor
 """
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from .baseimaging import BaseImaging, BaseImagingSegment
 from .baserois import BaseRois
-from .utils import ArrayType, FloatType
 
 
 class NumpyImaging(BaseImaging):
@@ -20,9 +20,9 @@ class NumpyImaging(BaseImaging):
 
     def __init__(
         self,
-        imaging_series: ArrayType | list[ArrayType],
-        sampling_frequency: FloatType,
-        time_vectors: ArrayType | list[ArrayType] | None = None,
+        imaging_series: ArrayLike | list[ArrayLike],
+        sampling_frequency: float,
+        time_vectors: ArrayLike | list[ArrayLike] | None = None,
         seed=None,
     ):
         """Create a NumpyImagingExtractor from a numpy array or list of numpy arrays.
@@ -34,11 +34,11 @@ class NumpyImaging(BaseImaging):
 
         Parameters
         ----------
-        imaging_series: ArrayType | list[ArrayType]
+        imaging_series: ArrayLike | list[ArrayLike]
             Numpy array or list of numpy arrays representing the video.
-        sampling_frequency: FloatType
+        sampling_frequency: float
             Sampling frequency of the video in Hz.
-        time_vectors: ArrayType | list[ArrayType] | None, default: None
+        time_vectors: ArrayLike | list[ArrayLike] | None, default: None
             Optional time vector(s) for the video.
         """
         if isinstance(imaging_series, np.ndarray):
@@ -63,7 +63,7 @@ class NumpyImaging(BaseImaging):
             shapes.append(video.shape[1:])
         if not all(shape == shapes[0] for shape in shapes):
             raise ValueError("All segments must have the same image shape (height, width, planes)")
-        
+
         # Check consistency of time vectors
         if time_vectors is not None:
             if num_segments == 1 and isinstance(time_vectors, np.ndarray):
@@ -75,7 +75,7 @@ class NumpyImaging(BaseImaging):
         BaseImaging.__init__(self, shape=shapes[0], sampling_frequency=sampling_frequency)
 
         for video, time_vector in zip(videos, time_vectors):
-            self.add_imaging_segment(
+            self.add_segment(
                 NumpyImagingSegment(
                     video=video,
                     sampling_frequency=self._sampling_frequency,
@@ -98,7 +98,7 @@ class NumpyImagingSegment(BaseImagingSegment):
         self,
         video: np.ndarray,
         sampling_frequency: float,
-        time_vector: ArrayType | None = None,
+        time_vector: ArrayLike | None = None,
     ):
         super().__init__(sampling_frequency=sampling_frequency, time_vector=time_vector)
         self._video = video
@@ -125,7 +125,6 @@ class NumpyImagingSegment(BaseImagingSegment):
         start = start_frame if start_frame is not None else 0
         end = end_frame if end_frame is not None else self._video.shape[0]
         return self._video[start:end, :, :, plane_indices] if plane_indices is not None else self._video[start:end]
-        
 
     def get_num_samples(self) -> int:
         """Returns the number of samples in this signal segment
@@ -141,21 +140,21 @@ class NumpyRois(BaseRois):
 
     def __init__(
         self,
-        roi_image_masks: np.ndarray,
-        sampling_frequency: FloatType,
-        roi_ids: ArrayType | None = None,
+        roi_image_masks: ArrayLike,
+        sampling_frequency: float,
+        roi_ids: ArrayLike | None = None,
     ):
         """Create a NumpyRois object from numpy arrays.
 
         Parameters
         ----------
-        roi_image_masks : np.ndarray
+        roi_image_masks : ArrayLike
             Numpy array representing the image masks for each ROI
             Accepted dimensions are: (num_rois x height x width) for single-plane and
             (num_rois x height x width x num_planes) for multi-plane.
-        sampling_frequency : FloatType
+        sampling_frequency : float
             Sampling frequency of the ROIs in Hz.
-        roi_ids : ArrayType | None, default: None
+        roi_ids : ArrayLike | None, default: None
             Optional array of ROI IDs. If None, IDs will be assigned as integers from 0 to num_rois-1.
         """
         num_rois = roi_image_masks.shape[0]
