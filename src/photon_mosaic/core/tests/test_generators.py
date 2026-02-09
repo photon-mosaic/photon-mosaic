@@ -11,14 +11,14 @@ def test_generate_random_imaging_int_vs_singleton_tuple_same_output():
     imaging_int = generate_random_imaging(num_frames=n, height=h, width=w, sampling_frequency=sf, seed=seed)
     imaging_tuple = generate_random_imaging(num_frames=(n,), height=h, width=w, sampling_frequency=sf, seed=seed)
 
-    assert imaging_int.get_num_segments() == 1
-    assert imaging_tuple.get_num_segments() == 1
+    assert imaging_int.get_num_epochs() == 1
+    assert imaging_tuple.get_num_epochs() == 1
 
-    np.testing.assert_allclose(imaging_int.get_series(), imaging_tuple.get_series())
-    assert imaging_int.get_shape() == imaging_tuple.get_shape() == (n, h, w)
+    np.testing.assert_array_equal(imaging_int.get_series(), imaging_tuple.get_series())
+    assert imaging_int.get_shape() == imaging_tuple.get_shape() == (n, h, w, 1)
 
 
-def test_generate_random_imaging_multisegment_shapes_and_reproducibility_multiplane():
+def test_generate_random_imaging_multiepoch_shapes_and_reproducibility_multiplane():
     num_frames = (3, 5)
     h, w, p = 4, 6, 2
     sf = 12.5
@@ -41,16 +41,16 @@ def test_generate_random_imaging_multisegment_shapes_and_reproducibility_multipl
         seed=seed,
     )
 
-    assert imaging1.get_num_segments() == 2
+    assert imaging1.get_num_epochs() == 2
     assert imaging1.get_num_planes() == p
 
-    s10 = imaging1.get_series(segment_index=0)
-    s11 = imaging1.get_series(segment_index=1)
+    s10 = imaging1.get_series(epoch_index=0)
+    s11 = imaging1.get_series(epoch_index=1)
     assert s10.shape == (num_frames[0], h, w, p)
     assert s11.shape == (num_frames[1], h, w, p)
 
-    np.testing.assert_allclose(imaging1.get_series(segment_index=0), imaging2.get_series(segment_index=0))
-    np.testing.assert_allclose(imaging1.get_series(segment_index=1), imaging2.get_series(segment_index=1))
+    np.testing.assert_allclose(imaging1.get_series(epoch_index=0), imaging2.get_series(epoch_index=0))
+    np.testing.assert_allclose(imaging1.get_series(epoch_index=1), imaging2.get_series(epoch_index=1))
 
 
 def test_generate_random_imaging_num_planes_1_returns_3d_series():
@@ -58,9 +58,9 @@ def test_generate_random_imaging_num_planes_1_returns_3d_series():
     imaging = generate_random_imaging(num_frames=n, height=h, width=w, sampling_frequency=10.0, num_planes=1, seed=0)
 
     series = imaging.get_series()
-    assert series.shape == (n, h, w)
-    assert series.ndim == 3
-    assert imaging.get_shape() == (n, h, w)
+    assert series.shape == (n, h, w, 1)
+    assert series.ndim == 4
+    assert imaging.get_shape() == (n, h, w, 1)
 
 
 def test_generate_rois_default_roi_ids_and_deterministic_masks():

@@ -16,10 +16,11 @@ def _write_binary_file(path: Path, array: np.ndarray, file_offset: int = 0) -> N
         f.write(array.tobytes(order="C"))
 
 
-def test_binaryimaging_single_segment_single_plane_roundtrip(tmp_path: Path):
+
+def test_binaryimaging_single_epoch_single_plane_roundtrip(tmp_path: Path):
     n_frames, h, w = 11, 3, 4
     dtype = np.uint16
-    data = np.arange(n_frames * h * w, dtype=dtype).reshape(n_frames, h, w)
+    data = np.arange(n_frames * h * w, dtype=dtype).reshape(n_frames, h, w, 1)
 
     fpath = tmp_path / "video.dat"
     _write_binary_file(fpath, data)
@@ -27,24 +28,23 @@ def test_binaryimaging_single_segment_single_plane_roundtrip(tmp_path: Path):
     imaging = BinaryImaging(
         file_paths=str(fpath),
         sampling_frequency=10.0,
-        image_shape=(h, w),
+        shape=(h, w, 1),
         dtype=dtype,
-        num_planes=1,
     )
 
-    assert imaging.get_num_segments() == 1
+    assert imaging.get_num_epochs() == 1
     assert imaging.get_num_frames() == n_frames
-    assert tuple(imaging.image_shape) == (h, w)
+    assert tuple(imaging.shape) == (h, w, 1)
     assert imaging.is_binary_compatible()
     binary_desc = imaging.get_binary_description()
     assert binary_desc is not None
 
     out = imaging.get_series(start_frame=0, end_frame=5)
-    assert out.shape == (5, h, w)
+    assert out.shape == (5, h, w, 1)
     np.testing.assert_array_equal(out, data[:5])
 
     out2 = imaging.get_series(start_frame=None, end_frame=None)
-    assert out2.shape == (n_frames, h, w)
+    assert out2.shape == (n_frames, h, w, 1)
     np.testing.assert_array_equal(out2, data)
 
     # test deleting
@@ -62,10 +62,8 @@ def test_binaryimaging_multi_plane_and_plane_selection(tmp_path: Path):
     imaging = BinaryImaging(
         file_paths=str(fpath),
         sampling_frequency=20.0,
-        image_shape=(h, w),
+        shape=(h, w, p),
         dtype=dtype,
-        num_planes=p,
-        plane_ids=list(range(p)),
     )
 
     out_all = imaging.get_series(0, n_frames)
@@ -99,13 +97,12 @@ def test_binaryimaging_with_tstarts(tmp_path: Path):
     imaging = BinaryImaging(
         file_paths=[str(f0), str(f1)],
         sampling_frequency=10.0,
-        image_shape=(h, w),
+        shape=(h, w, 1),
         dtype=dtype,
         t_starts=t_starts,
-        num_planes=1,
     )
 
-    assert imaging.get_num_segments() == 2
+    assert imaging.get_num_epochs() == 2
 
     time_vector_0 = imaging.get_times(segment_index=0)
     expected_time_0 = np.arange(4) / 10.0 + t_starts[0]
@@ -116,12 +113,12 @@ def test_binaryimaging_with_tstarts(tmp_path: Path):
     np.testing.assert_allclose(time_vector_1, expected_time_1)
 
 
-def test_binaryimaging_multiple_segments(tmp_path: Path):
+def test_binaryimaging_multiple_epochs(tmp_path: Path):
     h, w = 3, 3
     dtype = np.uint8
 
-    data0 = np.arange(5 * h * w, dtype=dtype).reshape(5, h, w)
-    data1 = np.arange(8 * h * w, dtype=dtype).reshape(8, h, w) + 100
+    data0 = np.arange(5 * h * w, dtype=dtype).reshape(5, h, w, 1)
+    data1 = np.arange(8 * h * w, dtype=dtype).reshape(8, h, w, 1) + 100
 
     f0 = tmp_path / "seg0.dat"
     f1 = tmp_path / "seg1.dat"
@@ -131,17 +128,16 @@ def test_binaryimaging_multiple_segments(tmp_path: Path):
     imaging = BinaryImaging(
         file_paths=[str(f0), str(f1)],
         sampling_frequency=5.0,
-        image_shape=(h, w),
+        shape=(h, w, 1),
         dtype=dtype,
-        num_planes=1,
     )
 
-    assert imaging.get_num_segments() == 2
-    assert imaging.get_num_samples(segment_index=0) == 5
-    assert imaging.get_num_samples(segment_index=1) == 8
+    assert imaging.get_num_epochs() == 2
+    assert imaging.get_num_frames(epoch_index=0) == 5
+    assert imaging.get_num_frames(epoch_index=1) == 8
 
-    s0 = imaging.get_series(0, 5, segment_index=0)
-    s1 = imaging.get_series(0, 8, segment_index=1)
+    s0 = imaging.get_series(0, 5, epoch_index=0)
+    s1 = imaging.get_series(0, 8, epoch_index=1)
     np.testing.assert_array_equal(s0, data0)
     np.testing.assert_array_equal(s1, data1)
 
@@ -151,16 +147,15 @@ def test_binaryimaging_file_offset(tmp_path: Path):
     dtype = np.float32
     file_offset = 64
 
-    data = np.linspace(0, 1, n_frames * h * w, dtype=dtype).reshape(n_frames, h, w)
+    data = np.linspace(0, 1, n_frames * h * w, dtype=dtype).reshape(n_frames, h, w, 1)
     fpath = tmp_path / "offset.dat"
     _write_binary_file(fpath, data, file_offset=file_offset)
 
     imaging = BinaryImaging(
         file_paths=str(fpath),
         sampling_frequency=30.0,
-        image_shape=(h, w),
+        shape=(h, w, 1),
         dtype=dtype,
-        num_planes=1,
         file_offset=file_offset,
     )
 
@@ -172,7 +167,7 @@ def test_baseimaging_save_binary_with_multiprocessing(tmp_path: Path):
     # Create a small source BinaryImaging (acts as a generic BaseImaging instance for save()).
     n_frames, h, w = 23, 4, 6
     dtype = np.int16
-    data = np.arange(n_frames * h * w, dtype=dtype).reshape(n_frames, h, w)
+    data = np.arange(n_frames * h * w, dtype=dtype).reshape(n_frames, h, w, 1)
 
     src_path = tmp_path / "src.dat"
     _write_binary_file(src_path, data)
@@ -180,9 +175,8 @@ def test_baseimaging_save_binary_with_multiprocessing(tmp_path: Path):
     imaging = BinaryImaging(
         file_paths=str(src_path),
         sampling_frequency=10.0,
-        image_shape=(h, w),
+        shape=(h, w, 1),
         dtype=dtype,
-        num_planes=1,
     )
 
     out_folder = tmp_path / "saved_binary"
@@ -217,7 +211,7 @@ def test_baseimaging_save_binary_with_multiprocessing(tmp_path: Path):
         BinaryFolderImaging(bad_folder)
 
 
-def test_base_imaging_multi_segment_multiplane_save(tmp_path: Path):
+def test_base_imaging_multi_epoch_multiplane_save(tmp_path: Path):
     n = (15, 30)
     h, w, p = 5, 5, 3
     sf = 20.0
@@ -242,12 +236,10 @@ def test_base_imaging_multi_segment_multiplane_save(tmp_path: Path):
     loaded = BinaryFolderImaging(out_folder)
     assert loaded.get_num_planes() == p
 
-    assert imaging.get_num_segments() == loaded.get_num_segments()
-    for segment_index in range(imaging.get_num_segments()):
-        assert imaging.get_num_samples(segment_index=segment_index) == loaded.get_num_samples(
-            segment_index=segment_index
-        )
-        full = imaging.get_series(segment_index=segment_index)
-        got = loaded.get_series(segment_index=segment_index)
+    assert imaging.get_num_epochs() == loaded.get_num_epochs()
+    for epoch_index in range(imaging.get_num_epochs()):
+        assert imaging.get_num_frames(epoch_index=epoch_index) == loaded.get_num_frames(epoch_index=epoch_index)
+        full = imaging.get_series(epoch_index=epoch_index)
+        got = loaded.get_series(epoch_index=epoch_index)
         assert got.shape == full.shape
         np.testing.assert_array_equal(got, full)
