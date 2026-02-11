@@ -1,5 +1,7 @@
-from .baseregistration import BaseRegistration, BaseRegistrationEpoch
 import numpy as np
+
+from .baseregistration import BaseRegistration, BaseRegistrationEpoch
+from .baseregistrationsettings import Suite2pRegistrationSettings
 
 
 class Suite2PMotion:
@@ -50,36 +52,45 @@ class Suite2PMotion:
         return self.displacements[epoch_index][frames]
 
 
-def compute_motion_suite2p(imaging, reference_frames=150, batch_size=500, **suite2p_kwargs):
+def compute_motion_suite2p(imaging, settings=None, **kwargs):
     """
     Compute motion correction signals for the entire imaging recording using Suite2P.
-    
+
     This function runs once over the entire video to compute displacement information
-    for all frames. The returned Suite2PMotion object can then be used with 
+    for all frames. The returned Suite2PMotion object can then be used with
     RegisterSuite2PImaging to apply the correction on-the-fly.
-    
+
     Parameters
     ----------
-    imaging : Imaging object
+    imaging : BaseImaging
         The imaging object to compute motion for
-    reference_frames : int, default: 150
-        Number of initial frames to use for computing the reference image
-    batch_size : int, default: 500
-        Number of frames to process at once during motion estimation
-    **suite2p_kwargs : dict
-        Additional keyword arguments to pass to suite2p registration
-        
+    settings : Suite2pRegistrationSettings or dict, optional
+        Registration settings. Can be a Suite2pRegistrationSettings instance,
+        a dict (e.g. loaded from JSON), or None to use defaults.
+        If a dict is provided, it will be validated against
+        Suite2pRegistrationSettings.
+    **kwargs : dict
+        Override individual settings fields. Applied on top of `settings`.
+
     Returns
     -------
     motion : Suite2PMotion
         Motion object containing displacement information for all frames
     """
-    from suite2p.registration import register
     from suite2p.default_ops import default_ops
-    
+    from suite2p.registration import register
+
+    # Resolve settings: dict -> validated model, None -> defaults, kwargs override
+    if settings is None:
+        settings = Suite2pRegistrationSettings(**kwargs)
+    elif isinstance(settings, dict):
+        settings = Suite2pRegistrationSettings.model_validate({**settings, **kwargs})
+    elif kwargs:
+        settings = settings.model_copy(update=kwargs)
+
     # Initialize suite2p ops
     ops = default_ops()
-    ops.update(suite2p_kwargs)
+    ops.update(settings.model_dump(exclude={"debug", "tmp_dir", "data_type"}))
     
     bidiphase = ops.get('bidiphase', 0)
     rmin, rmax = -np.inf, np.inf
@@ -94,7 +105,7 @@ def compute_motion_suite2p(imaging, reference_frames=150, batch_size=500, **suit
         
         # Compute reference from first epoch only (using initial frames)
         if refAndMasks is None:
-            n_ref_frames = min(reference_frames, num_frames)
+            n_ref_frames = min(settings.max_reference_iterations, num_frames)
             ref_frames = epoch.get_series(0, n_ref_frames)
             reference = register.compute_reference(ref_frames)
             refAndMasks = register.compute_reference_masks(reference, ops)
@@ -103,8 +114,8 @@ def compute_motion_suite2p(imaging, reference_frames=150, batch_size=500, **suit
         epoch_displacements = []
         
         # Process in batches to avoid memory issues
-        for start_frame in range(0, num_frames, batch_size):
-            end_frame = min(start_frame + batch_size, num_frames)
+        for start_frame in range(0, num_frames, settings.batch_size):
+            end_frame = min(start_frame + settings.batch_size, num_frames)
             batch_frames = epoch.get_series(start_frame, end_frame)
             
             # Register frames to get displacement information
