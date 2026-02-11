@@ -265,17 +265,6 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         """
         return self.get_total_samples()
 
-    def get_num_segments(self) -> int:  # pragma: no cover
-        """Get the number of imaging segments.
-        This is needed for SpikeInterface compatibility, but the photon-mosaic nomenclature is
-        "epochs" instead. Use `get_num_epochs()` is preferred.
-
-        Returns
-        -------
-        int
-            The number of imaging segments.
-        """
-        return len(self.segments)
 
     def get_num_epochs(self) -> int:
         """Get the number of imaging epochs.
@@ -349,10 +338,10 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
                 raise ValueError("epoch_index must be provided for multi-segment imaging data.")
         start_frame = start_frame if start_frame is not None else 0
         end_frame = end_frame if end_frame is not None else self.get_num_frames(epoch_index=epoch_index)
-        if plane_ids is None:
-            plane_indices = range(self.get_num_planes())
-        else:
+        if plane_ids:
             plane_indices = self.ids_to_indices(plane_ids)
+        else:
+            plane_indices = None
         return self.epochs[epoch_index].get_series(start_frame, end_frame, plane_indices)
 
     def get_average_image(

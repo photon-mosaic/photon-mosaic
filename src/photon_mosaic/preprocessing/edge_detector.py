@@ -1,4 +1,4 @@
-from .basepreprocessor import BasePreprocessor, BasePreprocessorSegment
+from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
 
 
 class EdgeDetectorImaging(BasePreprocessor):
@@ -14,10 +14,10 @@ class EdgeDetectorImaging(BasePreprocessor):
 
 
 # TODO: use canny or other methods
-class EdgeDetectorImagingSegment(BasePreprocessorSegment):
+class EdgeDetectorImagingSegment(BasePreprocessorEpoch):
 
     def __init__(self, parent_imaging_segment):
-        BasePreprocessorSegment.__init__(self, parent_imaging_segment)
+        BasePreprocessorEpoch.__init__(self, parent_imaging_segment)
 
     def get_series(self, start_frame, end_frame):
         import numpy as np

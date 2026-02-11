@@ -1,4 +1,4 @@
-from .basepreprocessor import BasePreprocessor, BasePreprocessorSegment
+from .baseregistration import BaseRegistration, BaseRegistrationEpoch
 import numpy as np
 
 
@@ -7,14 +7,14 @@ class Suite2PMotion:
     Container for Suite2P motion correction information.
     
     Stores the reference image, masks, and displacement information 
-    for each frame across all segments.
+    for each frame across all epochs.
     
     Parameters
     ----------
     imaging : Imaging object
         The parent imaging object
     displacements : list of np.ndarray
-        List of displacement arrays, one per segment. Each array has shape (n_frames, 2)
+        List of displacement arrays, one per epoch. Each array has shape (n_frames, 2)
         containing (y, x) displacements for each frame.
     refAndMasks : tuple
         The reference and masks computed by suite2p
@@ -27,18 +27,18 @@ class Suite2PMotion:
         self.displacements = displacements
         self.refAndMasks = refAndMasks
         self.ops = ops
-        self.num_segments = len(displacements)
+        self.num_epochs = len(displacements)
         
-    def get_displacement_at_frames(self, frames, segment_index=0):
+    def get_displacement_at_frames(self, frames, epoch_index=0):
         """
-        Get displacement for specific frames in a segment.
+        Get displacement for specific frames in a epoch.
         
         Parameters
         ----------
         frames : np.ndarray or int
             Frame indices to get displacements for
-        segment_index : int, default: 0
-            Which segment to get displacements from
+        epoch_index : int, default: 0
+            Which epoch to get displacements from
             
         Returns
         -------
@@ -46,8 +46,8 @@ class Suite2PMotion:
             Array of displacements with shape (n_frames, 2) or (2,) if single frame
         """
         if isinstance(frames, int):
-            return self.displacements[segment_index][frames]
-        return self.displacements[segment_index][frames]
+            return self.displacements[epoch_index][frames]
+        return self.displacements[epoch_index][frames]
 
 
 def compute_motion_suite2p(imaging, reference_frames=150, batch_size=500, **suite2p_kwargs):
@@ -85,27 +85,27 @@ def compute_motion_suite2p(imaging, reference_frames=150, batch_size=500, **suit
     rmin, rmax = -np.inf, np.inf
     nZ = 1
     
-    displacements_per_segment = []
+    displacements_per_epoch = []
     refAndMasks = None
     
-    # Process each segment
-    for segment_idx, segment in enumerate(imaging.segments):
-        num_frames = segment.get_num_samples()
+    # Process each epoch
+    for epoch_idx, epoch in enumerate(imaging.epochs):
+        num_frames = epoch.get_num_samples()
         
-        # Compute reference from first segment only (using initial frames)
+        # Compute reference from first epoch only (using initial frames)
         if refAndMasks is None:
             n_ref_frames = min(reference_frames, num_frames)
-            ref_frames = segment.get_series(0, n_ref_frames)
+            ref_frames = epoch.get_series(0, n_ref_frames)
             reference = register.compute_reference(ref_frames)
             refAndMasks = register.compute_reference_masks(reference, ops)
         
-        # Compute displacements for all frames in this segment
-        segment_displacements = []
+        # Compute displacements for all frames in this epoch
+        epoch_displacements = []
         
         # Process in batches to avoid memory issues
         for start_frame in range(0, num_frames, batch_size):
             end_frame = min(start_frame + batch_size, num_frames)
-            batch_frames = segment.get_series(start_frame, end_frame)
+            batch_frames = epoch.get_series(start_frame, end_frame)
             
             # Register frames to get displacement information
             _, ymax, xmax, cmax, ymax1, xmax1, cmax1, _ = register.register_frames(
@@ -114,16 +114,16 @@ def compute_motion_suite2p(imaging, reference_frames=150, batch_size=500, **suit
             )
             # Store displacements (ymax, xmax are the rigid displacements)
             batch_displacements = np.column_stack([ymax, xmax])
-            segment_displacements.append(batch_displacements)
+            epoch_displacements.append(batch_displacements)
         
-        # Concatenate all batch displacements for this segment
-        segment_displacements = np.vstack(segment_displacements)
-        displacements_per_segment.append(segment_displacements)
+        # Concatenate all batch displacements for this epoch
+        epoch_displacements = np.vstack(epoch_displacements)
+        displacements_per_epoch.append(epoch_displacements)
     
-    return Suite2PMotion(imaging, displacements_per_segment, refAndMasks, ops)
+    return Suite2PMotion(imaging, displacements_per_epoch, refAndMasks, ops)
 
 
-class RegisterSuite2PImaging(BasePreprocessor):
+class RegisterSuite2PImaging(BaseRegistration):
     """
     Apply pre-computed Suite2P motion correction to imaging data.
     
@@ -143,46 +143,46 @@ class RegisterSuite2PImaging(BasePreprocessor):
     """
 
     def __init__(self, imaging, motion, **kwargs):
-        BasePreprocessor.__init__(self, imaging)
+        BaseRegistration.__init__(self, imaging)
         
-        if motion.num_segments != len(imaging.segments):
+        if motion.num_epochs != len(imaging.epochs):
             raise ValueError(
-                f"Motion has {motion.num_segments} segments but imaging has "
-                f"{len(imaging.segments)} segments"
+                f"Motion has {motion.num_epochs} epochs but imaging has "
+                f"{len(imaging.epochs)} epochs"
             )
         
-        for segment_idx, parent_segment in enumerate(imaging.segments):
-            segment = RegisterSuite2PImagingSegment(
-                parent_segment, motion, segment_idx, **kwargs
+        for epoch_idx, parent_epoch in enumerate(imaging.epochs):
+            epoch = RegisterSuite2PImagingEpoch(
+                parent_epoch, motion, epoch_idx, **kwargs
             )
-            self.add_imaging_segment(segment)
+            self.add_epoch(epoch)
 
         self._kwargs = dict(imaging=imaging, motion=motion, **kwargs)
 
 
-class RegisterSuite2PImagingSegment(BasePreprocessorSegment):
+class RegisterSuite2PImagingEpoch(BaseRegistrationEpoch):
     """
-    Segment-level preprocessor that applies Suite2P motion correction.
+    Epoch-level preprocessor that applies Suite2P motion correction.
     
     Parameters
     ----------
-    parent_imaging_segment : ImagingSegment
-        The parent imaging segment
+    parent_imaging_epoch : ImagingEpoch
+        The parent imaging epoch
     motion : Suite2PMotion
         Pre-computed motion object
-    segment_index : int
-        Index of this segment
+    epoch_index : int
+        Index of this epoch
     **kwargs : dict
         Additional keyword arguments
     """
     
-    def __init__(self, parent_imaging_segment, motion, segment_index, **kwargs):
-        BasePreprocessorSegment.__init__(self, parent_imaging_segment)
+    def __init__(self, parent_imaging_epoch, motion, epoch_index, **kwargs):
+        BaseRegistrationEpoch.__init__(self, parent_imaging_epoch)
         self.motion = motion
-        self.segment_index = segment_index
+        self.epoch_index = epoch_index
         self.kwargs = kwargs
 
-    def get_series(self, start_frame, end_frame):
+    def get_series(self, start_frame, end_frame, plane_indices=None):
         """
         Get motion-corrected frames for the specified range.
         
@@ -202,13 +202,13 @@ class RegisterSuite2PImagingSegment(BasePreprocessorSegment):
         import copy
         
         # Get raw video for this frame range
-        video = self.parent_imaging_segment.get_series(start_frame, end_frame)
+        video = self.parent_imaging_epoch.get_series(start_frame, end_frame)
         
         # Get pre-computed displacements for these frames
         frame_indices = np.arange(start_frame, end_frame)
-        displacements = self.motion.get_displacement_at_frames(
-            frame_indices, self.segment_index
-        )
+        # displacements = self.motion.get_displacement_at_frames(
+        #     frame_indices, self.epoch_index
+        # )
         
         # Apply registration using pre-computed displacements
         ops = self.motion.ops

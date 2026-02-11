@@ -1,45 +1,5 @@
 [project]
 name = "photon-mosaic"
-<<<<<<< HEAD
-version = "0.1.0"
-
-readme = "README.md"
-requires-python = ">=3.11"
-dependencies = [
-    "roiextractors",
-    "pytest>=8.3.5",
-    "ruff>=0.9.9",
-    "tifffile",
-    "natsort",
-    "spikeinterface @ git+https://github.com/alejoe91/spikeinterface.git@42cace4503653907933ecaafbfe4fa72fde43478"
-]
-
-[project.optional-dependencies]
-docs = [
-    'Sphinx',
-    'sphinx-jinja',
-    'furo',
-    'docutils'
-]
-
-full = [
-    "scikit-image",
-    "suite2p"
-]
-
-widgets = [
-    "ipywidgets>=8.0.0",
-    "matplotlib>=3.5.0",
-    "ipympl"
-]
-
-
-[tool.pytest.ini_options]
-pythonpath = ["src", "tests"]
-
-[tool.setuptools.packages.find]
-where = ["src"]
-=======
 authors = [
     {name = "Laura Porta", email= "l.porta@ucl.ac.uk"},
     {name = "Arielle Leon", email= "ariellel@alleninstitute.org"},
@@ -139,4 +99,3 @@ extras =
 commands =
     pytest -v --color=yes --cov=photon_mosaic --cov-report=xml
 """
->>>>>>> ec85f572a0d1c537d92a7f2308f0202c0de7f6ba

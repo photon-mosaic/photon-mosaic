@@ -5,9 +5,9 @@ import inspect
 from pathlib import Path
 
 from roiextractors.imagingextractor import ImagingExtractor
-from roiextractors.extractorlist import imaging_extractor_dict, segmentation_extractor_dict
+from roiextractors.extractorlist import imaging_extractor_dict
 
-from photon_mosaic.core import BaseImaging, BaseImagingSegment, BaseRois
+from photon_mosaic.core import BaseImaging, BaseImagingEpoch
 
 
 class BaseROIExtractorImaging(BaseImaging):
@@ -18,30 +18,33 @@ class BaseROIExtractorImaging(BaseImaging):
 
         roi_extractor = self.roiextractor_imaging_class(**kwargs)
 
-        segment = BaseROIExtractorImagingSegment(roi_extractor)
+        segment = BaseROIExtractorImagingEpoch(roi_extractor)
         BaseImaging.__init__(
             self,
             shape=roi_extractor.get_sample_shape(),
             sampling_frequency=roi_extractor.get_sampling_frequency(),
         )
-        self.add_imaging_segment(segment)
+        self.add_epoch(segment)
         self.name = f"{imaging_name} (ROIExtractors)"
 
         self._kwargs = {"imaging_name": imaging_name, **kwargs}
 
 
-class BaseROIExtractorImagingSegment(BaseImagingSegment):
+class BaseROIExtractorImagingEpoch(BaseImagingEpoch):
     """Base class for ROI extractors that work with BaseImaging data."""
 
     def __init__(self, roi_extractor_imaging: ImagingExtractor):
-        BaseImagingSegment.__init__(self, sampling_frequency=roi_extractor_imaging.get_sampling_frequency())
+        BaseImagingEpoch.__init__(self, sampling_frequency=roi_extractor_imaging.get_sampling_frequency())
         self.roiextractor_extractor = roi_extractor_imaging
 
     def get_num_samples(self):
         return self.roiextractor_extractor.get_num_samples()
 
-    def get_series(self, start_frame=None, end_frame=None):
-        return self.roiextractor_extractor.get_series(start_frame, end_frame)
+    def get_series(self, start_frame=None, end_frame=None, plane_indices=None):
+        series = self.roiextractor_extractor.get_series(start_frame, end_frame)
+        if plane_indices is not None and series.ndim > 3:
+            series = series[..., plane_indices]
+        return series
 
 
 def get_imaging_extractor(file_path: str, imaging_name: str | None = None, **kwargs) -> BaseROIExtractorImaging:

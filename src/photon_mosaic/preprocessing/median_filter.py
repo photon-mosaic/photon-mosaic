@@ -1,4 +1,4 @@
-from .basepreprocessor import BasePreprocessor, BasePreprocessorSegment
+from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
 
 
 class MedianFilterImaging(BasePreprocessor):
@@ -13,10 +13,10 @@ class MedianFilterImaging(BasePreprocessor):
         self._kwargs = dict(imaging=imaging, size=size)
 
 
-class MedianFilterImagingSegment(BasePreprocessorSegment):
+class MedianFilterImagingSegment(BasePreprocessorEpoch):
 
     def __init__(self, parent_imaging_segment, size: int):
-        BasePreprocessorSegment.__init__(self, parent_imaging_segment)
+        BasePreprocessorEpoch.__init__(self, parent_imaging_segment)
         self.size = size
 
     def get_series(self, start_frame, end_frame):

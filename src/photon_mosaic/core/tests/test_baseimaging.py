@@ -154,8 +154,7 @@ def test_get_average_image_caches_and_recompute_replaces():
     assert avg2 is avg1  # cached
 
     avg3 = imaging.get_average_image(num_chunks=2, chunk_size=5, recompute=True)
-<<<<<<< HEAD
-    assert avg3.shape == (8, 6)
+    assert avg3.shape == (8, 6, 1)
     assert avg3 is not avg1
 
 # -------------------------
@@ -166,29 +165,12 @@ def test_get_average_image_caches_and_recompute_replaces():
 def test_multiplane_basic_shape_and_plane_ids():
     n, h, w, p = 7, 5, 6, 3
     sf = 20.0
-<<<<<<< HEAD
-    plane_ids = [10, 20, 30]
-=======
->>>>>>> 49b0376231b884dbfcb7f330310bcc9c143ed790
     imaging = generate_random_imaging(
         num_frames=n,
         height=h,
         width=w,
         sampling_frequency=sf,
         num_planes=p,
-<<<<<<< HEAD
-        plane_ids=plane_ids,
-        seed=0,
-    )
-
-    assert imaging.get_num_segments() == 1
-    assert imaging.get_num_planes() == p and imaging.num_planes == p
-    assert np.array_equal(imaging.plane_ids, plane_ids)
-    assert imaging.get_shape() == (n, h, w, p)
-    assert imaging.get_series().shape == (n, h, w, p)
-    # slice get_Series by plane_ids
-    assert imaging.get_series(plane_ids=[10, 20]).shape == (n, h, w, 2)
-=======
         seed=0,
     )
 
@@ -199,7 +181,6 @@ def test_multiplane_basic_shape_and_plane_ids():
     assert imaging.get_series().shape == (n, h, w, p)
     # slice get_Series by plane_ids
     assert imaging.get_series(plane_ids=[1, 2]).shape == (n, h, w, 2)
->>>>>>> 49b0376231b884dbfcb7f330310bcc9c143ed790
 
 
 def test_multiplane_average_image_shape_and_caching():
@@ -209,13 +190,8 @@ def test_multiplane_average_image_shape_and_caching():
         num_frames=n,
         height=h,
         width=w,
-<<<<<<< HEAD
-        sampling_frequency=sf,
-        num_planes=p,
-=======
         num_planes=p,
         sampling_frequency=sf,
->>>>>>> 49b0376231b884dbfcb7f330310bcc9c143ed790
         seed=42,
     )
 
@@ -241,10 +217,5 @@ def test_generate_random_imaging_multiplane_has_expected_plane_dimension_and_sel
     assert full.shape == (n, h, w, p)
 
     sel = imaging.get_series(plane_ids=[1])
-<<<<<<< HEAD
-    assert sel.shape[:-1] == (n, h, w)
-    np.testing.assert_allclose(sel[..., 0], full[..., 1])
-=======
     assert sel.shape == (n, h, w, 1)
     np.all(sel[..., 0] == full[..., 1])
->>>>>>> 49b0376231b884dbfcb7f330310bcc9c143ed790

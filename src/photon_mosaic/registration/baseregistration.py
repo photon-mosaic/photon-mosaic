@@ -3,7 +3,7 @@ from __future__ import annotations
 from photon_mosaic.core import BaseImaging, BaseImagingEpoch
 
 
-class BasePreprocessor(BaseImaging):
+class BaseRegistration(BaseImaging):
 
     def __init__(self, imaging, sampling_frequency=None, dtype=None):
         assert isinstance(imaging, BaseImaging), "'imaging' must be a BaseImaging"
@@ -21,7 +21,7 @@ class BasePreprocessor(BaseImaging):
         # self._kwargs have to be handled in subclass
 
 
-class BasePreprocessorEpoch(BaseImagingEpoch):
+class BaseRegistrationEpoch(BaseImagingEpoch):
     def __init__(self, parent_imaging_epoch):
         BaseImagingEpoch.__init__(self, **parent_imaging_epoch.get_times_kwargs())
         self.parent_imaging_epoch = parent_imaging_epoch

@@ -15,7 +15,7 @@ class ImagingSeriesWidget(BaseWidget):
     imaging : BaseImaging or dict[str, BaseImaging]
         The imaging extractor to visualize. Can be a single BaseImaging object or
         a dictionary of BaseImaging objects for synchronized multi-view display.
-    segment_index : int, optional
+    epoch_index : int, optional
         Which segment to display, by default 0
     frame_index : int, optional
         Initial frame to display, by default 0
@@ -36,7 +36,7 @@ class ImagingSeriesWidget(BaseWidget):
     def __init__(
         self,
         imaging: BaseImaging | dict,
-        segment_index: int = 0,
+        epoch_index: int = 0,
         frame_index: int = 0,
         time_range: tuple = None,
         colormap: str = "gray",
@@ -54,14 +54,14 @@ class ImagingSeriesWidget(BaseWidget):
             first_imaging = imaging[first_key]
             
             # Validate all imaging objects have the same number of frames
-            num_frames = first_imaging.get_num_samples(segment_index=segment_index)
-            times = first_imaging.get_times(segment_index=segment_index)
+            num_frames = first_imaging.get_num_samples(epoch_index)
+            times = first_imaging.get_times(epoch_index)
             frame_rate = first_imaging.sampling_frequency
             
             for name, img in imaging.items():
-                if img.get_num_samples(segment_index=segment_index) != num_frames:
+                if img.get_num_samples(epoch_index) != num_frames:
                     raise ValueError(f"All imaging objects must have the same number of frames. "
-                                   f"'{name}' has {img.get_num_samples(segment_index=segment_index)} frames, "
+                                   f"'{name}' has {img.get_num_samples(epoch_index)} frames, "
                                    f"expected {num_frames}")
             
             imaging_dict = imaging
@@ -70,8 +70,8 @@ class ImagingSeriesWidget(BaseWidget):
             # Single imaging object - wrap in dict for consistent handling
             imaging_dict = {"imaging": imaging}
             view_names = ["imaging"]
-            num_frames = imaging.get_num_samples(segment_index=segment_index)
-            times = imaging.get_times(segment_index=segment_index)
+            num_frames = imaging.get_num_samples(epoch_index)
+            times = imaging.get_times(epoch_index)
             frame_rate = imaging.sampling_frequency
 
         # Validate parameters
@@ -85,7 +85,7 @@ class ImagingSeriesWidget(BaseWidget):
             imaging_dict=imaging_dict,
             view_names=view_names,
             is_multi_view=is_multi_view,
-            segment_index=segment_index,
+            epoch_index=epoch_index,
             num_frames=num_frames,
             times=times,
             frame_rate=frame_rate,
@@ -126,7 +126,7 @@ class ImagingSeriesWidget(BaseWidget):
         
         for view_name, imaging in dp.imaging_dict.items():
             # TODO: get_random_frames instead
-            sampled_data = imaging.get_series(0, num_samples, segment_index=dp.segment_index)
+            sampled_data = imaging.get_series(0, num_samples, epoch_index=dp.epoch_index)
             # Calculate global percentiles for fixed colorbar range
             self.global_vmin[view_name] = np.percentile(sampled_data, dp.vmin_percentile)
             self.global_vmax[view_name] = np.percentile(sampled_data, dp.vmax_percentile)
@@ -137,7 +137,7 @@ class ImagingSeriesWidget(BaseWidget):
         
         # Get dimensions from first imaging object
         first_imaging = dp.imaging_dict[dp.view_names[0]]
-        ratio = first_imaging.image_shape[0] / first_imaging.image_shape[1]
+        ratio = first_imaging.shape[0] / first_imaging.shape[1]
         height_cm = width_cm * ratio
         
         num_views = len(dp.view_names)
@@ -166,7 +166,7 @@ class ImagingSeriesWidget(BaseWidget):
                 
                 # Get initial frame and create image
                 frame_data = imaging.get_series(
-                    self.current_frame, self.current_frame + 1, segment_index=dp.segment_index
+                    self.current_frame, self.current_frame + 1, epoch_index=dp.epoch_index
                 )
                 frame = frame_data[0]
 
@@ -320,7 +320,7 @@ class ImagingSeriesWidget(BaseWidget):
             im = self.images[view_name]
             
             # Get current frame data
-            frame_data = imaging.get_series(self.current_frame, self.current_frame + 1, segment_index=dp.segment_index)
+            frame_data = imaging.get_series(self.current_frame, self.current_frame + 1, epoch_index=dp.epoch_index)
             frame = frame_data[0]  # Remove time dimension
 
             # Use slider values as scaling factors on the global range

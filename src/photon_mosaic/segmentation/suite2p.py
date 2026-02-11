@@ -39,7 +39,7 @@ def suite2p_segmentation(
     from suite2p import io, pipeline, default_ops
 
     # TODO: handle multi-segment
-    if imaging.get_num_segments() > 1:
+    if imaging.get_num_epochs() > 1:
         raise NotImplementedError("Suite2p segmentation for multi-segment imaging is not yet implemented.")
 
     if folder is None:

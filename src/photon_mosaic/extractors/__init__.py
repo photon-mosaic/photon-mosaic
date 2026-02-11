@@ -1,7 +1,7 @@
 # Import base classes
 from .roiextractors import (
     BaseROIExtractorImaging,
-    BaseROIExtractorImagingSegment,
+    BaseROIExtractorImagingEpoch,
     get_imaging_extractor,
 )
 
@@ -10,7 +10,7 @@ from .suite2prois import read_suite2p_rois
 # Build __all__ to include all exports
 __all__ = [
     "BaseROIExtractorImaging",
-    "BaseROIExtractorImagingSegment",
+    "BaseROIExtractorImagingEpoch",
     "get_imaging_extractor",
 ]
 

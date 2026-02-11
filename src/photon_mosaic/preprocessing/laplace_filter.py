@@ -1,4 +1,4 @@
-from .basepreprocessor import BasePreprocessor, BasePreprocessorSegment
+from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
 
 
 class LaplaceFilterImaging(BasePreprocessor):
@@ -13,10 +13,10 @@ class LaplaceFilterImaging(BasePreprocessor):
         self._kwargs = dict(imaging=imaging, ksize=ksize)
 
 
-class LaplaceFilterImagingSegment(BasePreprocessorSegment):
+class LaplaceFilterImagingSegment(BasePreprocessorEpoch):
 
     def __init__(self, parent_imaging_segment, ksize):
-        BasePreprocessorSegment.__init__(self, parent_imaging_segment)
+        BasePreprocessorEpoch.__init__(self, parent_imaging_segment)
         self.ksize = ksize
 
     def get_series(self, start_frame, end_frame):
