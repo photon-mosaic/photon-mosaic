@@ -16,7 +16,6 @@ def _write_binary_file(path: Path, array: np.ndarray, file_offset: int = 0) -> N
         f.write(array.tobytes(order="C"))
 
 
-
 def test_binaryimaging_single_epoch_single_plane_roundtrip(tmp_path: Path):
     n_frames, h, w = 11, 3, 4
     dtype = np.uint16

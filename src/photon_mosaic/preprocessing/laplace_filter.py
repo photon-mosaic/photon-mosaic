@@ -2,9 +2,7 @@ from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
 
 
 class LaplaceFilterImaging(BasePreprocessor):
-
     def __init__(self, imaging, ksize=3):
-
         BasePreprocessor.__init__(self, imaging)
         for parent_segment in imaging.segments:
             segment = LaplaceFilterImagingSegment(parent_segment, ksize=ksize)
@@ -14,7 +12,6 @@ class LaplaceFilterImaging(BasePreprocessor):
 
 
 class LaplaceFilterImagingSegment(BasePreprocessorEpoch):
-
     def __init__(self, parent_imaging_segment, ksize):
         BasePreprocessorEpoch.__init__(self, parent_imaging_segment)
         self.ksize = ksize

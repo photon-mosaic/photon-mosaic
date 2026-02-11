@@ -2,9 +2,7 @@ from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
 
 
 class EdgeDetectorImaging(BasePreprocessor):
-
     def __init__(self, imaging, **kwargs):
-
         BasePreprocessor.__init__(self, imaging)
         for parent_segment in imaging.segments:
             segment = EdgeDetectorImagingSegment(parent_segment)
@@ -15,7 +13,6 @@ class EdgeDetectorImaging(BasePreprocessor):
 
 # TODO: use canny or other methods
 class EdgeDetectorImagingSegment(BasePreprocessorEpoch):
-
     def __init__(self, parent_imaging_segment):
         BasePreprocessorEpoch.__init__(self, parent_imaging_segment)
 
@@ -27,7 +24,7 @@ class EdgeDetectorImagingSegment(BasePreprocessorEpoch):
         edges = np.zeros_like(video, dtype=bool)
 
         for i in range(video.shape[0]):
-            edges[i] = canny(video[i]) #, sigma=sigma, low_threshold=low_threshold, high_threshold=high_threshold)
+            edges[i] = canny(video[i])  # , sigma=sigma, low_threshold=low_threshold, high_threshold=high_threshold)
 
         return edges.astype(video.dtype)
 

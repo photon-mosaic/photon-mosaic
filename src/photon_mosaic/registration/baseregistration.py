@@ -4,7 +4,6 @@ from photon_mosaic.core import BaseImaging, BaseImagingEpoch
 
 
 class BaseRegistration(BaseImaging):
-
     def __init__(self, imaging, sampling_frequency=None, dtype=None):
         assert isinstance(imaging, BaseImaging), "'imaging' must be a BaseImaging"
 

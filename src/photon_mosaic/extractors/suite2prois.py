@@ -1,4 +1,5 @@
 from pathlib import Path
+
 import numpy as np
 
 from photon_mosaic.core import BaseRois

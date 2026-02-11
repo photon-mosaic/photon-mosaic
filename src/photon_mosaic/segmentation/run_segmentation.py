@@ -24,6 +24,6 @@ def run_segmentation(imaging: BaseImaging, method: str = "suite2p", **method_par
     if method not in segmentation_methods:
         raise ValueError(f"Segmentation method '{method}' is not recognized.")
     segmentation_function = segmentation_methods[method]
-    rois = segmentation_function(imaging, **method_params)
+    rois: BaseRois = segmentation_function(imaging, **method_params)  # type: ignore[assignment]
     rois.register_imaging(imaging)
     return rois

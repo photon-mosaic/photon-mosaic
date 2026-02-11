@@ -2,11 +2,11 @@ import importlib.util
 import shutil
 from pathlib import Path
 
+from spikeinterface.core import write_binary
 from spikeinterface.core.job_tools import fix_job_kwargs, split_job_kwargs
 
 from photon_mosaic.core import BaseImaging
 from photon_mosaic.core.utils import PathType
-from spikeinterface.core import write_binary
 
 suite2p_spec = importlib.util.find_spec("suite2p")
 if suite2p_spec is not None:
@@ -35,8 +35,9 @@ def suite2p_segmentation(
     """
     if not HAVE_SUITE2P:
         raise ImportError("Suite2p is not installed. Please install Suite2p to use this function.")
+    from suite2p import default_ops, io, pipeline
+
     from photon_mosaic.extractors import read_suite2p_rois
-    from suite2p import io, pipeline, default_ops
 
     # TODO: handle multi-segment
     if imaging.get_num_epochs() > 1:

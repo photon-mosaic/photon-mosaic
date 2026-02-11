@@ -1,11 +1,11 @@
 """Map ROI extractor implementations to BaseImaging and BaseRois"""
 
-import re
 import inspect
+import re
 from pathlib import Path
 
-from roiextractors.imagingextractor import ImagingExtractor
 from roiextractors.extractorlist import imaging_extractor_dict
+from roiextractors.imagingextractor import ImagingExtractor
 
 from photon_mosaic.core import BaseImaging, BaseImagingEpoch
 
@@ -34,7 +34,7 @@ class BaseROIExtractorImagingEpoch(BaseImagingEpoch):
     """Base class for ROI extractors that work with BaseImaging data."""
 
     def __init__(self, roi_extractor_imaging: ImagingExtractor):
-        BaseImagingEpoch.__init__(self, sampling_frequency=roi_extractor_imaging.get_sampling_frequency())
+        BaseImagingEpoch.__init__(self, sampling_frequency=roi_extractor_imaging.get_sampling_frequency())  # type: ignore[call-arg]
         self.roiextractor_extractor = roi_extractor_imaging
 
     def get_num_samples(self):
@@ -47,7 +47,7 @@ class BaseROIExtractorImagingEpoch(BaseImagingEpoch):
         return series
 
 
-def get_imaging_extractor(file_path: str, imaging_name: str | None = None, **kwargs) -> BaseROIExtractorImaging:
+def get_imaging_extractor(file_path: str | Path, imaging_name: str | None = None, **kwargs) -> BaseROIExtractorImaging:
     """Automatically detect and load imaging data from a file.
 
     This function attempts to identify the correct imaging extractor based on the file
@@ -136,7 +136,6 @@ def get_imaging_extractor(file_path: str, imaging_name: str | None = None, **kwa
 
 
 # Dynamically create classes and read functions for all imaging extractors
-from roiextractors.extractorlist import imaging_extractor_dict
 
 
 def get_classes_and_functions_to_import():

@@ -12,6 +12,7 @@ class BaseRegistrationSettings(BaseSettings):
     is a runtime dependency passed separately to the registration class.
     """
 
+
 class Suite2pRegistrationSettings(BaseRegistrationSettings):
     """Settings for Suite2P motion correction.
 
@@ -24,9 +25,7 @@ class Suite2pRegistrationSettings(BaseRegistrationSettings):
         default=Path("/scratch"),
         description="Directory into which to write temporary files produced by Suite2P",
     )
-    data_type: str = Field(
-        default="h5", description="Processing h5 (default) or TIFF timeseries"
-    )
+    data_type: str = Field(default="h5", description="Processing h5 (default) or TIFF timeseries")
     do_registration: bool = Field(
         default="true",
         description="whether to register data (2 forces re-registration)",
@@ -34,22 +33,16 @@ class Suite2pRegistrationSettings(BaseRegistrationSettings):
     batch_size: int = Field(default=500, description="Number of frames per batch")
     align_by_chan: int = Field(
         default=1,
-        description="when multi-channel, you can align by non-functional channel "
-        "(1-based)",
+        description="when multi-channel, you can align by non-functional channel (1-based)",
     )
     maxregshift: float = Field(
         default=0.1,
         description="max allowed registration shift, as a fraction of "
         "frame max(width and height). This will be ignored if force_refImg is set to True",
     )
-    force_refImg: bool = Field(
-        default=True, description="Force the use of an external reference image"
-    )
-    nonrigid: bool = Field(
-        default=True, description="Whether to use non-rigid registration"
-    )
-    block_size: list = Field(default_factory=lambda: [128, 128],
-        description="Block size for non-rigid registration.")
+    force_refImg: bool = Field(default=True, description="Force the use of an external reference image")
+    nonrigid: bool = Field(default=True, description="Whether to use non-rigid registration")
+    block_size: list = Field(default_factory=lambda: [128, 128], description="Block size for non-rigid registration.")
     snr_thresh: float = Field(
         default=1.2,
         description="if any nonrigid block is below this threshold, it gets smoothed "
@@ -70,7 +63,8 @@ class Suite2pRegistrationSettings(BaseRegistrationSettings):
         description="Units [fraction FOV dim]. After median-filter detrending, outliers more than this value are "
         "clipped to this value in x and y offset, independently. "
         "This is similar to Suite2P's internal maxregshift, but allows for low-frequency drift. "
-        "Default value of 0.05 is typically clipping outliers to 512 * 0.05 = 25 pixels above or below the median trend.",
+        "Default value of 0.05 is typically clipping outliers to "
+        "512 * 0.05 = 25 pixels above or below the median trend.",
     )
     clip_negative: bool = Field(
         default=False,
@@ -86,7 +80,8 @@ class Suite2pRegistrationSettings(BaseRegistrationSettings):
     )
     auto_remove_empty_frames: bool = Field(
         default=True,
-        description="Automatically detect empty noise frames at the start and end of the movie. Overrides values set in "
+        description="Automatically detect empty noise frames at the start and end of the movie. "
+        "Overrides values set in "
         "trim_frames_start and trim_frames_end. Some movies arrive with otherwise quality data but contain a set of "
         "frames that are empty and contain pure noise. When processed, these frames tend to receive "
         "large random shifts that throw off motion border calculation. Turning on this setting automatically "
@@ -96,19 +91,22 @@ class Suite2pRegistrationSettings(BaseRegistrationSettings):
     )
     trim_frames_start: int = Field(
         default=0,
-        description="Number of frames to remove from the start of the movie if known. Removes frames from motion border calculation "
+        description="Number of frames to remove from the start of the movie if known. "
+        "Removes frames from motion border calculation "
         "and resets the frame shifts found. Frames are still written to motion correction. Raises an error if "
         "auto_remove_empty_frames is set and trim_frames_start > 0",
     )
     trim_frames_end: int = Field(
         default=0,
-        description="Number of frames to remove from the end of the movie if known. Removes frames from motion border calculation "
+        description="Number of frames to remove from the end of the movie if known. "
+        "Removes frames from motion border calculation "
         "and resets the frame shifts found. Frames are still written to motion correction. Raises an error if "
         "auto_remove_empty_frames is set and trim_frames_start > 0",
     )
     do_optimize_motion_params: bool = Field(
         default=False,
-        description="Do a search for best parameters of smooth_sigma and smooth_sigma_time. Adds significant runtime cost to "
+        description="Do a search for best parameters of smooth_sigma and smooth_sigma_time. "
+        "Adds significant runtime cost to "
         "motion correction and should only be run once per experiment with the resulting parameters being stored "
         "for later use.",
     )
@@ -118,11 +116,13 @@ class Suite2pRegistrationSettings(BaseRegistrationSettings):
     )
     smooth_sigma: float = Field(
         default=1.15,
-        description="~1 good for 2P recordings, recommend 3-5 for 1P recordings. If do_optimize_motion_params is set, this will be overridden",
+        description="~1 good for 2P recordings, recommend 3-5 for 1P recordings. "
+        "If do_optimize_motion_params is set, this will be overridden",
     )
     use_ave_image_as_reference: bool = Field(
         default=False,
-        description="Only available if `do_optimize_motion_params` is set. After the a best set of smoothing parameters is found, "
+        description="Only available if `do_optimize_motion_params` is set. "
+        "After the a best set of smoothing parameters is found, "
         "use the resulting average image as the reference for the full registration. This can be used as two step "
         "registration by setting by setting smooth_sigma_min=smooth_sigma_max and "
         "smooth_sigma_time_min=smooth_sigma_time_max and steps=1.",
@@ -146,7 +146,8 @@ class Suite2pRegistrationSettings(BaseRegistrationSettings):
     )
     n_batches: int = Field(
         default=20,
-        description="Number of batches to load from the movie for smoothing parameter testing. Batches are evenly spaced throughout the movie.",
+        description="Number of batches to load from the movie for smoothing parameter testing. "
+        "Batches are evenly spaced throughout the movie.",
     )
     smooth_sigma_min: float = Field(
         default=0.65,
@@ -170,13 +171,15 @@ class Suite2pRegistrationSettings(BaseRegistrationSettings):
     )
     smooth_sigma_time_steps: int = Field(
         default=7,
-        description="Number of steps to grid between smooth_sigma and smooth_sigma_time_max. Large values will add significant time to motion correction",
+        description="Number of steps to grid between smooth_sigma and smooth_sigma_time_max. "
+        "Large values will add significant time to motion correction",
     )
 
     class Config:
         env_prefix = "SUITE2P_REGISTRATION_"
         case_sensitive = False
         env_file = ".env"
+
 
 class CaImAnRegistrationSettings(BaseRegistrationSettings):
     """Settings for CaImAn motion correction.
@@ -231,8 +234,7 @@ class CaImAnRegistrationSettings(BaseRegistrationSettings):
     )
     nonneg_movie: bool = Field(
         default=True,
-        description="Make the saved movie and template mostly nonnegative "
-        "by removing min_mov from movie",
+        description="Make the saved movie and template mostly nonnegative by removing min_mov from movie",
     )
     gSig_filt: Optional[list[int]] = Field(
         default=[],
@@ -250,8 +252,7 @@ class CaImAnRegistrationSettings(BaseRegistrationSettings):
     )
     num_frames_split: int = Field(
         default=80,
-        description="Number of frames in each batch. Used when constructing the options "
-        "through the params object",
+        description="Number of frames in each batch. Used when constructing the options through the params object",
     )
     var_name_hdf5: str = Field(
         default="mov",

@@ -36,7 +36,7 @@ class BaseRois(BaseExtractor):
         shape = self._shape
         # Format shape string based on whether data is volumetric or not
         shape_repr = f"{shape[0]} rows x {shape[1]} columns "
-        return f"{name}:\n" f"{self.get_num_rois()} ROIs - " f"{shape_repr}"
+        return f"{name}:\n{self.get_num_rois()} ROIs - {shape_repr}"
 
     def _repr_html_(self, display_name=True):
         common_style = "margin-left: 10px;"
@@ -202,12 +202,12 @@ class BaseRois(BaseExtractor):
             Imaging with the same number of planes as the ROIs.
             Assigned to self._imaging.
         """
-        assert (
-            imaging.get_num_planes() == self.get_num_planes()
-        ), "The imaging has a different number of planes than the ROIs!"
-        assert np.isclose(
-            self.sampling_frequency, imaging.sampling_frequency, atol=0.1
-        ), "The imaging has a different sampling frequency than the ROIs!"
+        assert imaging.get_num_planes() == self.get_num_planes(), (
+            "The imaging has a different number of planes than the ROIs!"
+        )
+        assert np.isclose(self.sampling_frequency, imaging.sampling_frequency, atol=0.1), (
+            "The imaging has a different sampling frequency than the ROIs!"
+        )
         self._imaging = imaging
 
 

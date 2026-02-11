@@ -265,7 +265,6 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         """
         return self.get_total_samples()
 
-
     def get_num_epochs(self) -> int:
         """Get the number of imaging epochs.
 

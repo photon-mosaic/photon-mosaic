@@ -15,9 +15,7 @@ from photon_mosaic.registration.baseregistration import (
 class TestBaseRegistration:
     @pytest.fixture()
     def imaging(self):
-        return generate_random_imaging(
-            num_frames=10, height=8, width=9, sampling_frequency=30.0, seed=0
-        )
+        return generate_random_imaging(num_frames=10, height=8, width=9, sampling_frequency=30.0, seed=0)
 
     def test_init_inherits_sampling_frequency(self, imaging):
         reg = BaseRegistration(imaging)
@@ -81,9 +79,7 @@ class TestBaseRegistrationMultiEpoch:
 class TestBaseRegistrationEpoch:
     @pytest.fixture()
     def imaging(self):
-        return generate_random_imaging(
-            num_frames=12, height=5, width=6, sampling_frequency=25.0, seed=2
-        )
+        return generate_random_imaging(num_frames=12, height=5, width=6, sampling_frequency=25.0, seed=2)
 
     @pytest.fixture()
     def epoch(self, imaging):

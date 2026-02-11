@@ -24,9 +24,7 @@ from photon_mosaic.registration.suite2p import (
 class TestSuite2PMotion:
     @pytest.fixture()
     def imaging(self):
-        return generate_random_imaging(
-            num_frames=10, height=8, width=9, sampling_frequency=30.0, seed=0
-        )
+        return generate_random_imaging(num_frames=10, height=8, width=9, sampling_frequency=30.0, seed=0)
 
     @pytest.fixture()
     def motion(self, imaging):
@@ -64,9 +62,7 @@ class TestSuite2PMotion:
         d0 = np.random.default_rng(1).random((10, 2))
         d1 = np.random.default_rng(2).random((10, 2))
         m = Suite2PMotion(imaging, [d0, d1], None, {})
-        np.testing.assert_array_equal(
-            m.get_displacement_at_frames(0, epoch_index=1), d1[0]
-        )
+        np.testing.assert_array_equal(m.get_displacement_at_frames(0, epoch_index=1), d1[0])
 
 
 # ---------------------------------------------------------------------------
@@ -116,9 +112,7 @@ class TestComputeMotionSettingsResolution:
     def test_invalid_dict_raises_validation_error(self):
         """A dict with invalid types raises a ValidationError."""
         with pytest.raises(ValidationError):
-            Suite2pRegistrationSettings.model_validate(
-                {"batch_size": "not_a_number_at_all!"}
-            )
+            Suite2pRegistrationSettings.model_validate({"batch_size": "not_a_number_at_all!"})
 
     def test_json_string_roundtrip(self):
         """Settings can be serialized to JSON and deserialized back."""
@@ -137,9 +131,7 @@ class TestComputeMotionSettingsResolution:
 class TestComputeMotionSuite2p:
     @pytest.fixture()
     def imaging(self):
-        return generate_random_imaging(
-            num_frames=20, height=8, width=9, sampling_frequency=30.0, seed=0
-        )
+        return generate_random_imaging(num_frames=20, height=8, width=9, sampling_frequency=30.0, seed=0)
 
     @pytest.fixture()
     def mock_suite2p(self):
@@ -189,9 +181,7 @@ class TestComputeMotionSuite2p:
                 "suite2p.default_ops": MagicMock(default_ops=mock_default_ops),
             },
         ):
-            motion = compute_motion_suite2p(
-                imaging, settings={"batch_size": 10}
-            )
+            motion = compute_motion_suite2p(imaging, settings={"batch_size": 10})
         assert isinstance(motion, Suite2PMotion)
         # With batch_size=10 and 20 frames, register_frames should be called twice
         assert mock_register.register_frames.call_count == 2
@@ -223,9 +213,7 @@ class TestComputeMotionSuite2p:
                 "suite2p.default_ops": MagicMock(default_ops=mock_default_ops),
             },
         ):
-            motion = compute_motion_suite2p(
-                imaging, settings=settings, batch_size=5
-            )
+            motion = compute_motion_suite2p(imaging, settings=settings, batch_size=5)
         assert isinstance(motion, Suite2PMotion)
         # batch_size overridden to 5: 20 frames / 5 = 4 batches
         assert mock_register.register_frames.call_count == 4
@@ -261,9 +249,7 @@ class TestComputeMotionSuite2p:
 class TestRegisterSuite2PImaging:
     @pytest.fixture()
     def imaging(self):
-        return generate_random_imaging(
-            num_frames=10, height=8, width=9, sampling_frequency=30.0, seed=0
-        )
+        return generate_random_imaging(num_frames=10, height=8, width=9, sampling_frequency=30.0, seed=0)
 
     @pytest.fixture()
     def motion(self, imaging):
@@ -298,9 +284,7 @@ class TestRegisterSuite2PImaging:
 class TestRegisterSuite2PImagingEpoch:
     @pytest.fixture()
     def imaging(self):
-        return generate_random_imaging(
-            num_frames=10, height=8, width=9, sampling_frequency=30.0, seed=0
-        )
+        return generate_random_imaging(num_frames=10, height=8, width=9, sampling_frequency=30.0, seed=0)
 
     @pytest.fixture()
     def motion(self, imaging):

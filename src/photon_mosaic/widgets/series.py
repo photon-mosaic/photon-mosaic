@@ -1,7 +1,7 @@
-from photon_mosaic.core.baseimaging import BaseImaging
-
-from spikeinterface.widgets.base import BaseWidget, to_attr
 import numpy as np
+from spikeinterface.widgets.base import BaseWidget, to_attr
+
+from photon_mosaic.core.baseimaging import BaseImaging
 
 
 class ImagingSeriesWidget(BaseWidget):
@@ -38,7 +38,7 @@ class ImagingSeriesWidget(BaseWidget):
         imaging: BaseImaging | dict,
         epoch_index: int = 0,
         frame_index: int = 0,
-        time_range: tuple = None,
+        time_range: tuple | None = None,
         colormap: str = "gray",
         vmin_percentile: float = 2.0,
         vmax_percentile: float = 98.0,
@@ -46,27 +46,29 @@ class ImagingSeriesWidget(BaseWidget):
         **backend_kwargs,
     ):
         # Check if imaging is a dictionary
-        is_multi_view = isinstance(imaging, dict)
-        
-        if is_multi_view:
+        if isinstance(imaging, dict):
             # Get the first imaging object to extract common properties
             first_key = list(imaging.keys())[0]
             first_imaging = imaging[first_key]
-            
+
             # Validate all imaging objects have the same number of frames
             num_frames = first_imaging.get_num_samples(epoch_index)
             times = first_imaging.get_times(epoch_index)
             frame_rate = first_imaging.sampling_frequency
-            
+
             for name, img in imaging.items():
                 if img.get_num_samples(epoch_index) != num_frames:
-                    raise ValueError(f"All imaging objects must have the same number of frames. "
-                                   f"'{name}' has {img.get_num_samples(epoch_index)} frames, "
-                                   f"expected {num_frames}")
-            
+                    raise ValueError(
+                        f"All imaging objects must have the same number of frames. "
+                        f"'{name}' has {img.get_num_samples(epoch_index)} frames, "
+                        f"expected {num_frames}"
+                    )
+
+            is_multi_view = True
             imaging_dict = imaging
             view_names = list(imaging.keys())
         else:
+            is_multi_view = False
             # Single imaging object - wrap in dict for consistent handling
             imaging_dict = {"imaging": imaging}
             view_names = ["imaging"]
@@ -101,7 +103,6 @@ class ImagingSeriesWidget(BaseWidget):
     def plot_ipywidgets(self, data_plot, **backend_kwargs):
         """Interactive ipywidgets plot with video controls."""
         import matplotlib.pyplot as plt
-        import ipywidgets as widgets
         from IPython.display import display
         from spikeinterface.widgets.utils_ipywidgets import check_ipywidget_backend
 
@@ -119,11 +120,11 @@ class ImagingSeriesWidget(BaseWidget):
         # Calculate global contrast range from multiple frames for consistent colorbar
         # Sample frames throughout the video to get representative range
         num_samples = 100
-        
+
         # Store global vmin/vmax for each view
         self.global_vmin = {}
         self.global_vmax = {}
-        
+
         for view_name, imaging in dp.imaging_dict.items():
             # TODO: get_random_frames instead
             sampled_data = imaging.get_series(0, num_samples, epoch_index=dp.epoch_index)
@@ -134,22 +135,19 @@ class ImagingSeriesWidget(BaseWidget):
         # Create matplotlib figure with proper size
         cm = 1 / 2.54
         width_cm = backend_kwargs.get("width_cm", 12)
-        
+
         # Get dimensions from first imaging object
         first_imaging = dp.imaging_dict[dp.view_names[0]]
         ratio = first_imaging.shape[0] / first_imaging.shape[1]
         height_cm = width_cm * ratio
-        
+
         num_views = len(dp.view_names)
 
         # Turn off interactive mode to prevent duplicate display
         with plt.ioff():
             # Create figure with multiple subplots if needed
             if num_views > 1:
-                self.figure, self.axes = plt.subplots(
-                    1, num_views, 
-                    figsize=(width_cm * num_views * cm, height_cm * cm)
-                )
+                self.figure, self.axes = plt.subplots(1, num_views, figsize=(width_cm * num_views * cm, height_cm * cm))
                 if num_views == 1:
                     self.axes = [self.axes]  # Make it a list for consistency
             else:
@@ -159,32 +157,31 @@ class ImagingSeriesWidget(BaseWidget):
             # Store image objects and colorbars for each view
             self.images = {}
             self.colorbars = {}
-            
+
             for idx, view_name in enumerate(dp.view_names):
                 imaging = dp.imaging_dict[view_name]
                 ax = self.axes[idx]
-                
+
                 # Get initial frame and create image
-                frame_data = imaging.get_series(
-                    self.current_frame, self.current_frame + 1, epoch_index=dp.epoch_index
-                )
+                frame_data = imaging.get_series(self.current_frame, self.current_frame + 1, epoch_index=dp.epoch_index)
                 frame = frame_data[0]
 
                 # Create the image object with fixed colorbar range
                 im = ax.imshow(
-                    frame, cmap=dp.colormap, 
-                    vmin=self.global_vmin[view_name], 
-                    vmax=self.global_vmax[view_name], 
-                    aspect="auto"
+                    frame,
+                    cmap=dp.colormap,
+                    vmin=self.global_vmin[view_name],
+                    vmax=self.global_vmax[view_name],
+                    aspect="auto",
                 )
-                
+
                 self.images[view_name] = im
 
                 if dp.is_multi_view:
                     ax.set_title(f"{view_name}\nFrame {self.current_frame} | Time: {dp.times[self.current_frame]:.3f}s")
                 else:
                     ax.set_title(f"Frame {self.current_frame} | Time: {dp.times[self.current_frame]:.3f}s")
-                    
+
                 ax.axis("off")
 
                 # Add colorbar with fixed range
@@ -318,7 +315,7 @@ class ImagingSeriesWidget(BaseWidget):
             imaging = dp.imaging_dict[view_name]
             ax = self.axes[idx]
             im = self.images[view_name]
-            
+
             # Get current frame data
             frame_data = imaging.get_series(self.current_frame, self.current_frame + 1, epoch_index=dp.epoch_index)
             frame = frame_data[0]  # Remove time dimension

@@ -1,12 +1,12 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.colors import to_rgba
 from spikeinterface.widgets import get_some_colors
 from spikeinterface.widgets.base import BaseWidget, to_attr
 from spikeinterface.widgets.utils_matplotlib import make_mpl_figure
 
-from photon_mosaic.core.baserois import BaseRois
 from photon_mosaic.core.baseimaging import BaseImaging
+from photon_mosaic.core.baserois import BaseRois
 
 
 class RoisWidget(BaseWidget):
@@ -36,7 +36,7 @@ class RoisWidget(BaseWidget):
     def __init__(
         self,
         rois: BaseRois,
-        imaging: BaseImaging = None,
+        imaging: BaseImaging | None = None,
         alpha: float = 0.5,
         colors: dict | str | None = None,
         show_roi_ids: bool = False,
@@ -140,7 +140,6 @@ class RoisWidget(BaseWidget):
     def plot_ipywidgets(self, data_plot, **backend_kwargs):
         """Interactive ipywidgets plot with ROI selection and zoom."""
         import matplotlib.pyplot as plt
-        import ipywidgets as widgets
         from IPython.display import display
         from spikeinterface.widgets.utils_ipywidgets import check_ipywidget_backend
 
@@ -395,7 +394,6 @@ class RoisWidget(BaseWidget):
 
     def _on_prev_clicked(self, button):
         """Handle previous button click."""
-        dp = to_attr(self.data_plot)
         if self.selected_roi_idx > 0:
             self.selected_roi_idx -= 1
             # Update dropdown to reflect the change

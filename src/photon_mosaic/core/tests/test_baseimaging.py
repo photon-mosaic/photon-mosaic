@@ -157,6 +157,7 @@ def test_get_average_image_caches_and_recompute_replaces():
     assert avg3.shape == (8, 6, 1)
     assert avg3 is not avg1
 
+
 # -------------------------
 # Multi-plane specific tests
 # -------------------------
