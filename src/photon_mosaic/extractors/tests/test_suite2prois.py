@@ -35,10 +35,12 @@ def _make_suite2p_folder(tmp_path, num_rois=5, height=64, width=64, fs=31.2, inc
     np.save(tmp_path / "stat.npy", np.array(stats, dtype=object))
 
     if include_iscell:
-        iscell = np.column_stack([
-            rng.integers(0, 2, size=num_rois).astype(float),
-            rng.random(num_rois),
-        ])
+        iscell = np.column_stack(
+            [
+                rng.integers(0, 2, size=num_rois).astype(float),
+                rng.random(num_rois),
+            ]
+        )
         np.save(tmp_path / "iscell.npy", iscell)
 
     return ops, stats

@@ -4,14 +4,13 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from photon_mosaic.core import BaseImaging, BaseImagingEpoch
+from photon_mosaic.core import BaseImaging
 from photon_mosaic.extractors.roiextractors import (
     BaseROIExtractorImaging,
     BaseROIExtractorImagingEpoch,
     get_classes_and_functions_to_import,
     get_imaging_extractor,
 )
-
 
 # --------------- Helpers ---------------
 
@@ -127,7 +126,7 @@ def test_get_imaging_extractor_auto_detect_sbx(mock_cls, tmp_path):
     mock_instance = MagicMock()
     mock_cls.return_value = mock_instance
 
-    result = get_imaging_extractor(fake_file)
+    get_imaging_extractor(fake_file)
     mock_cls.assert_called_once_with(imaging_name="SbxImagingExtractor", file_path=str(fake_file))
 
 
