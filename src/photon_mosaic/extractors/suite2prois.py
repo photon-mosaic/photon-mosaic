@@ -3,13 +3,12 @@ from pathlib import Path
 import numpy as np
 
 from photon_mosaic.core import BaseRois
-from photon_mosaic.core.utils import PathType
 
 
 class Suite2pRois(BaseRois):
     """Suite2p ROIs extractor."""
 
-    def __init__(self, folder_path: PathType):
+    def __init__(self, folder_path: str | Path):
         """Create a Suite2pRois extractor from a Suite2p folder."""
         ops_file = Path(folder_path) / "ops.npy"
         stat_file = Path(folder_path) / "stat.npy"
@@ -63,7 +62,7 @@ class Suite2pRois(BaseRois):
         masks = []
         for roi_id in roi_ids:
             stat = self.stats[roi_id]
-            mask = np.zeros(self.image_shape, dtype=bool)
+            mask = np.zeros(self.shape[:2], dtype=bool)
             ypix = stat["ypix"]
             xpix = stat["xpix"]
             mask[ypix, xpix] = True
