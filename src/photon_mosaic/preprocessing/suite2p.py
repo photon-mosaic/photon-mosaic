@@ -6,64 +6,36 @@ from .baseregistrationsettings import Suite2pRegistrationSettings
 
 class Suite2PMotion:
     """
-    Container for Suite2P motion correction information.
+    Container for Suite2P motion correction reference data.
 
-    Stores the reference image, masks, and displacement information
-    for each frame across all epochs.
+    Stores the reference image and masks needed to apply motion correction
+    on-the-fly via register_frames.
 
     Parameters
     ----------
-    imaging : Imaging object
-        The parent imaging object
-    displacements : list of np.ndarray
-        List of displacement arrays, one per epoch. Each array has shape (n_frames, 2)
-        containing (y, x) displacements for each frame.
     refAndMasks : tuple
         The reference and masks computed by suite2p
     ops : dict
         Suite2p operations dictionary
     """
 
-    def __init__(self, imaging, displacements, refAndMasks, ops):
-        self.imaging = imaging
-        self.displacements = displacements
+    def __init__(self, refAndMasks, ops):
         self.refAndMasks = refAndMasks
         self.ops = ops
-        self.num_epochs = len(displacements)
-
-    def get_displacement_at_frames(self, frames, epoch_index=0):
-        """
-        Get displacement for specific frames in a epoch.
-
-        Parameters
-        ----------
-        frames : np.ndarray or int
-            Frame indices to get displacements for
-        epoch_index : int, default: 0
-            Which epoch to get displacements from
-
-        Returns
-        -------
-        displacements : np.ndarray
-            Array of displacements with shape (n_frames, 2) or (2,) if single frame
-        """
-        if isinstance(frames, int):
-            return self.displacements[epoch_index][frames]
-        return self.displacements[epoch_index][frames]
 
 
 def compute_motion_suite2p(imaging, settings=None, **kwargs):
     """
-    Compute motion correction signals for the entire imaging recording using Suite2P.
+    Pre-compute the Suite2P reference image and masks for motion correction.
 
-    This function runs once over the entire video to compute displacement information
-    for all frames. The returned Suite2PMotion object can then be used with
-    RegisterSuite2PImaging to apply the correction on-the-fly.
+    This function computes the reference and masks from the first epoch's
+    initial frames. The returned Suite2PMotion object can then be used with
+    RegisterSuite2PImaging, which applies registration on-the-fly in get_series.
 
     Parameters
     ----------
     imaging : BaseImaging
-        The imaging object to compute motion for
+        The imaging object to compute the reference from
     settings : Suite2pRegistrationSettings or dict, optional
         Registration settings. Can be a Suite2pRegistrationSettings instance,
         a dict (e.g. loaded from JSON), or None to use defaults.
@@ -75,7 +47,7 @@ def compute_motion_suite2p(imaging, settings=None, **kwargs):
     Returns
     -------
     motion : Suite2PMotion
-        Motion object containing displacement information for all frames
+        Motion object containing the reference and masks for on-the-fly registration
     """
     from suite2p.default_ops import default_ops
     from suite2p.registration import register
@@ -92,54 +64,23 @@ def compute_motion_suite2p(imaging, settings=None, **kwargs):
     ops = default_ops()
     ops.update(settings.model_dump(exclude={"debug", "tmp_dir", "data_type"}))
 
-    bidiphase = ops.get("bidiphase", 0)
-    rmin, rmax = -np.inf, np.inf
-    nZ = 1
+    # Compute reference from first epoch
+    first_epoch = imaging.epochs[0]
+    num_frames = first_epoch.get_num_samples()
+    n_ref_frames = min(settings.max_reference_iterations, num_frames)
+    ref_frames = first_epoch.get_series(0, n_ref_frames)
+    reference = register.compute_reference(ref_frames)
+    refAndMasks = register.compute_reference_masks(reference, ops)
 
-    displacements_per_epoch = []
-    refAndMasks = None
-
-    # Process each epoch
-    for epoch_idx, epoch in enumerate(imaging.epochs):
-        num_frames = epoch.get_num_samples()
-
-        # Compute reference from first epoch only (using initial frames)
-        if refAndMasks is None:
-            n_ref_frames = min(settings.max_reference_iterations, num_frames)
-            ref_frames = epoch.get_series(0, n_ref_frames)
-            reference = register.compute_reference(ref_frames)
-            refAndMasks = register.compute_reference_masks(reference, ops)
-
-        # Compute displacements for all frames in this epoch
-        epoch_displacements = []
-
-        # Process in batches to avoid memory issues
-        for start_frame in range(0, num_frames, settings.batch_size):
-            end_frame = min(start_frame + settings.batch_size, num_frames)
-            batch_frames = epoch.get_series(start_frame, end_frame)
-
-            # Register frames to get displacement information
-            _, ymax, xmax, cmax, ymax1, xmax1, cmax1, _ = register.register_frames(
-                refAndMasks, batch_frames, rmin=rmin, rmax=rmax, bidiphase=bidiphase, ops=ops, nZ=nZ
-            )
-            # Store displacements (ymax, xmax are the rigid displacements)
-            batch_displacements = np.column_stack([ymax, xmax])
-            epoch_displacements.append(batch_displacements)
-
-        # Concatenate all batch displacements for this epoch
-        epoch_displacements = np.vstack(epoch_displacements)
-        displacements_per_epoch.append(epoch_displacements)
-
-    return Suite2PMotion(imaging, displacements_per_epoch, refAndMasks, ops)
+    return Suite2PMotion(refAndMasks, ops)
 
 
 class RegisterSuite2PImaging(BasePreprocessor):
     """
     Apply pre-computed Suite2P motion correction to imaging data.
 
-    This preprocessor applies motion correction on-the-fly using displacement
-    information computed by compute_motion_suite2p(). This ensures consistent
-    results regardless of how frames are sliced.
+    This preprocessor applies motion correction on-the-fly using the
+    reference and masks computed by compute_motion_suite2p().
 
     Parameters
     ----------
@@ -154,9 +95,6 @@ class RegisterSuite2PImaging(BasePreprocessor):
 
     def __init__(self, imaging, motion, **kwargs):
         BasePreprocessor.__init__(self, imaging)
-
-        if motion.num_epochs != len(imaging.epochs):
-            raise ValueError(f"Motion has {motion.num_epochs} epochs but imaging has {len(imaging.epochs)} epochs")
 
         for epoch_idx, parent_epoch in enumerate(imaging.epochs):
             epoch = RegisterSuite2PImagingEpoch(parent_epoch, motion, epoch_idx, **kwargs)
@@ -191,6 +129,9 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
         """
         Get motion-corrected frames for the specified range.
 
+        Computes and applies displacement on-the-fly using the pre-computed
+        reference and masks.
+
         Parameters
         ----------
         start_frame : int
@@ -203,31 +144,17 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
         registered_video : np.ndarray
             Motion-corrected video with shape (n_frames, height, width)
         """
-        import copy
-
         from suite2p.registration import register
 
-        # Get raw video for this frame range
         video = self.parent_imaging_epoch.get_series(start_frame, end_frame)
 
-        # Get pre-computed displacements for these frames
-        # displacements = self.motion.get_displacement_at_frames(
-        #     frame_indices, self.epoch_index
-        # )
-
-        # Apply registration using pre-computed displacements
         ops = self.motion.ops
         bidiphase = ops.get("bidiphase", 0)
         rmin, rmax = -np.inf, np.inf
         nZ = 1
 
-        registered_video = copy.deepcopy(video)
-
-        # Apply the registration with pre-computed shifts
-        # Note: We still need to call register_frames, but now it's using
-        # a consistent reference from the full video analysis
         registered_video, *_ = register.register_frames(
-            self.motion.refAndMasks, registered_video, rmin=rmin, rmax=rmax, bidiphase=bidiphase, ops=ops, nZ=nZ
+            self.motion.refAndMasks, video, rmin=rmin, rmax=rmax, bidiphase=bidiphase, ops=ops, nZ=nZ
         )
 
         return registered_video
