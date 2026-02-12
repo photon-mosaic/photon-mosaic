@@ -1,6 +1,6 @@
 import numpy as np
 
-from .baseregistration import BaseRegistration, BaseRegistrationEpoch
+from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
 from .baseregistrationsettings import Suite2pRegistrationSettings
 
 
@@ -133,7 +133,7 @@ def compute_motion_suite2p(imaging, settings=None, **kwargs):
     return Suite2PMotion(imaging, displacements_per_epoch, refAndMasks, ops)
 
 
-class RegisterSuite2PImaging(BaseRegistration):
+class RegisterSuite2PImaging(BasePreprocessor):
     """
     Apply pre-computed Suite2P motion correction to imaging data.
 
@@ -153,7 +153,7 @@ class RegisterSuite2PImaging(BaseRegistration):
     """
 
     def __init__(self, imaging, motion, **kwargs):
-        BaseRegistration.__init__(self, imaging)
+        BasePreprocessor.__init__(self, imaging)
 
         if motion.num_epochs != len(imaging.epochs):
             raise ValueError(f"Motion has {motion.num_epochs} epochs but imaging has {len(imaging.epochs)} epochs")
@@ -165,7 +165,7 @@ class RegisterSuite2PImaging(BaseRegistration):
         self._kwargs = dict(imaging=imaging, motion=motion, **kwargs)
 
 
-class RegisterSuite2PImagingEpoch(BaseRegistrationEpoch):
+class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
     """
     Epoch-level preprocessor that applies Suite2P motion correction.
 
@@ -182,7 +182,7 @@ class RegisterSuite2PImagingEpoch(BaseRegistrationEpoch):
     """
 
     def __init__(self, parent_imaging_epoch, motion, epoch_index, **kwargs):
-        BaseRegistrationEpoch.__init__(self, parent_imaging_epoch)
+        BasePreprocessorEpoch.__init__(self, parent_imaging_epoch)
         self.motion = motion
         self.epoch_index = epoch_index
         self.kwargs = kwargs

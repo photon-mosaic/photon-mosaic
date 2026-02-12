@@ -5,10 +5,10 @@ import pytest
 from pydantic import ValidationError
 
 from photon_mosaic.core.generators import generate_random_imaging
-from photon_mosaic.registration.baseregistrationsettings import (
+from photon_mosaic.preprocessing.baseregistrationsettings import (
     Suite2pRegistrationSettings,
 )
-from photon_mosaic.registration.suite2p import (
+from photon_mosaic.preprocessing.suite2p import (
     RegisterSuite2PImaging,
     RegisterSuite2PImagingEpoch,
     Suite2PMotion,

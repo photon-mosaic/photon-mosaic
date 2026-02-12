@@ -1,3 +1,6 @@
-from .laplace_filter import laplace_filter
-from .median_filter import median_filter
-from .edge_detector import edge_detector
+from .suite2p import register_suite2p
+from .suite2p import compute_motion_suite2p
+from .suite2p import RegisterSuite2PImagingEpoch
+from .suite2p import RegisterSuite2PImaging
+from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
+from .baseregistrationsettings import Suite2pRegistrationSettings
