@@ -1,14 +1,14 @@
+from unittest.mock import patch
+
 import matplotlib
 import numpy as np
 import pytest
-from unittest.mock import patch
 
 matplotlib.use("Agg")
 
 from photon_mosaic.core.generators import generate_random_imaging, generate_rois
 from photon_mosaic.widgets.rois import RoisWidget
 from photon_mosaic.widgets.series import ImagingSeriesWidget
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
