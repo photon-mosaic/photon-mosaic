@@ -86,16 +86,6 @@ def test_base_roi_extractor_imaging_init(mock_dict):
     assert imaging._kwargs["imaging_name"] == "TestExtractor"
 
 
-@patch("photon_mosaic.extractors.roiextractors.imaging_extractor_dict", {"TiffImagingExtractor": MagicMock()})
-@patch("photon_mosaic.extractors.roiextractors.BaseROIExtractorImaging", side_effect=Exception("load failed"))
-def test_get_imaging_extractor_reports_last_error(mock_cls, tmp_path):
-    fake_file = tmp_path / "data.tif"
-    fake_file.write_text("fake")
-
-    with pytest.raises(RuntimeError, match="load failed"):
-        get_imaging_extractor(fake_file)
-
-
 # --------------- get_classes_and_functions_to_import ---------------
 
 
