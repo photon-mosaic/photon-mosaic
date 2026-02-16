@@ -2,7 +2,6 @@
 
 import inspect
 import re
-from pathlib import Path
 
 from roiextractors.extractorlist import imaging_extractor_dict
 from roiextractors.imagingextractor import ImagingExtractor

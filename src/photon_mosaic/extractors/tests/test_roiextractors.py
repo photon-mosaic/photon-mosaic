@@ -2,7 +2,6 @@ import re
 from unittest.mock import MagicMock, patch
 
 import numpy as np
-import pytest
 
 from photon_mosaic.core import BaseImaging
 from photon_mosaic.extractors.roiextractors import (
