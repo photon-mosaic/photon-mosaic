@@ -55,15 +55,15 @@ def test_epoch_get_series_slices_planes_when_provided():
     np.testing.assert_array_equal(result[..., 1], data_4d[..., 2])
 
 
-def test_epoch_get_series_no_plane_slicing_for_3d_data():
+def test_epoch_get_series_adds_plane_axis_for_3d_data():
     mock_extractor = _make_mock_imaging_extractor()
     data_3d = np.random.default_rng(0).random((40, 64, 64))
     mock_extractor.get_series.return_value = data_3d
     epoch = BaseROIExtractorImagingEpoch(mock_extractor)
 
     result = epoch.get_series(start_frame=10, end_frame=50, plane_indices=[0])
-    # 3D data should not be sliced (ndim <= 3)
-    assert result.shape == data_3d.shape
+    # 3D data should be expanded to 4D and then sliced
+    assert result.shape == (40, 64, 64, 1)
 
 
 # --------------- BaseROIExtractorImaging ---------------
