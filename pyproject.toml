@@ -43,6 +43,8 @@ dev = [
   "pre-commit",
   "ruff",
   "setuptools-scm",
+  "dask",
+  "pytest-benchmark",
 ]
 
 [build-system]
@@ -66,6 +68,7 @@ addopts = "--cov=photon_mosaic"
 markers = [
     "small: benchmarks on small datasets that fit in RAM",
     "large: benchmarks on large datasets (>16 GB) that do NOT fit in RAM",
+    "grid: parametrized grid-search benchmarks across planes/frames/backends",
 ]
 
 [tool.ruff]
@@ -86,6 +89,7 @@ ignore_missing_imports = true
 [tool.codespell]
 skip = '.git'
 check-hidden = true
+ignore-words-list = 'strat'
 
 [tool.tox]
 legacy_tox_ini = """
