@@ -2,7 +2,6 @@
 from .roiextractors import (
     BaseROIExtractorImaging,
     BaseROIExtractorImagingEpoch,
-    get_imaging_extractor,
 )
 
 from .suite2prois import read_suite2p_rois
@@ -11,7 +10,6 @@ from .suite2prois import read_suite2p_rois
 __all__ = [
     "BaseROIExtractorImaging",
     "BaseROIExtractorImagingEpoch",
-    "get_imaging_extractor",
 ]
 
 
