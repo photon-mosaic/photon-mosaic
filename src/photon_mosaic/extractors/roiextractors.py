@@ -3,6 +3,7 @@
 import inspect
 import re
 
+import numpy as np
 from roiextractors.extractorlist import imaging_extractor_dict
 from roiextractors.imagingextractor import ImagingExtractor
 
@@ -41,7 +42,9 @@ class BaseROIExtractorImagingEpoch(BaseImagingEpoch):
 
     def get_series(self, start_frame=None, end_frame=None, plane_indices=None):
         series = self.roiextractor_extractor.get_series(start_frame, end_frame)
-        if plane_indices is not None and series.ndim > 3:
+        if series.ndim == 3:
+            series = series[..., np.newaxis]
+        if plane_indices is not None:
             series = series[..., plane_indices]
         return series
 
