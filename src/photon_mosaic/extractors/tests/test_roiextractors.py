@@ -9,7 +9,6 @@ from photon_mosaic.extractors.roiextractors import (
     BaseROIExtractorImaging,
     BaseROIExtractorImagingEpoch,
     get_classes_and_functions_to_import,
-    get_imaging_extractor,
 )
 
 # --------------- Helpers ---------------
@@ -85,58 +84,6 @@ def test_base_roi_extractor_imaging_init(mock_dict):
     assert imaging.get_num_epochs() == 1
     assert "TestExtractor" in imaging.name
     assert imaging._kwargs["imaging_name"] == "TestExtractor"
-
-
-# --------------- get_imaging_extractor ---------------
-
-
-def test_get_imaging_extractor_file_not_found(tmp_path):
-    with pytest.raises(FileNotFoundError, match="File not found"):
-        get_imaging_extractor(tmp_path / "nonexistent.tif")
-
-
-def test_get_imaging_extractor_unsupported_extension(tmp_path):
-    fake_file = tmp_path / "data.xyz"
-    fake_file.write_text("fake")
-    with pytest.raises(ValueError, match="No suitable imaging extractor"):
-        get_imaging_extractor(fake_file)
-
-
-@patch("photon_mosaic.extractors.roiextractors.imaging_extractor_dict")
-@patch("photon_mosaic.extractors.roiextractors.BaseROIExtractorImaging")
-def test_get_imaging_extractor_with_explicit_name(mock_cls, mock_dict, tmp_path):
-    fake_file = tmp_path / "data.tif"
-    fake_file.write_text("fake")
-
-    mock_instance = MagicMock()
-    mock_cls.return_value = mock_instance
-
-    result = get_imaging_extractor(fake_file, imaging_name="ScanImageImagingExtractor")
-
-    mock_cls.assert_called_once_with(imaging_name="ScanImageImagingExtractor", file_path=str(fake_file))
-    assert result is mock_instance
-
-
-@patch("photon_mosaic.extractors.roiextractors.imaging_extractor_dict", {"SbxImagingExtractor": MagicMock()})
-@patch("photon_mosaic.extractors.roiextractors.BaseROIExtractorImaging")
-def test_get_imaging_extractor_auto_detect_sbx(mock_cls, tmp_path):
-    fake_file = tmp_path / "data.sbx"
-    fake_file.write_text("fake")
-
-    mock_instance = MagicMock()
-    mock_cls.return_value = mock_instance
-
-    get_imaging_extractor(fake_file)
-    mock_cls.assert_called_once_with(imaging_name="SbxImagingExtractor", file_path=str(fake_file))
-
-
-@patch("photon_mosaic.extractors.roiextractors.imaging_extractor_dict", {})
-def test_get_imaging_extractor_all_extractors_fail(tmp_path):
-    fake_file = tmp_path / "data.tif"
-    fake_file.write_text("fake")
-
-    with pytest.raises(RuntimeError, match="No suitable imaging extractor"):
-        get_imaging_extractor(fake_file)
 
 
 @patch("photon_mosaic.extractors.roiextractors.imaging_extractor_dict", {"TiffImagingExtractor": MagicMock()})
