@@ -52,7 +52,7 @@ from pathlib import Path
 
 # Test name pattern:
 #   test_{size}_{backend}[P{planes}-{strategy}-{position}-F{frames}]
-# e.g. test_small_zarr_native[P10-1plane-mid-F100]
+# e.g. test_small_zarr_dask[P10-1plane-mid-F100]
 _NAME_RE = re.compile(
     r"test_(?P<size>small|large)_(?P<backend>[a-z_]+)\[P(?P<planes>\d+)-(?P<strategy>\w+)-(?P<position>start|mid|end)-F(?P<frames>\d+)\]"
 )
@@ -388,9 +388,10 @@ def plot_heatmaps(results: list[dict], output_dir: str | Path = "."):
         "npy_memmap: numpy memory-mapped (lazy)  •  "
         "npy_dask: dask array backed by numpy memmap\n"
         "binary_memmap: raw binary with fresh mmap per read  •  "
-        "zarr_native: zarr with on-disk chunks (256 frames)  •  "
-        "zarr_rechunked: zarr read with smaller dask chunks (64 frames), "
-        "misaligned with the on-disk layout"
+        "zarr_dask: zarr+dask with on-disk chunks (256 frames)  \u2022  "
+        "zarr_dask_rechunked: zarr+dask read with smaller chunks (64 frames), "
+        "misaligned with the on-disk layout\n"
+        "zarr_native: direct zarr slicing (no dask), returns numpy arrays"
     )
     fig.text(
         0.50,

@@ -296,7 +296,65 @@ def test_small_binary_memmap(
     assert result.shape == _expected_shape(nf_read, len(plane_ids))
 
 
-# --- zarr (native chunks) ----------------------------------------
+# --- zarr dask (native chunks) ------------------------------------
+@pytest.mark.small
+@pytest.mark.grid
+@pytest.mark.parametrize("num_planes,plane_ids,start,nf_read", SMALL_GRID)
+def test_small_zarr_dask(
+    benchmark,
+    _file_cache,
+    tmp_path_factory,
+    num_planes,
+    plane_ids,
+    start,
+    nf_read,
+):
+    """ZarrImaging (dask) using the on-disk chunk layout (T_CHUNK_DISK=256)."""
+    path = _get_or_create_zarr(_file_cache, tmp_path_factory, SMALL_NUM_FRAMES, num_planes)
+    imaging = ZarrImaging(
+        zarr_paths=str(path),
+        sampling_frequency=SAMPLING_FREQUENCY,
+        use_dask=True,
+    )
+
+    def _read():
+        return imaging.get_series(start_frame=start, end_frame=start + nf_read, plane_ids=plane_ids).compute()
+
+    result = benchmark(_read)
+    assert result.shape == _expected_shape(nf_read, len(plane_ids))
+
+
+# --- zarr dask (discordant read-chunks) ----------------------------
+@pytest.mark.small
+@pytest.mark.grid
+@pytest.mark.parametrize("num_planes,plane_ids,start,nf_read", SMALL_GRID)
+def test_small_zarr_dask_rechunked(
+    benchmark,
+    _file_cache,
+    tmp_path_factory,
+    num_planes,
+    plane_ids,
+    start,
+    nf_read,
+):
+    """ZarrImaging (dask) with read-chunks (T_CHUNK_READ=64) misaligned
+    with the on-disk layout (T_CHUNK_DISK=256)."""
+    path = _get_or_create_zarr(_file_cache, tmp_path_factory, SMALL_NUM_FRAMES, num_planes)
+    imaging = ZarrImaging(
+        zarr_paths=str(path),
+        sampling_frequency=SAMPLING_FREQUENCY,
+        chunks=_zarr_read_chunks(num_planes),
+        use_dask=True,
+    )
+
+    def _read():
+        return imaging.get_series(start_frame=start, end_frame=start + nf_read, plane_ids=plane_ids).compute()
+
+    result = benchmark(_read)
+    assert result.shape == _expected_shape(nf_read, len(plane_ids))
+
+
+# --- zarr native (direct zarr slicing, no dask) -------------------
 @pytest.mark.small
 @pytest.mark.grid
 @pytest.mark.parametrize("num_planes,plane_ids,start,nf_read", SMALL_GRID)
@@ -309,46 +367,16 @@ def test_small_zarr_native(
     start,
     nf_read,
 ):
-    """ZarrImaging using the on-disk chunk layout (T_CHUNK_DISK=256)."""
+    """ZarrImaging (no dask) — direct zarr slicing returns numpy."""
     path = _get_or_create_zarr(_file_cache, tmp_path_factory, SMALL_NUM_FRAMES, num_planes)
     imaging = ZarrImaging(
         zarr_paths=str(path),
         sampling_frequency=SAMPLING_FREQUENCY,
+        use_dask=False,
     )
 
-    def _read():
-        return imaging.get_series(start_frame=start, end_frame=start + nf_read, plane_ids=plane_ids).compute()
-
-    result = benchmark(_read)
-    assert result.shape == _expected_shape(nf_read, len(plane_ids))
-
-
-# --- zarr (discordant read-chunks) --------------------------------
-@pytest.mark.small
-@pytest.mark.grid
-@pytest.mark.parametrize("num_planes,plane_ids,start,nf_read", SMALL_GRID)
-def test_small_zarr_rechunked(
-    benchmark,
-    _file_cache,
-    tmp_path_factory,
-    num_planes,
-    plane_ids,
-    start,
-    nf_read,
-):
-    """ZarrImaging with dask read-chunks (T_CHUNK_READ=64) misaligned
-    with the on-disk layout (T_CHUNK_DISK=256)."""
-    path = _get_or_create_zarr(_file_cache, tmp_path_factory, SMALL_NUM_FRAMES, num_planes)
-    imaging = ZarrImaging(
-        zarr_paths=str(path),
-        sampling_frequency=SAMPLING_FREQUENCY,
-        chunks=_zarr_read_chunks(num_planes),
-    )
-
-    def _read():
-        return imaging.get_series(start_frame=start, end_frame=start + nf_read, plane_ids=plane_ids).compute()
-
-    result = benchmark(_read)
+    result = benchmark(imaging.get_series, start_frame=start, end_frame=start + nf_read, plane_ids=plane_ids)
+    assert isinstance(result, np.ndarray)
     assert result.shape == _expected_shape(nf_read, len(plane_ids))
 
 
@@ -433,7 +461,64 @@ def test_large_binary_memmap(
     assert result.shape == _expected_shape(nf_read, len(plane_ids))
 
 
-# --- zarr native chunks -------------------------------------------
+# --- zarr dask (native chunks) ------------------------------------
+@pytest.mark.large
+@pytest.mark.grid
+@pytest.mark.parametrize("num_planes,plane_ids,start,nf_read", LARGE_GRID)
+def test_large_zarr_dask(
+    benchmark,
+    _file_cache,
+    tmp_path_factory,
+    num_planes,
+    plane_ids,
+    start,
+    nf_read,
+):
+    """ZarrImaging (dask) using on-disk chunk layout on large dataset."""
+    path = _get_or_create_zarr(_file_cache, tmp_path_factory, LARGE_NUM_FRAMES, num_planes)
+    imaging = ZarrImaging(
+        zarr_paths=str(path),
+        sampling_frequency=SAMPLING_FREQUENCY,
+        use_dask=True,
+    )
+
+    def _read():
+        return imaging.get_series(start_frame=start, end_frame=start + nf_read, plane_ids=plane_ids).compute()
+
+    result = benchmark(_read)
+    assert result.shape == _expected_shape(nf_read, len(plane_ids))
+
+
+# --- zarr dask discordant read-chunks -----------------------------
+@pytest.mark.large
+@pytest.mark.grid
+@pytest.mark.parametrize("num_planes,plane_ids,start,nf_read", LARGE_GRID)
+def test_large_zarr_dask_rechunked(
+    benchmark,
+    _file_cache,
+    tmp_path_factory,
+    num_planes,
+    plane_ids,
+    start,
+    nf_read,
+):
+    """ZarrImaging (dask) with discordant read-chunks on large dataset."""
+    path = _get_or_create_zarr(_file_cache, tmp_path_factory, LARGE_NUM_FRAMES, num_planes)
+    imaging = ZarrImaging(
+        zarr_paths=str(path),
+        sampling_frequency=SAMPLING_FREQUENCY,
+        chunks=_zarr_read_chunks(num_planes),
+        use_dask=True,
+    )
+
+    def _read():
+        return imaging.get_series(start_frame=start, end_frame=start + nf_read, plane_ids=plane_ids).compute()
+
+    result = benchmark(_read)
+    assert result.shape == _expected_shape(nf_read, len(plane_ids))
+
+
+# --- zarr native (direct zarr slicing, no dask) -------------------
 @pytest.mark.large
 @pytest.mark.grid
 @pytest.mark.parametrize("num_planes,plane_ids,start,nf_read", LARGE_GRID)
@@ -446,43 +531,14 @@ def test_large_zarr_native(
     start,
     nf_read,
 ):
-    """ZarrImaging using on-disk chunk layout on large dataset."""
+    """ZarrImaging (no dask) — direct zarr slicing on large dataset."""
     path = _get_or_create_zarr(_file_cache, tmp_path_factory, LARGE_NUM_FRAMES, num_planes)
     imaging = ZarrImaging(
         zarr_paths=str(path),
         sampling_frequency=SAMPLING_FREQUENCY,
+        use_dask=False,
     )
 
-    def _read():
-        return imaging.get_series(start_frame=start, end_frame=start + nf_read, plane_ids=plane_ids).compute()
-
-    result = benchmark(_read)
-    assert result.shape == _expected_shape(nf_read, len(plane_ids))
-
-
-# --- zarr discordant read-chunks ----------------------------------
-@pytest.mark.large
-@pytest.mark.grid
-@pytest.mark.parametrize("num_planes,plane_ids,start,nf_read", LARGE_GRID)
-def test_large_zarr_rechunked(
-    benchmark,
-    _file_cache,
-    tmp_path_factory,
-    num_planes,
-    plane_ids,
-    start,
-    nf_read,
-):
-    """ZarrImaging with discordant dask read-chunks on large dataset."""
-    path = _get_or_create_zarr(_file_cache, tmp_path_factory, LARGE_NUM_FRAMES, num_planes)
-    imaging = ZarrImaging(
-        zarr_paths=str(path),
-        sampling_frequency=SAMPLING_FREQUENCY,
-        chunks=_zarr_read_chunks(num_planes),
-    )
-
-    def _read():
-        return imaging.get_series(start_frame=start, end_frame=start + nf_read, plane_ids=plane_ids).compute()
-
-    result = benchmark(_read)
+    result = benchmark(imaging.get_series, start_frame=start, end_frame=start + nf_read, plane_ids=plane_ids)
+    assert isinstance(result, np.ndarray)
     assert result.shape == _expected_shape(nf_read, len(plane_ids))
