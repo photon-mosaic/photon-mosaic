@@ -35,6 +35,10 @@ classifiers = [
 "User Support" = "https://github.com/photon-mosaic/photon-mosaic/issues"
 
 [project.optional-dependencies]
+widgets = [
+  "matplotlib",
+  "ipywidgets",
+]
 dev = [
   "pytest",
   "pytest-cov",
