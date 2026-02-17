@@ -11,7 +11,8 @@ readme = "README.md"
 requires-python = ">=3.10.0"
 dynamic = ["version"]
 dependencies = [
-    "spikeinterface @ git+https://github.com/alejoe91/spikeinterface.git@04f44e85ca848722bc60447aeadb5178c70c652b"
+    "spikeinterface @ git+https://github.com/alejoe91/spikeinterface.git@04f44e85ca848722bc60447aeadb5178c70c652b",
+    "roiextractors"
 ]
 
 license = {text = "MIT License"}
