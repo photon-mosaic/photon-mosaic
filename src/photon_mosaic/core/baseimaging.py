@@ -448,7 +448,16 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         elif format == "memory":
             raise NotImplementedError
         elif format == "zarr":
-            raise NotImplementedError
+            import zarr
+
+            from .zarrimaging import ZarrImaging, add_imaging_to_zarr_group
+
+            folder_path = kwargs["folder"]
+            storage_options = kwargs.get("storage_options", None)
+            zarr_root = zarr.open(str(folder_path), mode="w", storage_options=storage_options)
+            add_imaging_to_zarr_group(self, zarr_root, **kwargs)
+
+            cached = ZarrImaging(zarr_root)
         elif format == "nwb":
             raise NotImplementedError
 
