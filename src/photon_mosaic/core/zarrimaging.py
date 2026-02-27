@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import zarr
 from spikeinterface.core.chunkable_tools import write_chunkable_to_zarr
-from spikeinterface.core.core_tools import check_json
+from spikeinterface.core.core_tools import check_json, retrieve_importing_provenance
 from spikeinterface.core.job_tools import split_job_kwargs
 from spikeinterface.core.zarrextractors import (
     add_properties_and_annotations,
@@ -173,3 +173,4 @@ def add_imaging_to_zarr_group(
     )
 
     add_properties_and_annotations(zarr_group, imaging)
+    zarr_group.attrs["provenance"] = retrieve_importing_provenance(ZarrImaging)

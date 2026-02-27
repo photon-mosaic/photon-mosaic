@@ -5,7 +5,7 @@ from numpy.typing import ArrayLike, DTypeLike
 from spikeinterface.core.base import BaseExtractor
 from spikeinterface.core.chunkable import ChunkableMixin, ChunkableSegment
 from spikeinterface.core.chunkable_tools import get_chunks, write_binary
-from spikeinterface.core.core_tools import convert_bytes_to_str, convert_seconds_to_str, retrieve_importing_provenance
+from spikeinterface.core.core_tools import convert_bytes_to_str, convert_seconds_to_str
 
 
 class BaseImaging(BaseExtractor, ChunkableMixin):
@@ -456,7 +456,6 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             storage_options = kwargs.get("storage_options", None)
             zarr_root = zarr.open(str(zarr_path), mode="w", storage_options=storage_options)
             add_imaging_to_zarr_group(self, zarr_root, **kwargs)
-            zarr_root.attrs["provenance"] = retrieve_importing_provenance(ZarrImaging)
 
             cached = ZarrImaging(zarr_path)
         elif format == "nwb":
