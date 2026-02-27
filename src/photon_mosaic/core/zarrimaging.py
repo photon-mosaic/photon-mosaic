@@ -119,11 +119,11 @@ class ZarrImagingEpoch(BaseImagingEpoch):
         """
         return self._video.shape[0]
 
-    def get_traces(
+    def get_series(
         self,
-        start_frame: int | None = None,
-        end_frame: int | None = None,
-        plane_indices: list[int | str] | None = None,
+        start_frame: int,
+        end_frame: int,
+        plane_indices: list[int] | None = None,
     ) -> np.ndarray:
         video = self._video[start_frame:end_frame]
         if plane_indices is not None:
@@ -144,8 +144,8 @@ def add_imaging_to_zarr_group(
     # save data (done the subclass)
     zarr_group.attrs["sampling_frequency"] = float(imaging.get_sampling_frequency())
     zarr_group.attrs["num_segments"] = int(imaging.get_num_segments())
-    zarr_group.create_dataset(name="shape", data=imaging.get_video_shape(), compressor=None)
-    dataset_paths = [f"videos_seg{i}" for i in range(imaging.get_num_segments())]
+    zarr_group.create_dataset(name="shape", data=imaging.shape, compressor=None)
+    dataset_paths = [f"video_seg{i}" for i in range(imaging.get_num_segments())]
 
     dtype = imaging.get_dtype() if dtype is None else dtype
     extra_chunks = zarr_kwargs.get("extra_chunks", None)
