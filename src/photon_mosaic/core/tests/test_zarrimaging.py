@@ -7,13 +7,22 @@ from photon_mosaic.core.zarrimaging import ZarrImaging
 
 @pytest.fixture
 def imaging():
-    return generate_random_imaging(num_frames=[100, 20, 30], height=4, width=4, sampling_frequency=10.0, seed=3)
+    return generate_random_imaging(num_frames=[100, 20, 30], height=16, width=16, sampling_frequency=10.0, seed=3)
+
+
+@pytest.fixture
+def imaging_multi_plane():
+    imaging = generate_random_imaging(
+        num_frames=[100, 20, 30], height=16, width=16, sampling_frequency=10.0, seed=3, num_planes=5
+    )
+    imaging.set_property("depth", np.arange(100, 105))
+    return imaging
 
 
 def test_zarr_writing(imaging, tmp_path):
     zarr_path = tmp_path / "test_imaging.zarr"
 
-    imaging_zarr = imaging.save(format="zarr", folder=zarr_path)
+    imaging_zarr = imaging.save(format="zarr", folder=zarr_path, n_jobs=2)
 
     imaging_zarr_loaded = ZarrImaging(zarr_path)
 
@@ -23,6 +32,36 @@ def test_zarr_writing(imaging, tmp_path):
     assert imaging_zarr_loaded.get_num_epochs() == imaging.get_num_epochs()
     assert imaging_zarr.shape == imaging.shape
     assert imaging_zarr_loaded.shape == imaging.shape
+    assert imaging_zarr_loaded.get_series(start_frame=2, end_frame=6, epoch_index=0).shape == (4, 16, 16, 1)
+
+    for epoch_index in range(imaging.get_num_epochs()):
+        np.testing.assert_array_equal(
+            imaging_zarr.get_series(epoch_index=epoch_index), imaging.get_series(epoch_index=epoch_index)
+        )
+        np.testing.assert_array_equal(
+            imaging_zarr_loaded.get_series(epoch_index=epoch_index), imaging.get_series(epoch_index=epoch_index)
+        )
+
+    # load_compression_ratio
+    imaging_with_cr = ZarrImaging(zarr_path, load_compression_ratio=True)
+    assert "compression_ratio" in imaging_with_cr.get_annotation_keys()
+
+
+def test_zarr_multi_plane_writing(imaging_multi_plane, tmp_path):
+    zarr_path = tmp_path / "test_imaging.zarr"
+
+    imaging = imaging_multi_plane
+    imaging_zarr = imaging.save(format="zarr", folder=zarr_path, n_jobs=2)
+
+    imaging_zarr_loaded = ZarrImaging(zarr_path)
+
+    assert imaging_zarr_loaded.sampling_frequency == imaging.sampling_frequency
+    assert len(imaging_zarr_loaded.epochs) == len(imaging.epochs)
+    assert imaging_zarr.get_num_epochs() == imaging.get_num_epochs()
+    assert imaging_zarr_loaded.get_num_epochs() == imaging.get_num_epochs()
+    assert imaging_zarr.shape == imaging.shape
+    assert imaging_zarr_loaded.shape == imaging.shape
+    assert imaging_zarr_loaded.get_series(start_frame=2, end_frame=6, epoch_index=0).shape == (4, 16, 16, 5)
 
     for epoch_index in range(imaging.get_num_epochs()):
         np.testing.assert_array_equal(

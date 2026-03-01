@@ -173,4 +173,4 @@ def add_imaging_to_zarr_group(
     )
 
     add_properties_and_annotations(zarr_group, imaging)
-    zarr_group.attrs["provenance"] = retrieve_importing_provenance(ZarrImaging)
+    zarr_group.attrs["zarr_class_info   "] = retrieve_importing_provenance(ZarrImaging)
