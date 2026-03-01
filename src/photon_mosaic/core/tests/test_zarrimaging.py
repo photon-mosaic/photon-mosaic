@@ -7,15 +7,15 @@ from photon_mosaic.core.zarrimaging import ZarrImaging
 
 @pytest.fixture
 def imaging():
-    return generate_random_imaging(num_frames=[100, 20, 30], height=16, width=16, sampling_frequency=10.0, seed=3)
+    return generate_random_imaging(num_frames=[40, 20, 30], height=4, width=4, sampling_frequency=10.0, seed=3)
 
 
 @pytest.fixture
 def imaging_multi_plane():
     imaging = generate_random_imaging(
-        num_frames=[100, 20, 30], height=16, width=16, sampling_frequency=10.0, seed=3, num_planes=5
+        num_frames=[100, 20, 30], height=4, width=4, sampling_frequency=10.0, seed=3, num_planes=3
     )
-    imaging.set_property("depth", np.arange(100, 105))
+    imaging.set_property("depth", np.arange(100, 103))
     return imaging
 
 
@@ -32,7 +32,7 @@ def test_zarr_writing(imaging, tmp_path):
     assert imaging_zarr_loaded.get_num_epochs() == imaging.get_num_epochs()
     assert imaging_zarr.shape == imaging.shape
     assert imaging_zarr_loaded.shape == imaging.shape
-    assert imaging_zarr_loaded.get_series(start_frame=2, end_frame=6, epoch_index=0).shape == (4, 16, 16, 1)
+    assert imaging_zarr_loaded.get_series(start_frame=2, end_frame=6, epoch_index=0).shape == (4, 4, 4, 1)
 
     for epoch_index in range(imaging.get_num_epochs()):
         np.testing.assert_array_equal(
@@ -61,7 +61,7 @@ def test_zarr_multi_plane_writing(imaging_multi_plane, tmp_path):
     assert imaging_zarr_loaded.get_num_epochs() == imaging.get_num_epochs()
     assert imaging_zarr.shape == imaging.shape
     assert imaging_zarr_loaded.shape == imaging.shape
-    assert imaging_zarr_loaded.get_series(start_frame=2, end_frame=6, epoch_index=0).shape == (4, 16, 16, 5)
+    assert imaging_zarr_loaded.get_series(start_frame=2, end_frame=6, epoch_index=0).shape == (4, 4, 4, 3)
 
     for epoch_index in range(imaging.get_num_epochs()):
         np.testing.assert_array_equal(

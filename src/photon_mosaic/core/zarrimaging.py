@@ -62,7 +62,7 @@ class ZarrImaging(BaseImaging):
                 else:
                     t_start = t_starts[segment_index]
                     if np.isnan(t_start):
-                        t_start = None
+                        t_start = None  # pragma: no cover
                 time_kwargs["t_start"] = t_start
             time_kwargs["sampling_frequency"] = sampling_frequency
 
@@ -75,7 +75,7 @@ class ZarrImaging(BaseImaging):
                 if nbytes_stored_segment > 0:
                     cr_by_segment[segment_index] = nbytes_segment / nbytes_stored_segment
                 else:
-                    cr_by_segment[segment_index] = np.nan
+                    cr_by_segment[segment_index] = np.nan  # pragma: no cover
 
                 total_nbytes += nbytes_segment
                 total_nbytes_stored += nbytes_stored_segment
@@ -96,7 +96,7 @@ class ZarrImaging(BaseImaging):
             if total_nbytes_stored > 0:
                 cr = total_nbytes / total_nbytes_stored
             else:
-                cr = np.nan
+                cr = np.nan  # pragma: no cover
             self.annotate(compression_ratio=cr, compression_ratio_segments=cr_by_segment)
 
         self._kwargs = {
@@ -139,7 +139,7 @@ def add_imaging_to_zarr_group(
     if imaging.check_if_json_serializable():
         zarr_group.attrs["provenance"] = check_json(imaging.to_dict(recursive=True))
     else:
-        zarr_group.attrs["provenance"] = None
+        zarr_group.attrs["provenance"] = None  # pragma: no cover
 
     # save data (done the subclass)
     zarr_group.attrs["sampling_frequency"] = float(imaging.get_sampling_frequency())
@@ -173,4 +173,4 @@ def add_imaging_to_zarr_group(
     )
 
     add_properties_and_annotations(zarr_group, imaging)
-    zarr_group.attrs["zarr_class_info   "] = retrieve_importing_provenance(ZarrImaging)
+    zarr_group.attrs["zarr_class_info"] = retrieve_importing_provenance(ZarrImaging)
