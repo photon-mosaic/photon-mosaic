@@ -128,7 +128,7 @@ class ZarrImagingEpoch(BaseImagingEpoch):
         video = self._video[start_frame:end_frame]
         if plane_indices is not None:
             video = video[..., plane_indices]
-        return video
+        return np.asarray(video)
 
 
 def add_imaging_to_zarr_group(
