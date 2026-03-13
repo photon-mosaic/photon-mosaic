@@ -6,6 +6,7 @@ import pytest
 
 from photon_mosaic.core.binaryimaging import BinaryFolderImaging, BinaryImaging
 from photon_mosaic.core.generators import generate_random_imaging
+from photon_mosaic.core.testingtools import assert_imaging_equal
 
 
 def _write_binary_file(path: Path, array: np.ndarray, file_offset: int = 0) -> None:
@@ -224,7 +225,7 @@ def test_base_imaging_multi_epoch_multiplane_save(tmp_path: Path):
     )
 
     out_folder = tmp_path / "multiplane_binary"
-    _ = imaging.save(
+    imaging_saved = imaging.save(
         format="binary",
         folder=str(out_folder),
         n_jobs=1,
@@ -232,13 +233,6 @@ def test_base_imaging_multi_epoch_multiplane_save(tmp_path: Path):
         progress_bar=False,
     )
 
-    loaded = BinaryFolderImaging(out_folder)
-    assert loaded.get_num_planes() == p
-
-    assert imaging.get_num_epochs() == loaded.get_num_epochs()
-    for epoch_index in range(imaging.get_num_epochs()):
-        assert imaging.get_num_frames(epoch_index=epoch_index) == loaded.get_num_frames(epoch_index=epoch_index)
-        full = imaging.get_series(epoch_index=epoch_index)
-        got = loaded.get_series(epoch_index=epoch_index)
-        assert got.shape == full.shape
-        np.testing.assert_array_equal(got, full)
+    imaging_loaded = BinaryFolderImaging(out_folder)
+    assert_imaging_equal(imaging, imaging_saved)
+    assert_imaging_equal(imaging, imaging_loaded)
