@@ -32,15 +32,17 @@ class ZarrImaging(BaseImaging):
     ):
         folder_path, folder_path_kwarg = resolve_zarr_path(folder_path)
 
+        # super_zarr_open is a helper function that deals with consolidated/non-consolidated stores
+        # and anonymous/non-anonymous cloud access
         self._root = super_zarr_open(folder_path, mode="r", storage_options=storage_options)
 
         sampling_frequency = self._root.attrs.get("sampling_frequency", None)
-        num_segments = self._root.attrs.get("num_segments", None)
+        num_epochs = self._root.attrs.get("num_epochs", None)
         assert "shape" in self._root.keys(), "'shape' dataset not found!"
         shapes = self._root["shape"][:]
 
         assert sampling_frequency is not None, "'sampling_frequency' attribute not found!"
-        assert num_segments is not None, "'num_segments' attribute not found!"
+        assert num_epochs is not None, "'num_epochs' attribute not found!"
 
         BaseImaging.__init__(self, sampling_frequency=sampling_frequency, shape=shapes)
 
@@ -48,19 +50,19 @@ class ZarrImaging(BaseImaging):
         if load_compression_ratio:
             total_nbytes = 0
             total_nbytes_stored = 0
-            cr_by_segment = {}
-        for segment_index in range(num_segments):
-            video_name = f"video_seg{segment_index}"
+            cr_by_epoch = {}
+        for epoch_index in range(num_epochs):
+            video_name = f"video_epoch{epoch_index}"
 
             time_kwargs = {}
-            time_vector = self._root.get(f"times_seg{segment_index}", None)
+            time_vector = self._root.get(f"times_epoch{epoch_index}", None)
             if time_vector is not None:
                 time_kwargs["time_vector"] = time_vector
             else:
                 if t_starts is None:
                     t_start = None
                 else:
-                    t_start = t_starts[segment_index]
+                    t_start = t_starts[epoch_index]
                     if np.isnan(t_start):
                         t_start = None  # pragma: no cover
                 time_kwargs["t_start"] = t_start
@@ -70,15 +72,15 @@ class ZarrImaging(BaseImaging):
             self.add_epoch(epoch)
 
             if load_compression_ratio:
-                nbytes_segment = self._root[video_name].nbytes
-                nbytes_stored_segment = self._root[video_name].nbytes_stored
-                if nbytes_stored_segment > 0:
-                    cr_by_segment[segment_index] = nbytes_segment / nbytes_stored_segment
+                nbytes_epoch = self._root[video_name].nbytes
+                nbytes_stored_epoch = self._root[video_name].nbytes_stored
+                if nbytes_stored_epoch > 0:
+                    cr_by_epoch[epoch_index] = nbytes_epoch / nbytes_stored_epoch
                 else:
-                    cr_by_segment[segment_index] = np.nan  # pragma: no cover
+                    cr_by_epoch[epoch_index] = np.nan  # pragma: no cover
 
-                total_nbytes += nbytes_segment
-                total_nbytes_stored += nbytes_stored_segment
+                total_nbytes += nbytes_epoch
+                total_nbytes_stored += nbytes_stored_epoch
 
         # load properties
         if "properties" in self._root:
@@ -97,7 +99,7 @@ class ZarrImaging(BaseImaging):
                 cr = total_nbytes / total_nbytes_stored
             else:
                 cr = np.nan  # pragma: no cover
-            self.annotate(compression_ratio=cr, compression_ratio_segments=cr_by_segment)
+            self.annotate(compression_ratio=cr, compression_ratio_epochs=cr_by_epoch)
 
         self._kwargs = {
             "folder_path": folder_path_kwarg,
@@ -134,6 +136,25 @@ class ZarrImagingEpoch(BaseImagingEpoch):
 def add_imaging_to_zarr_group(
     imaging: BaseImaging, zarr_group: zarr.hierarchy.Group, verbose=False, dtype=None, **kwargs
 ):
+    """Adds an Imaging object to a zarr group.
+
+    Parameters
+    ----------
+    imaging: BaseImaging
+        The Imaging object to add to the zarr group.
+    zarr_group: zarr.hierarchy.Group
+        The zarr group to which the imaging data should be added.
+    verbose: bool
+        Whether to print verbose output during the writing process.
+    dtype: np.dtype | None
+        The dtype to use for the video datasets. If None, the dtype of the imaging data
+        will be used.
+    **kwargs:
+        Additional keyword arguments to pass to the write_chunkable_to_zarr function. This can include
+        zarr-specific arguments (e.g., compressor, filters) as well as job-related arguments
+        (e.g., n_jobs).
+    """
+
     zarr_kwargs, job_kwargs = split_job_kwargs(kwargs)
 
     if imaging.check_if_json_serializable():
@@ -143,9 +164,17 @@ def add_imaging_to_zarr_group(
 
     # save data (done the subclass)
     zarr_group.attrs["sampling_frequency"] = float(imaging.get_sampling_frequency())
-    zarr_group.attrs["num_segments"] = int(imaging.get_num_segments())
+    zarr_group.attrs["num_epochs"] = int(imaging.get_num_epochs())
     zarr_group.create_dataset(name="shape", data=imaging.shape, compressor=None)
-    dataset_paths = [f"video_seg{i}" for i in range(imaging.get_num_segments())]
+    dataset_paths = [f"video_epoch{i}" for i in range(imaging.get_num_epochs())]
+    dataset_timestamps_paths: list | None = None
+    if any(imaging.has_time_vector(i) for i in range(imaging.get_num_epochs())):
+        dataset_timestamps_paths = []
+        for i in range(imaging.get_num_epochs()):
+            if imaging.has_time_vector(i):
+                dataset_timestamps_paths.append(f"times_epoch{i}")
+            else:
+                dataset_timestamps_paths.append(None)
 
     dtype = imaging.get_dtype() if dtype is None else dtype
     extra_chunks = zarr_kwargs.get("extra_chunks", None)
@@ -162,6 +191,7 @@ def add_imaging_to_zarr_group(
         chunkable=imaging,
         zarr_group=zarr_group,
         dataset_paths=dataset_paths,
+        dataset_timestamps_paths=dataset_timestamps_paths,
         compressor_data=compressor_videos,
         filters_data=filters_videos,
         compressor_times=compressor_times,
