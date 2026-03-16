@@ -323,6 +323,8 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         end_frame: int | None = None,
         plane_ids: list[int] | None = None,
         epoch_index: int | None = None,
+        row_range: tuple[int, int] | None = None,
+        col_range: tuple[int, int] | None = None,
     ) -> np.ndarray:
         """Get a series of frames from the imaging data.
 
@@ -336,6 +338,10 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             The list of plane IDs to include. If None, all planes are included.
         epoch_index : int | None
             The index of the imaging segment. If None and there is only one segment, it defaults to 0.
+        row_range : tuple[int, int] | None
+            ``(row_start, row_end)`` spatial row selection. If None, all rows are included.
+        col_range : tuple[int, int] | None
+            ``(col_start, col_end)`` spatial column selection. If None, all columns are included.
 
         Returns
         -------
@@ -353,7 +359,12 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             plane_indices = range(self.get_num_planes())
         else:
             plane_indices = self.ids_to_indices(plane_ids)
-        return self.epochs[epoch_index].get_series(start_frame, end_frame, plane_indices)
+        spatial_kwargs = {}
+        if row_range is not None:
+            spatial_kwargs["row_range"] = row_range
+        if col_range is not None:
+            spatial_kwargs["col_range"] = col_range
+        return self.epochs[epoch_index].get_series(start_frame, end_frame, plane_indices, **spatial_kwargs)
 
     def get_average_image(
         self,
@@ -393,6 +404,37 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             )
             self._average_image = np.mean(data, axis=0)
             return self._average_image
+
+    def select_fov(
+        self,
+        row_start: int = 0,
+        row_end: int | None = None,
+        col_start: int = 0,
+        col_end: int | None = None,
+    ) -> "SelectFov":
+        """Select a spatial field-of-view (FOV) region.
+
+        Returns a new imaging object whose ``shape`` reflects the cropped region.
+        Backends that support spatial selection (e.g. HDF5) will read only the
+        requested pixels from disk; others fall back to crop-after-read.
+
+        Parameters
+        ----------
+        row_start : int
+            First row (inclusive). Default: 0.
+        row_end : int | None
+            Last row (exclusive). Default: full height.
+        col_start : int
+            First column (inclusive). Default: 0.
+        col_end : int | None
+            Last column (exclusive). Default: full width.
+
+        Returns
+        -------
+        SelectFov
+            A new imaging object representing the cropped FOV.
+        """
+        return SelectFov(self, row_start=row_start, row_end=row_end, col_start=col_start, col_end=col_end)
 
     def is_binary_compatible(self) -> bool:
         """
@@ -483,6 +525,8 @@ class BaseImagingEpoch(ChunkableSegment):
         start_frame: int,
         end_frame: int,
         plane_indices: list[int] | None = None,
+        row_range: tuple[int, int] | None = None,
+        col_range: tuple[int, int] | None = None,
     ) -> np.ndarray:  # pragma: no cover
         """
         Return the raw series, optionally for a subset of samples
@@ -495,6 +539,10 @@ class BaseImagingEpoch(ChunkableSegment):
             end_sample, or number of samples if None
         plane_indices : list[int] | None, default: None
             List of plane indices to include, or all planes if None
+        row_range : tuple[int, int] | None, default: None
+            ``(row_start, row_end)`` spatial row selection. If None, all rows are included.
+        col_range : tuple[int, int] | None, default: None
+            ``(col_start, col_end)`` spatial column selection. If None, all columns are included.
 
         Returns
         -------
@@ -503,3 +551,114 @@ class BaseImagingEpoch(ChunkableSegment):
         """
         # must be implemented in subclass
         raise NotImplementedError
+
+
+class SelectFovEpoch(BaseImagingEpoch):
+    """An epoch that delegates to a source epoch with spatial cropping.
+
+    If the source epoch's ``get_series`` supports ``row_range``/``col_range``
+    keyword arguments, they are passed through for efficient I/O.  Otherwise,
+    the full frame is read and cropped in memory.
+    """
+
+    def __init__(self, source_epoch, row_start, row_end, col_start, col_end, **time_kwargs):
+        BaseImagingEpoch.__init__(self, **time_kwargs)
+        self._source_epoch = source_epoch
+        self._row_range = (row_start, row_end)
+        self._col_range = (col_start, col_end)
+
+    def get_series(
+        self,
+        start_frame: int,
+        end_frame: int,
+        plane_indices: list[int] | None = None,
+        row_range: tuple[int, int] | None = None,
+        col_range: tuple[int, int] | None = None,
+    ) -> np.ndarray:
+        # Use our stored spatial bounds, ignoring any passed row_range/col_range
+        # (an outer SelectFovEpoch may pass its own, but we always crop with ours)
+        try:
+            data = self._source_epoch.get_series(
+                start_frame,
+                end_frame,
+                plane_indices,
+                row_range=self._row_range,
+                col_range=self._col_range,
+            )
+        except TypeError:
+            # Source backend doesn't support spatial params — crop after read
+            data = self._source_epoch.get_series(start_frame, end_frame, plane_indices)
+            r0, r1 = self._row_range
+            c0, c1 = self._col_range
+            data = data[:, r0:r1, c0:c1, :]
+
+        # If an outer wrapper passed additional spatial bounds (chaining), apply them
+        if row_range is not None or col_range is not None:
+            r0, r1 = row_range if row_range is not None else (0, data.shape[1])
+            c0, c1 = col_range if col_range is not None else (0, data.shape[2])
+            data = data[:, r0:r1, c0:c1, :]
+        return data
+
+    def get_num_samples(self) -> int:
+        return self._source_epoch.get_num_samples()
+
+
+class SelectFov(BaseImaging):
+    """A wrapper that presents a spatial sub-region of an existing imaging object.
+
+    The wrapper reports a cropped ``shape`` and delegates data reads to the
+    underlying epochs via ``SelectFovEpoch``.  Follows the ``SelectRois``
+    pattern in ``baserois.py``.
+    """
+
+    def __init__(
+        self,
+        imaging: BaseImaging,
+        row_start: int = 0,
+        row_end: int | None = None,
+        col_start: int = 0,
+        col_end: int | None = None,
+    ):
+        h, w, num_planes = imaging.shape
+
+        # Resolve defaults
+        if row_end is None:
+            row_end = h
+        if col_end is None:
+            col_end = w
+
+        # Validate bounds
+        if not (0 <= row_start < row_end <= h):
+            raise ValueError(f"Invalid row bounds: row_start={row_start}, row_end={row_end}, height={h}")
+        if not (0 <= col_start < col_end <= w):
+            raise ValueError(f"Invalid col bounds: col_start={col_start}, col_end={col_end}, width={w}")
+
+        cropped_shape = (row_end - row_start, col_end - col_start, num_planes)
+        BaseImaging.__init__(self, sampling_frequency=imaging.sampling_frequency, shape=cropped_shape)
+
+        # Wrap each source epoch
+        for epoch_index in range(imaging.get_num_epochs()):
+            source_epoch = imaging.epochs[epoch_index]
+            time_kwargs = dict(sampling_frequency=imaging.sampling_frequency)
+            if imaging.has_time_vector(epoch_index):
+                time_kwargs["time_vector"] = imaging.get_times(segment_index=epoch_index)
+            self.add_epoch(
+                SelectFovEpoch(
+                    source_epoch,
+                    row_start=row_start,
+                    row_end=row_end,
+                    col_start=col_start,
+                    col_end=col_end,
+                    **time_kwargs,
+                )
+            )
+
+        imaging.copy_metadata(self)
+        self._parent = imaging
+        self._kwargs = dict(
+            imaging=imaging,
+            row_start=row_start,
+            row_end=row_end,
+            col_start=col_start,
+            col_end=col_end,
+        )

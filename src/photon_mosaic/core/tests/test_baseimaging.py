@@ -220,3 +220,124 @@ def test_generate_random_imaging_multiplane_has_expected_plane_dimension_and_sel
     sel = imaging.get_series(plane_ids=[1])
     assert sel.shape == (n, h, w, 1)
     np.all(sel[..., 0] == full[..., 1])
+
+
+# -------------------------
+# SelectFov tests
+# -------------------------
+
+
+def test_select_fov_shape_and_data():
+    """Cropped shape matches and data equals manual slice of full."""
+    h, w = 32, 64
+    imaging = generate_random_imaging(num_frames=10, height=h, width=w, seed=100)
+    fov = imaging.select_fov(row_start=4, row_end=20, col_start=10, col_end=50)
+
+    assert fov.shape == (16, 40, 1)
+    full = imaging.get_series()
+    cropped = fov.get_series()
+    np.testing.assert_array_equal(cropped, full[:, 4:20, 10:50, :])
+
+
+def test_select_fov_defaults_no_op():
+    """No-op crop returns the full frame data."""
+    h, w = 16, 16
+    imaging = generate_random_imaging(num_frames=5, height=h, width=w, seed=101)
+    fov = imaging.select_fov()
+
+    assert fov.shape == (h, w, 1)
+    np.testing.assert_array_equal(fov.get_series(), imaging.get_series())
+
+
+def test_select_fov_partial_defaults():
+    """Partial crop — only row_end specified."""
+    h, w = 20, 30
+    imaging = generate_random_imaging(num_frames=5, height=h, width=w, seed=102)
+    fov = imaging.select_fov(row_end=10)
+
+    assert fov.shape == (10, w, 1)
+    full = imaging.get_series()
+    np.testing.assert_array_equal(fov.get_series(), full[:, :10, :, :])
+
+
+def test_select_fov_invalid_row_bounds():
+    imaging = generate_random_imaging(num_frames=5, height=16, width=16, seed=103)
+    with pytest.raises(ValueError, match="Invalid row bounds"):
+        imaging.select_fov(row_start=10, row_end=5)
+
+
+def test_select_fov_invalid_col_bounds():
+    imaging = generate_random_imaging(num_frames=5, height=16, width=16, seed=104)
+    with pytest.raises(ValueError, match="Invalid col bounds"):
+        imaging.select_fov(col_start=0, col_end=20)  # exceeds width
+
+
+def test_select_fov_row_start_equals_row_end():
+    imaging = generate_random_imaging(num_frames=5, height=16, width=16, seed=105)
+    with pytest.raises(ValueError, match="Invalid row bounds"):
+        imaging.select_fov(row_start=8, row_end=8)
+
+
+def test_select_fov_multiplane():
+    n, h, w, p = 8, 20, 30, 3
+    imaging = generate_random_imaging(num_frames=n, height=h, width=w, num_planes=p, seed=106)
+    fov = imaging.select_fov(row_start=2, row_end=12, col_start=5, col_end=25)
+
+    assert fov.shape == (10, 20, p)
+    full = imaging.get_series()
+    np.testing.assert_array_equal(fov.get_series(), full[:, 2:12, 5:25, :])
+
+
+def test_select_fov_multi_epoch():
+    imaging = generate_random_imaging(num_frames=(10, 15), height=20, width=20, seed=107)
+    fov = imaging.select_fov(row_start=5, row_end=15, col_start=5, col_end=15)
+
+    assert fov.get_num_epochs() == 2
+    assert fov.shape == (10, 10, 1)
+    assert fov.get_num_frames(epoch_index=0) == 10
+    assert fov.get_num_frames(epoch_index=1) == 15
+
+    for ei in range(2):
+        full = imaging.get_series(epoch_index=ei)
+        cropped = fov.get_series(epoch_index=ei)
+        np.testing.assert_array_equal(cropped, full[:, 5:15, 5:15, :])
+
+
+def test_select_fov_time_vector_preserved():
+    n, h, w = 10, 16, 16
+    sf = 30.0
+    imaging = generate_random_imaging(num_frames=n, height=h, width=w, sampling_frequency=sf, seed=108)
+    times = np.arange(n, dtype="float64") / sf + 0.5
+    imaging.set_times(times, with_warning=False)
+
+    fov = imaging.select_fov(row_start=0, row_end=8)
+    assert fov.has_time_vector()
+    np.testing.assert_allclose(fov.get_times(), times)
+
+
+def test_select_fov_chaining():
+    """select_fov on a select_fov result works correctly."""
+    h, w = 32, 32
+    imaging = generate_random_imaging(num_frames=5, height=h, width=w, seed=109)
+
+    # First crop: rows 4:24, cols 4:28
+    fov1 = imaging.select_fov(row_start=4, row_end=24, col_start=4, col_end=28)
+    assert fov1.shape == (20, 24, 1)
+
+    # Second crop: rows 2:10, cols 4:16 (relative to fov1)
+    fov2 = fov1.select_fov(row_start=2, row_end=10, col_start=4, col_end=16)
+    assert fov2.shape == (8, 12, 1)
+
+    # The chained result should match the equivalent direct slice of the original
+    full = imaging.get_series()
+    # fov1 crops [4:24, 4:28], fov2 crops [2:10, 4:16] of that → [6:14, 8:20] of original
+    expected = full[:, 6:14, 8:20, :]
+    np.testing.assert_array_equal(fov2.get_series(), expected)
+
+
+def test_select_fov_get_average_image():
+    h, w = 16, 16
+    imaging = generate_random_imaging(num_frames=30, height=h, width=w, seed=110)
+    fov = imaging.select_fov(row_start=4, row_end=12, col_start=4, col_end=12)
+    avg = fov.get_average_image(num_chunks=2, chunk_size=5)
+    assert avg.shape == (8, 8, 1)
