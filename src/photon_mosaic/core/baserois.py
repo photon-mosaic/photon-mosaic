@@ -216,20 +216,27 @@ class BaseRois(BaseExtractor):
         Parameters
         ----------
         format : str, default: "binary"
-            Only ``"binary"`` is supported.
+            ``"binary"`` or ``"zarr"``.
         **save_kwargs
-            Must include ``folder`` (str or Path).
+            For ``"binary"``: must include ``folder`` (str or Path).
+            For ``"zarr"``: must include ``zarr_path`` (str or Path).
+                Optional: ``saving_options`` (dict), ``storage_options`` (dict).
 
         Returns
         -------
-        BinaryFolderRois
+        BinaryFolderRois or ZarrRois
             The on-disk representation.
         """
+        if format == "binary":
+            return self._save_binary(**save_kwargs)
+        elif format == "zarr":
+            return self._save_zarr(**save_kwargs)
+        else:
+            raise ValueError(f"format {format!r} not supported for BaseRois, use 'binary' or 'zarr'")
+
+    def _save_binary(self, **save_kwargs):
         import json
         from pathlib import Path
-
-        if format != "binary":
-            raise ValueError(f"format {format!r} not supported for BaseRois, use 'binary'")
 
         folder = Path(save_kwargs["folder"])
         folder.mkdir(parents=True, exist_ok=True)
@@ -275,6 +282,23 @@ class BaseRois(BaseExtractor):
         from .binaryrois import BinaryFolderRois
 
         return BinaryFolderRois(folder_path=folder)
+
+    def _save_zarr(self, **save_kwargs):
+        import zarr
+
+        from .zarrrois import ZarrRois, save_rois_to_zarr
+
+        zarr_path = save_kwargs["zarr_path"]
+        saving_options = save_kwargs.get("saving_options", None)
+        storage_options = save_kwargs.get("storage_options", None)
+
+        zarr_root = zarr.open(str(zarr_path), mode="w", storage_options=storage_options)
+        rois_group = zarr_root.create_group("rois")
+        save_rois_to_zarr(self, rois_group, saving_options=saving_options)
+
+        zarr.consolidate_metadata(zarr_root.store)
+
+        return ZarrRois(zarr_path, zarr_group_name="rois", storage_options=storage_options)
 
 
 class SelectRois(BaseRois):
