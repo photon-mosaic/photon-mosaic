@@ -210,6 +210,72 @@ class BaseRois(BaseExtractor):
         ), "The imaging has a different sampling frequency than the ROIs!"
         self._imaging = imaging
 
+    def _save(self, format="binary", **save_kwargs):
+        """Save ROIs to disk. Called internally by ``BaseExtractor.save()``.
+
+        Parameters
+        ----------
+        format : str, default: "binary"
+            Only ``"binary"`` is supported.
+        **save_kwargs
+            Must include ``folder`` (str or Path).
+
+        Returns
+        -------
+        BinaryFolderRois
+            The on-disk representation.
+        """
+        import json
+        from pathlib import Path
+
+        if format != "binary":
+            raise ValueError(f"format {format!r} not supported for BaseRois, use 'binary'")
+
+        folder = Path(save_kwargs["folder"])
+        folder.mkdir(parents=True, exist_ok=True)
+
+        image_masks = self.get_roi_image_masks()
+        np.save(folder / "roi_image_masks.npy", image_masks)
+        np.save(folder / "roi_ids.npy", np.array(self.roi_ids))
+
+        metadata = dict(
+            sampling_frequency=float(self.sampling_frequency),
+            shape=list(self.shape),
+        )
+        with open(folder / "metadata.json", "w") as f:
+            json.dump(metadata, f, indent=4)
+
+        # Provenance
+        provenance = dict(
+            class_="photon_mosaic.core.binaryrois.BinaryRois",
+            kwargs=dict(
+                file_path=str((folder / "roi_image_masks.npy").absolute()),
+                sampling_frequency=metadata["sampling_frequency"],
+                roi_ids=self.roi_ids.tolist(),
+                shape=metadata["shape"],
+            ),
+        )
+        with open(folder / "binary.json", "w") as f:
+            json.dump(provenance, f, indent=4)
+
+        # Save properties
+        properties_folder = folder / "properties"
+        properties_folder.mkdir(exist_ok=True)
+        for key in self.get_property_keys():
+            values = self.get_property(key)
+            np.save(properties_folder / f"{key}.npy", values)
+
+        # Save annotations
+        annotations = self.get_annotation_keys()
+        if annotations:
+            ann_dict = {key: self.get_annotation(key) for key in annotations}
+            with open(folder / "annotations.json", "w") as f:
+                json.dump(ann_dict, f, indent=4)
+
+        from .binaryrois import BinaryFolderRois
+
+        return BinaryFolderRois(folder_path=folder)
+
 
 class SelectRois(BaseRois):
     """Class to select a subset of ROIs from an existing BaseRois object."""
