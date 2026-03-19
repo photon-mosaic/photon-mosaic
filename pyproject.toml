@@ -11,7 +11,7 @@ readme = "README.md"
 requires-python = ">=3.10.0"
 dynamic = ["version"]
 dependencies = [
-    "spikeinterface @ git+https://github.com/alejoe91/spikeinterface.git@a861af7ecceba415c5813ce36515e3542515b0d7",
+    "spikeinterface @ git+https://github.com/alejoe91/spikeinterface.git@138f8959974df12af99395f7419f5ceace23a252",
     "roiextractors"
 ]
 

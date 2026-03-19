@@ -9,7 +9,7 @@ class FluorescenceExtension(AnalyzerExtension):
     """Extension to extract fluorescence traces from ROIs."""
 
     extension_name = "fluorescence"
-    depend_on = []
+    depend_on: list[str] = []
     need_imaging = True
     use_nodepipeline = True
     need_job_kwargs = True
