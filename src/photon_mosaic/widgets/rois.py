@@ -51,6 +51,8 @@ class RoisWidget(BaseWidget):
         background_imaging = imaging or rois.imaging
         if background_imaging is not None:
             background = background_imaging.get_average_image()
+        else:
+            background = None
 
         # Prepare data for plotting
         data_plot = dict(

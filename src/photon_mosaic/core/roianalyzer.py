@@ -985,6 +985,7 @@ class RoiAnalyzer:
                 gather_mode="memory",
                 squeeze_output=False,
                 verbose=verbose,
+                check_for_peak_source=False,
             )
             runtime_s = perf_counter() - t0
 
@@ -1244,7 +1245,7 @@ class AnalyzerExtension:
         raise NotImplementedError
 
     def _handle_backward_compatibility_on_load(self):
-        raise NotImplementedError
+        pass
 
     # ------------------------------------------------------------------
     # Properties
@@ -1637,10 +1638,9 @@ class AnalyzerExtension:
 
 
 # ---------------------------------------------------------------------------
-# Built-in extensions registry (empty for now — extensions will be added later)
+# Built-in extensions registry
 # ---------------------------------------------------------------------------
 
 _builtin_extensions: dict[str, str] = {
-    # Example:
-    # "traces": "photon_mosaic.postprocessing",
+    "fluorescence": "photon_mosaic.core",
 }
