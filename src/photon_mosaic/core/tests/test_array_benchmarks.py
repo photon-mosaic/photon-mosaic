@@ -46,7 +46,8 @@ from photon_mosaic.core.generators import (
     write_random_npy,
     write_random_zarr,
 )
-from photon_mosaic.core.zarrimaging_laura import ZarrImaging
+from photon_mosaic.core.zarrimaging_laura import ZarrImagingLaura
+from photon_mosaic.core.zarrimaging import ZarrImaging
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -198,7 +199,7 @@ def _get_or_create_binary(file_cache, tmp_path_factory, total_frames, num_planes
     return file_cache[key]
 
 
-def _get_or_create_zarr(file_cache, tmp_path_factory, total_frames, num_planes):
+def _get_or_create_zarr_array(file_cache, tmp_path_factory, total_frames, num_planes):
     key = ("zarr", total_frames, num_planes)
     if key not in file_cache:
         shape = (total_frames, HEIGHT, WIDTH, num_planes)
@@ -208,6 +209,24 @@ def _get_or_create_zarr(file_cache, tmp_path_factory, total_frames, num_planes):
         file_cache[key] = path
     return file_cache[key]
 
+
+def _get_or_create_zarr_group(file_cache, tmp_path_factory, total_frames, num_planes):
+    key = ("zarr_group", total_frames, num_planes)
+    if key not in file_cache:
+        import zarr
+
+        array_path = _get_or_create_zarr_array(file_cache, tmp_path_factory, total_frames, num_planes)
+        group_path = array_path.parent / "group.zarr"
+
+        array = zarr.open_array(str(array_path), mode="r")
+        group = zarr.open_group(str(group_path), mode="w")
+        group["video_epoch0"] = array
+        group["shape"] = array.shape[1:]
+        group.attrs["sampling_frequency"] = 30.0
+        group.attrs["num_epochs"] = 1
+        
+        file_cache[key] = group_path
+    return file_cache[key]
 
 # ===================================================================
 # Expected-shape helper
@@ -309,9 +328,9 @@ def test_small_zarr_dask(
     start,
     nf_read,
 ):
-    """ZarrImaging (dask) using the on-disk chunk layout (T_CHUNK_DISK=256)."""
-    path = _get_or_create_zarr(_file_cache, tmp_path_factory, SMALL_NUM_FRAMES, num_planes)
-    imaging = ZarrImaging(
+    """ZarrImagingLaura (dask) using the on-disk chunk layout (T_CHUNK_DISK=256)."""
+    path = _get_or_create_zarr_array(_file_cache, tmp_path_factory, SMALL_NUM_FRAMES, num_planes)
+    imaging = ZarrImagingLaura(
         zarr_paths=str(path),
         sampling_frequency=SAMPLING_FREQUENCY,
         use_dask=True,
@@ -337,10 +356,10 @@ def test_small_zarr_dask_rechunked(
     start,
     nf_read,
 ):
-    """ZarrImaging (dask) with read-chunks (T_CHUNK_READ=64) misaligned
+    """ZarrImagingLaura (dask) with read-chunks (T_CHUNK_READ=64) misaligned
     with the on-disk layout (T_CHUNK_DISK=256)."""
-    path = _get_or_create_zarr(_file_cache, tmp_path_factory, SMALL_NUM_FRAMES, num_planes)
-    imaging = ZarrImaging(
+    path = _get_or_create_zarr_array(_file_cache, tmp_path_factory, SMALL_NUM_FRAMES, num_planes)
+    imaging = ZarrImagingLaura(
         zarr_paths=str(path),
         sampling_frequency=SAMPLING_FREQUENCY,
         chunks=_zarr_read_chunks(num_planes),
@@ -367,9 +386,9 @@ def test_small_zarr_native(
     start,
     nf_read,
 ):
-    """ZarrImaging (no dask) — direct zarr slicing returns numpy."""
-    path = _get_or_create_zarr(_file_cache, tmp_path_factory, SMALL_NUM_FRAMES, num_planes)
-    imaging = ZarrImaging(
+    """ZarrImagingLaura (no dask) — direct zarr slicing returns numpy."""
+    path = _get_or_create_zarr_array(_file_cache, tmp_path_factory, SMALL_NUM_FRAMES, num_planes)
+    imaging = ZarrImagingLaura(
         zarr_paths=str(path),
         sampling_frequency=SAMPLING_FREQUENCY,
         use_dask=False,
@@ -379,6 +398,30 @@ def test_small_zarr_native(
     assert isinstance(result, np.ndarray)
     assert result.shape == _expected_shape(nf_read, len(plane_ids))
 
+
+
+# --- zarr native (direct zarr slicing, no dask) -------------------
+@pytest.mark.small
+@pytest.mark.grid
+@pytest.mark.parametrize("num_planes,plane_ids,start,nf_read", SMALL_GRID)
+def test_small_zarr_dev(
+    benchmark,
+    _file_cache,
+    tmp_path_factory,
+    num_planes,
+    plane_ids,
+    start,
+    nf_read,
+):
+    """ZarrImaging (from dev) — spike interface style."""
+    path = _get_or_create_zarr_group(_file_cache, tmp_path_factory, SMALL_NUM_FRAMES, num_planes)
+    imaging = ZarrImaging(
+        folder_path=str(path)
+    )
+
+    result = benchmark(imaging.get_series, start_frame=start, end_frame=start + nf_read, plane_ids=plane_ids)
+    assert isinstance(result, np.ndarray)
+    assert result.shape == _expected_shape(nf_read, len(plane_ids))
 
 # ###################################################################
 #  LARGE-DATA GRID  (out-of-core only — skip full npy load)
@@ -474,9 +517,9 @@ def test_large_zarr_dask(
     start,
     nf_read,
 ):
-    """ZarrImaging (dask) using on-disk chunk layout on large dataset."""
-    path = _get_or_create_zarr(_file_cache, tmp_path_factory, LARGE_NUM_FRAMES, num_planes)
-    imaging = ZarrImaging(
+    """ZarrImagingLaura (dask) using on-disk chunk layout on large dataset."""
+    path = _get_or_create_zarr_array(_file_cache, tmp_path_factory, LARGE_NUM_FRAMES, num_planes)
+    imaging = ZarrImagingLaura(
         zarr_paths=str(path),
         sampling_frequency=SAMPLING_FREQUENCY,
         use_dask=True,
@@ -502,9 +545,9 @@ def test_large_zarr_dask_rechunked(
     start,
     nf_read,
 ):
-    """ZarrImaging (dask) with discordant read-chunks on large dataset."""
-    path = _get_or_create_zarr(_file_cache, tmp_path_factory, LARGE_NUM_FRAMES, num_planes)
-    imaging = ZarrImaging(
+    """ZarrImagingLaura (dask) with discordant read-chunks on large dataset."""
+    path = _get_or_create_zarr_array(_file_cache, tmp_path_factory, LARGE_NUM_FRAMES, num_planes)
+    imaging = ZarrImagingLaura(
         zarr_paths=str(path),
         sampling_frequency=SAMPLING_FREQUENCY,
         chunks=_zarr_read_chunks(num_planes),
@@ -531,12 +574,35 @@ def test_large_zarr_native(
     start,
     nf_read,
 ):
-    """ZarrImaging (no dask) — direct zarr slicing on large dataset."""
-    path = _get_or_create_zarr(_file_cache, tmp_path_factory, LARGE_NUM_FRAMES, num_planes)
-    imaging = ZarrImaging(
+    """ZarrImagingLaura (no dask) — direct zarr slicing on large dataset."""
+    path = _get_or_create_zarr_array(_file_cache, tmp_path_factory, LARGE_NUM_FRAMES, num_planes)
+    imaging = ZarrImagingLaura(
         zarr_paths=str(path),
         sampling_frequency=SAMPLING_FREQUENCY,
         use_dask=False,
+    )
+
+    result = benchmark(imaging.get_series, start_frame=start, end_frame=start + nf_read, plane_ids=plane_ids)
+    assert isinstance(result, np.ndarray)
+    assert result.shape == _expected_shape(nf_read, len(plane_ids))
+
+# --- zarr Imaging -------------------
+@pytest.mark.large
+@pytest.mark.grid
+@pytest.mark.parametrize("num_planes,plane_ids,start,nf_read", LARGE_GRID)
+def test_large_zarr_dev(
+    benchmark,
+    _file_cache,
+    tmp_path_factory,
+    num_planes,
+    plane_ids,
+    start,
+    nf_read,
+):
+    """ZarrImaging (from dev) — spike interface style."""
+    path = _get_or_create_zarr_group(_file_cache, tmp_path_factory, SMALL_NUM_FRAMES, num_planes)
+    imaging = ZarrImaging(
+        folder_path=str(path)
     )
 
     result = benchmark(imaging.get_series, start_frame=start, end_frame=start + nf_read, plane_ids=plane_ids)
