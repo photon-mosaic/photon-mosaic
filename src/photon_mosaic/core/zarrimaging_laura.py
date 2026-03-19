@@ -19,7 +19,7 @@ import zarr
 from .baseimaging import BaseImaging, BaseImagingEpoch
 
 
-class ZarrImaging(BaseImaging):
+class ZarrImagingLaura(BaseImaging):
     """A single- or multi-epoch Imaging backed by zarr stores.
 
     Each epoch corresponds to one zarr array on disk. The read strategy

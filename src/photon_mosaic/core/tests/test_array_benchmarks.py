@@ -46,7 +46,7 @@ from photon_mosaic.core.generators import (
     write_random_npy,
     write_random_zarr,
 )
-from photon_mosaic.core.zarrimaging import ZarrImaging
+from photon_mosaic.core.zarrimaging_laura import ZarrImaging
 
 # ---------------------------------------------------------------------------
 # Constants
