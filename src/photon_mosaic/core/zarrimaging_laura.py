@@ -229,7 +229,3 @@ class ZarrImagingEpochNative(BaseImagingEpoch):
     def get_num_samples(self) -> int:
         """Return the number of frames in this epoch."""
         return self._zarr_array.shape[0]
-
-
-# Backward-compatible alias
-ZarrImagingEpoch = ZarrImagingEpochDask
