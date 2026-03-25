@@ -125,11 +125,11 @@ class ZarrImagingEpoch(BaseImagingEpoch):
         self,
         start_frame: int,
         end_frame: int,
-        plane_indices: list[int] | None = None,
+        plane_indices: slice | np.ndarray | None = None,
     ) -> np.ndarray:
-        video = self._video[start_frame:end_frame]
-        if plane_indices is not None:
-            video = video[..., plane_indices]
+        if plane_indices is None:
+            plane_indices = slice(None)
+        video = self._video[start_frame:end_frame, :, :, plane_indices]
         return np.asarray(video)
 
 

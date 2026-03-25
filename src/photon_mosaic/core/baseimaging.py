@@ -321,7 +321,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         self,
         start_frame: int | None = None,
         end_frame: int | None = None,
-        plane_ids: list[int] | None = None,
+        plane_ids: list | np.ndarray | None = None,
         epoch_index: int | None = None,
     ) -> np.ndarray:
         """Get a series of frames from the imaging data.
@@ -332,7 +332,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             The starting frame index (inclusive).
         end_frame : int
             The ending frame index (exclusive).
-        plane_ids : list[int] | None
+        plane_ids : list | np.ndarray | None
             The list of plane IDs to include. If None, all planes are included.
         epoch_index : int | None
             The index of the imaging segment. If None and there is only one segment, it defaults to 0.
@@ -350,7 +350,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         start_frame = start_frame if start_frame is not None else 0
         end_frame = end_frame if end_frame is not None else self.get_num_frames(epoch_index=epoch_index)
         if plane_ids is None:
-            plane_indices = range(self.get_num_planes())
+            plane_indices = slice(self.get_num_planes())
         else:
             plane_indices = self.ids_to_indices(plane_ids)
         return self.epochs[epoch_index].get_series(start_frame, end_frame, plane_indices)
@@ -482,7 +482,7 @@ class BaseImagingEpoch(ChunkableSegment):
         self,
         start_frame: int,
         end_frame: int,
-        plane_indices: list[int] | None = None,
+        plane_indices: slice | np.ndarray | None = None,
     ) -> np.ndarray:  # pragma: no cover
         """
         Return the raw series, optionally for a subset of samples
@@ -493,7 +493,7 @@ class BaseImagingEpoch(ChunkableSegment):
             start sample index, or zero if None
         end_frame : int | None, default: None
             end_sample, or number of samples if None
-        plane_indices : list[int] | None, default: None
+        plane_indices : slice | list[int] | None, default: None
             List of plane indices to include, or all planes if None
 
         Returns
