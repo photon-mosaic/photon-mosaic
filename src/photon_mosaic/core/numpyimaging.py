@@ -103,7 +103,10 @@ class NumpyImagingEpoch(BaseImagingEpoch):
         self._video = video
 
     def get_series(
-        self, start_frame: int | None = None, end_frame: int | None = None, plane_indices: list | None = None
+        self,
+        start_frame: int | None = None,
+        end_frame: int | None = None,
+        plane_indices: slice | np.ndarray | None = None,
     ) -> np.ndarray:
         """Get the raw series, optionally for a subset of samples.
 
@@ -113,7 +116,7 @@ class NumpyImagingEpoch(BaseImagingEpoch):
             start frame index, or zero if None
         end_frame : int | None, default: None
             end frame, or number of frames if None
-        plane_indices : list | None, default: None
+        plane_indices : slice | np.ndarray | None, default: None
             List of plane indices to include, or all planes if None
 
         Returns

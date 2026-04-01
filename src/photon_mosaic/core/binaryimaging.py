@@ -136,7 +136,7 @@ class BinaryImagingEpoch(BaseImagingEpoch):
         self,
         start_frame: int,
         end_frame: int,
-        plane_indices: list[int] | None = None,
+        plane_indices: slice | np.ndarray | None = None,
     ) -> np.ndarray:
         # Calculate byte offsets for start and end frames
         start_byte = self.file_offset + start_frame * self.bytes_per_sample
