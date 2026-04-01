@@ -13,11 +13,7 @@ class BaseRegistrationSettings(BaseSettings):
     """
 
 
-class BasePreprocessorSettings(BaseRegistrationSettings):
-    """Backwards-compatible alias for registration settings base class."""
-
-
-class Suite2pRegistrationSettings(BasePreprocessorSettings):
+class Suite2pRegistrationSettings(BaseRegistrationSettings):
     """Settings for Suite2P motion correction.
 
     This class defines all configuration parameters for motion correction using Suite2P.
@@ -182,7 +178,7 @@ class Suite2pRegistrationSettings(BasePreprocessorSettings):
     model_config = ConfigDict(env_prefix="SUITE2P_REGISTRATION_", case_sensitive=False, env_file=".env")
 
 
-class CaImAnRegistrationSettings(BasePreprocessorSettings):
+class CaImAnRegistrationSettings(BaseRegistrationSettings):
     """Settings for CaImAn motion correction.
 
     This class defines all configuration parameters for motion correction using CaImAn.

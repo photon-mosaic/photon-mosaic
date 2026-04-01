@@ -3,24 +3,24 @@ from pathlib import Path
 import pytest
 
 from photon_mosaic.preprocessing.baseregistrationsettings import (
-    BasePreprocessorSettings,
+    BaseRegistrationSettings,
     CaImAnRegistrationSettings,
     Suite2pRegistrationSettings,
 )
 
 # ---------------------------------------------------------------------------
-# BasePreprocessorSettings
+# BaseRegistrationSettings
 # ---------------------------------------------------------------------------
 
 
-class TestBasePreprocessorSettings:
+class TestBaseRegistrationSettings:
     def test_instantiation(self):
-        settings = BasePreprocessorSettings()
-        assert isinstance(settings, BasePreprocessorSettings)
+        settings = BaseRegistrationSettings()
+        assert isinstance(settings, BaseRegistrationSettings)
 
     def test_subclass_relationship(self):
-        assert issubclass(Suite2pRegistrationSettings, BasePreprocessorSettings)
-        assert issubclass(CaImAnRegistrationSettings, BasePreprocessorSettings)
+        assert issubclass(Suite2pRegistrationSettings, BaseRegistrationSettings)
+        assert issubclass(CaImAnRegistrationSettings, BaseRegistrationSettings)
 
 
 # ---------------------------------------------------------------------------
