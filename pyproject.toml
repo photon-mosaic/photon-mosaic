@@ -14,7 +14,8 @@ dependencies = [
     "spikeinterface @ git+https://github.com/alejoe91/spikeinterface.git@793aab6ab9daa1becd9c5347f34afcae67275a8c",
     "roiextractors",
     "pydantic>=2",
-    "pydantic-settings>=2"
+    "pydantic-settings>=2",
+    "suite2p",
 ]
 
 license = {text = "MIT License"}
