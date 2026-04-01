@@ -51,11 +51,19 @@ def _make_shifted_imaging(num_frames, num_planes=1, height=16, width=16, shifts=
     if shifts is None:
         shifts = [None] * len(num_frames)
     # If user passed plane-wise shifts for a single epoch, wrap it
-    if len(num_frames) == 1 and shifts and isinstance(shifts[0], list) and shifts[0] and isinstance(shifts[0][0], tuple):
+    if (
+        len(num_frames) == 1
+        and shifts
+        and isinstance(shifts[0], list)
+        and shifts[0]
+        and isinstance(shifts[0][0], tuple)
+    ):
         shifts = [shifts]
     for epoch_idx, n_frames in enumerate(num_frames):
         epoch_shifts = shifts[epoch_idx]
-        videos.append(_make_shifted_video(n_frames, num_planes=num_planes, height=height, width=width, shifts=epoch_shifts))
+        videos.append(
+            _make_shifted_video(n_frames, num_planes=num_planes, height=height, width=width, shifts=epoch_shifts)
+        )
     return NumpyImaging(imaging_series=videos, sampling_frequency=sampling_frequency)
 
 
@@ -173,7 +181,9 @@ class TestComputeMotionSettingsResolution:
 class TestComputeMotionSuite2p:
     def test_returns_suite2p_motion_and_registers_frames(self):
         shifts = [[(0, 0), (0, 0), (1, 0), (1, 0), (0, 1), (0, 1)]]
-        imaging = _make_shifted_imaging(num_frames=6, num_planes=1, height=12, width=12, shifts=shifts, sampling_frequency=10.0)
+        imaging = _make_shifted_imaging(
+            num_frames=6, num_planes=1, height=12, width=12, shifts=shifts, sampling_frequency=10.0
+        )
         motion = compute_motion_suite2p(imaging, settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=False))
         assert isinstance(motion, Suite2PMotion)
         assert motion.num_epochs == 1
@@ -185,7 +195,9 @@ class TestComputeMotionSuite2p:
 
     def test_kwargs_override_settings_and_batching(self):
         shifts = [[(0, 0)] * 8]
-        imaging = _make_shifted_imaging(num_frames=8, num_planes=1, height=12, width=12, shifts=shifts, sampling_frequency=10.0)
+        imaging = _make_shifted_imaging(
+            num_frames=8, num_planes=1, height=12, width=12, shifts=shifts, sampling_frequency=10.0
+        )
         settings = Suite2pRegistrationSettings(batch_size=6)
         motion = compute_motion_suite2p(imaging, settings=settings, batch_size=3)
         assert motion.displacements[0].shape == (8, 1, 2)
@@ -195,7 +207,9 @@ class TestComputeMotionSuite2p:
             [(0, 0), (0, 0), (1, 0), (1, 0), (0, 1)],
             [(0, 0), (0, 0), (-1, 0), (-1, 0)],
         ]
-        imaging = _make_shifted_imaging(num_frames=(5, 4), num_planes=1, height=12, width=12, shifts=shifts, sampling_frequency=10.0)
+        imaging = _make_shifted_imaging(
+            num_frames=(5, 4), num_planes=1, height=12, width=12, shifts=shifts, sampling_frequency=10.0
+        )
         motion = compute_motion_suite2p(imaging, settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=False))
 
         assert motion.num_epochs == 2
@@ -280,7 +294,9 @@ class TestRegisterSuite2PImagingEpoch:
     @pytest.fixture()
     def imaging(self):
         shifts = [[(0, 0), (0, 0), (1, 0), (0, 1), (1, 1), (0, 0)]]
-        return _make_shifted_imaging(num_frames=6, num_planes=1, height=12, width=12, shifts=shifts, sampling_frequency=10.0)
+        return _make_shifted_imaging(
+            num_frames=6, num_planes=1, height=12, width=12, shifts=shifts, sampling_frequency=10.0
+        )
 
     @pytest.fixture()
     def motion(self, imaging):
@@ -307,7 +323,9 @@ class TestRegisterSuite2PImagingEpoch:
 
     def test_get_series_multiplane(self):
         shifts = [[(0, 0)] * 5, [(0, 0)] * 5, [(0, 0)] * 5]
-        imaging = _make_shifted_imaging(num_frames=5, num_planes=3, height=12, width=12, shifts=shifts, sampling_frequency=10.0)
+        imaging = _make_shifted_imaging(
+            num_frames=5, num_planes=3, height=12, width=12, shifts=shifts, sampling_frequency=10.0
+        )
         motion = compute_motion_suite2p(imaging, settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=False))
         parent_epoch = imaging.epochs[0]
         epoch = RegisterSuite2PImagingEpoch(parent_epoch, motion, 0)
@@ -320,7 +338,9 @@ class TestRegisterSuite2PImagingEpoch:
 
     def test_get_series_plane_slice(self):
         shifts = [[(0, 0)] * 5, [(0, 0)] * 5, [(0, 0)] * 5]
-        imaging = _make_shifted_imaging(num_frames=5, num_planes=3, height=12, width=12, shifts=shifts, sampling_frequency=10.0)
+        imaging = _make_shifted_imaging(
+            num_frames=5, num_planes=3, height=12, width=12, shifts=shifts, sampling_frequency=10.0
+        )
         motion = compute_motion_suite2p(imaging, settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=False))
         parent_epoch = imaging.epochs[0]
         epoch = RegisterSuite2PImagingEpoch(parent_epoch, motion, 0)
