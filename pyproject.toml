@@ -12,7 +12,9 @@ requires-python = ">=3.10.0"
 dynamic = ["version"]
 dependencies = [
     "spikeinterface @ git+https://github.com/alejoe91/spikeinterface.git@793aab6ab9daa1becd9c5347f34afcae67275a8c",
-    "roiextractors"
+    "roiextractors",
+    "pydantic>=2",
+    "pydantic-settings>=2"
 ]
 
 license = {text = "MIT License"}
