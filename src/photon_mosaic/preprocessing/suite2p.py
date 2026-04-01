@@ -19,6 +19,7 @@ class Suite2PMotion:
         refAndMasks: Any,
         ops: dict[str, Any],
         nonrigid_offsets: Sequence[Sequence[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]]] | None]
+        | Sequence[Sequence[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]] | None]]
         | None = None,
         blocks: Sequence[Any] | None = None,
     ) -> None:
@@ -107,14 +108,16 @@ def compute_motion_suite2p(
     from suite2p.registration import register
 
     if settings is None:
-        settings = Suite2pRegistrationSettings(**kwargs)
+        resolved_settings = Suite2pRegistrationSettings(**kwargs)
     elif isinstance(settings, dict):
-        settings = Suite2pRegistrationSettings.model_validate({**settings, **kwargs})
+        resolved_settings = Suite2pRegistrationSettings.model_validate({**settings, **kwargs})
     elif kwargs:
-        settings = settings.model_copy(update=kwargs)
+        resolved_settings = settings.model_copy(update=kwargs)
+    else:
+        resolved_settings = settings
 
     ops = default_ops()
-    ops.update(settings.model_dump(exclude={"debug", "tmp_dir", "data_type"}))
+    ops.update(resolved_settings.model_dump(exclude={"debug", "tmp_dir", "data_type"}))
 
     num_planes = imaging.get_num_planes()
     num_epochs = len(imaging.epochs)
@@ -126,15 +129,15 @@ def compute_motion_suite2p(
 
     def _register_single_plane(plane_idx: int):
         first_epoch = imaging.epochs[0]
-        n_ref = min(settings.max_reference_iterations, first_epoch.get_num_samples())
+        n_ref = min(resolved_settings.max_reference_iterations, first_epoch.get_num_samples())
         ref_frames = first_epoch.get_series(0, n_ref)
         if ref_frames.ndim == 4:
             ref_frames = ref_frames[:, :, :, plane_idx]
         reference = register.compute_reference(ref_frames)
         refAndMasks = register.compute_reference_masks(reference, ops)
 
-        displacements = []
-        nonrigid_offsets = []
+        displacements: list[NDArray[np.floating[Any]]] = []
+        nonrigid_offsets_list: list[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]] | None] = []
 
         for epoch in imaging.epochs:
             epoch_yoff = []
@@ -143,8 +146,8 @@ def compute_motion_suite2p(
             epoch_xoff1 = []
             num_frames = epoch.get_num_samples()
 
-            for start in range(0, num_frames, settings.batch_size):
-                end = min(start + settings.batch_size, num_frames)
+            for start in range(0, num_frames, resolved_settings.batch_size):
+                end = min(start + resolved_settings.batch_size, num_frames)
                 batch = epoch.get_series(start, end)
                 if batch.ndim == 4:
                     batch = batch[:, :, :, plane_idx]
@@ -169,15 +172,19 @@ def compute_motion_suite2p(
             displacements.append(disp)
 
             if epoch_yoff1:
-                nonrigid_offsets.append((np.concatenate(epoch_yoff1), np.concatenate(epoch_xoff1)))
+                nonrigid_offsets_list.append((np.concatenate(epoch_yoff1), np.concatenate(epoch_xoff1)))
             else:
-                nonrigid_offsets.append(None)
+                nonrigid_offsets_list.append(None)
 
         blocks = refAndMasks[6]
-        if all(item is None for item in nonrigid_offsets):
-            nonrigid_offsets = None
+        if all(item is None for item in nonrigid_offsets_list):
+            nonrigid_offsets_result: list[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]] | None] | None = (
+                None
+            )
+        else:
+            nonrigid_offsets_result = nonrigid_offsets_list
 
-        return refAndMasks, displacements, nonrigid_offsets, blocks
+        return refAndMasks, displacements, nonrigid_offsets_result, blocks
 
     for plane_idx in range(num_planes):
         ref_masks, plane_disp, nonrigid, blocks = _register_single_plane(plane_idx)
@@ -188,15 +195,19 @@ def compute_motion_suite2p(
 
     displacements = []
     has_nonrigid = any(nonrigid is not None for nonrigid in plane_nonrigid)
-    nonrigid_offsets = [] if has_nonrigid else None
+    nonrigid_offsets: list[list[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]] | None]] | None
+    if has_nonrigid:
+        nonrigid_offsets = []
+    else:
+        nonrigid_offsets = None
 
     for epoch_idx in range(num_epochs):
         epoch_plane_disps = [plane_displacements[p][epoch_idx] for p in range(num_planes)]
         displacements_epoch = np.stack(epoch_plane_disps, axis=1)
         displacements.append(displacements_epoch)
 
-        if has_nonrigid:
-            epoch_offsets = []
+        if has_nonrigid and nonrigid_offsets is not None:
+            epoch_offsets: list[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]] | None] = []
             for plane_idx in range(num_planes):
                 plane_nr = plane_nonrigid[plane_idx]
                 epoch_offsets.append(None if plane_nr is None else plane_nr[epoch_idx])
