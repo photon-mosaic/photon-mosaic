@@ -341,8 +341,6 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
             plane_indices = slice(self.get_num_planes())
         else:
             plane_indices = self.ids_to_indices(plane_ids)
-        else:
-            plane_indices = None
         return self.epochs[epoch_index].get_series(start_frame, end_frame, plane_indices)
 
     def get_average_image(

@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Optional
 
-from pydantic import Field
+from pydantic import ConfigDict, Field
 from pydantic_settings import BaseSettings
 
 
@@ -13,7 +13,11 @@ class BaseRegistrationSettings(BaseSettings):
     """
 
 
-class Suite2pRegistrationSettings(BaseRegistrationSettings):
+class BasePreprocessorSettings(BaseRegistrationSettings):
+    """Backwards-compatible alias for registration settings base class."""
+
+
+class Suite2pRegistrationSettings(BasePreprocessorSettings):
     """Settings for Suite2P motion correction.
 
     This class defines all configuration parameters for motion correction using Suite2P.
@@ -175,13 +179,10 @@ class Suite2pRegistrationSettings(BaseRegistrationSettings):
         "Large values will add significant time to motion correction",
     )
 
-    class Config:
-        env_prefix = "SUITE2P_REGISTRATION_"
-        case_sensitive = False
-        env_file = ".env"
+    model_config = ConfigDict(env_prefix="SUITE2P_REGISTRATION_", case_sensitive=False, env_file=".env")
 
 
-class CaImAnRegistrationSettings(BaseRegistrationSettings):
+class CaImAnRegistrationSettings(BasePreprocessorSettings):
     """Settings for CaImAn motion correction.
 
     This class defines all configuration parameters for motion correction using CaImAn.
@@ -268,7 +269,4 @@ class CaImAnRegistrationSettings(BaseRegistrationSettings):
         "to size of image (for pw_rigid only)",
     )
 
-    class Config:
-        env_prefix = "CAIMAN_REGISTRATION_"
-        case_sensitive = False
-        env_file = ".env"
+    model_config = ConfigDict(env_prefix="CAIMAN_REGISTRATION_", case_sensitive=False, env_file=".env")
