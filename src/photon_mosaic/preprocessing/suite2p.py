@@ -1,4 +1,9 @@
+from typing import Any, Sequence
+
 import numpy as np
+from numpy.typing import NDArray
+
+from photon_mosaic.core import BaseImaging, BaseImagingEpoch
 
 from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
 from .baseregistrationsettings import Suite2pRegistrationSettings
@@ -7,7 +12,34 @@ from .baseregistrationsettings import Suite2pRegistrationSettings
 class Suite2PMotion:
     """Container for Suite2P motion correction artifacts."""
 
-    def __init__(self, imaging, displacements, refAndMasks, ops, nonrigid_offsets=None, blocks=None):
+    def __init__(
+        self,
+        imaging: BaseImaging,
+        displacements: Sequence[NDArray[np.floating[Any]]],
+        refAndMasks: Any,
+        ops: dict[str, Any],
+        nonrigid_offsets: Sequence[Sequence[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]]] | None]
+        | None = None,
+        blocks: Sequence[Any] | None = None,
+    ) -> None:
+        """Store displacement fields and metadata produced by Suite2P.
+
+        Parameters
+        ----------
+        imaging : BaseImaging
+            Imaging object associated with the computed motion.
+        displacements : Sequence[NDArray]
+            Per-epoch displacement arrays shaped ``(frames, planes, 2)`` or ``(frames, 2)``.
+        refAndMasks : Any
+            Suite2P reference images and masks returned by ``compute_reference_masks``.
+        ops : dict[str, Any]
+            Suite2P options used during registration.
+        nonrigid_offsets : Sequence | None, optional
+            Per-epoch, per-plane non-rigid offsets if available.
+        blocks : Sequence | None, optional
+            Suite2P block definitions when non-rigid registration is enabled.
+        """
+
         self.imaging = imaging
         self.displacements = displacements
         self.refAndMasks = refAndMasks
@@ -16,10 +48,30 @@ class Suite2PMotion:
         self.blocks = blocks
 
     @property
-    def num_epochs(self):
+    def num_epochs(self) -> int:
+        """Number of epochs represented in the stored displacements."""
+
         return len(self.displacements)
 
-    def get_displacement_at_frames(self, frame_idx, epoch_index=0, plane_index=None):
+    def get_displacement_at_frames(
+        self,
+        frame_idx: int | NDArray[np.integer[Any]],
+        epoch_index: int = 0,
+        plane_index: int | None = None,
+    ) -> NDArray[np.floating[Any]]:
+        """Return displacements for selected frames and plane.
+
+        Parameters
+        ----------
+        frame_idx : int | NDArray[np.integer]
+            Frame index or indices to extract.
+        epoch_index : int, optional
+            Epoch to query. Defaults to 0.
+        plane_index : int | None, optional
+            Specific plane to slice when multi-plane displacements exist. If None, returns
+            the full displacement slice for the requested frames.
+        """
+
         disp = self.displacements[epoch_index]
         if plane_index is None:
             return disp[frame_idx]
@@ -28,8 +80,28 @@ class Suite2PMotion:
         return disp[frame_idx, plane_index, :]
 
 
-def compute_motion_suite2p(imaging, settings=None, **kwargs):
-    """Pre-compute Suite2P references and displacements for all planes/epochs."""
+def compute_motion_suite2p(
+    imaging: BaseImaging,
+    settings: Suite2pRegistrationSettings | dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> Suite2PMotion:
+    """Pre-compute Suite2P references and displacements for all planes/epochs.
+
+    Parameters
+    ----------
+    imaging : BaseImaging
+        Imaging object containing one or more epochs/planes to be registered.
+    settings : Suite2pRegistrationSettings | dict | None, optional
+        Registration settings. Dicts are validated into ``Suite2pRegistrationSettings``.
+        If None, defaults are used. Additional keyword arguments override provided settings.
+    **kwargs : Any
+        Extra options forwarded to ``Suite2pRegistrationSettings``.
+
+    Returns
+    -------
+    Suite2PMotion
+        Motion container with per-epoch displacements and reference metadata.
+    """
 
     from suite2p.default_ops import default_ops
     from suite2p.registration import register
@@ -52,7 +124,7 @@ def compute_motion_suite2p(imaging, settings=None, **kwargs):
     plane_nonrigid = []
     blocks_per_plane = []
 
-    def _register_single_plane(plane_idx):
+    def _register_single_plane(plane_idx: int):
         first_epoch = imaging.epochs[0]
         n_ref = min(settings.max_reference_iterations, first_epoch.get_num_samples())
         ref_frames = first_epoch.get_series(0, n_ref)
@@ -143,7 +215,8 @@ def compute_motion_suite2p(imaging, settings=None, **kwargs):
 class RegisterSuite2PImaging(BasePreprocessor):
     """Apply pre-computed Suite2P motion correction on-the-fly."""
 
-    def __init__(self, imaging, motion, **kwargs):
+    def __init__(self, imaging: BaseImaging, motion: Suite2PMotion, **kwargs: Any) -> None:
+        """Build an imaging view that applies stored motion fields lazily."""
         BasePreprocessor.__init__(self, imaging)
 
         if motion.num_epochs != len(imaging.epochs):
@@ -161,13 +234,27 @@ class RegisterSuite2PImaging(BasePreprocessor):
 class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
     """Epoch-level preprocessor that applies stored Suite2P displacements."""
 
-    def __init__(self, parent_imaging_epoch, motion, epoch_index, **kwargs):
+    def __init__(
+        self,
+        parent_imaging_epoch: BaseImagingEpoch,
+        motion: Suite2PMotion,
+        epoch_index: int,
+        **kwargs: Any,
+    ) -> None:
+        """Create an epoch preprocessor for a specific epoch and displacement set."""
         BasePreprocessorEpoch.__init__(self, parent_imaging_epoch)
         self.motion = motion
         self.epoch_index = epoch_index
         self.kwargs = kwargs
 
-    def get_series(self, start_frame, end_frame, plane_indices=None):
+    def get_series(
+        self,
+        start_frame: int,
+        end_frame: int,
+        plane_indices: int | slice | Sequence[int] | None = None,
+    ) -> NDArray[np.floating[Any]]:
+        """Return motion-corrected frames for the requested interval and planes."""
+
         from suite2p.registration import register
 
         video = self.parent_imaging_epoch.get_series(start_frame, end_frame)
