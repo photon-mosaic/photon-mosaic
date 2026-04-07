@@ -31,7 +31,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         self._average_image = None
 
     def _repr_header(self, display_name=True):
-        """Generate text representation of the BaseImaging object."""
+        """Generate text representation of the BaseImaging object"""
         num_frames = [self.get_num_frames(epoch_index=i) for i in range(self.get_num_epochs())]
         shape = self._shape
         dtype = self.get_dtype()
