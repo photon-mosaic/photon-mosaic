@@ -14,7 +14,8 @@ def _normalize_epoch_indices(epoch_indices: int | list[int], num_epochs: int) ->
         raise ValueError("epoch_indices must contain at least one index")
 
     for epoch_index in normalized_epoch_indices:
-        if not isinstance(epoch_index, int):
+        # isinstance(True, int) returns True, so we need the second check here
+        if not isinstance(epoch_index, int) or isinstance(epoch_index, bool): 
             raise TypeError("All epoch indices must be ints")
         if not 0 <= epoch_index < num_epochs:
             raise IndexError(f"Epoch index {epoch_index} out of range for imaging with {num_epochs} epochs")
