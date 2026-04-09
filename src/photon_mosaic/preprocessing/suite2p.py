@@ -8,6 +8,8 @@ from photon_mosaic.core import BaseImaging, BaseImagingEpoch
 from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
 from .baseregistrationsettings import Suite2pRegistrationSettings
 
+import torch
+
 
 class Suite2PMotion:
     """Container for Suite2P motion correction artifacts."""
@@ -133,7 +135,8 @@ def compute_motion_suite2p(
         ref_frames = first_epoch.get_series(0, n_ref)
         if ref_frames.ndim == 4:
             ref_frames = ref_frames[:, :, :, plane_idx]
-        reference = register.compute_reference(ref_frames)
+        reference = register.compute_reference(ref_frames, settings=ops, device=torch.device("cpu"))
+        
         refAndMasks = register.compute_reference_masks(reference, ops)
 
         displacements: list[NDArray[np.floating[Any]]] = []
