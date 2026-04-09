@@ -3,7 +3,7 @@ from .baseimaging import BaseImaging
 
 def _normalize_epoch_indices(epoch_indices: int | list[int], num_epochs: int) -> list[int]:
     """Normalize and validate epoch indices requested by the user."""
-    if isinstance(epoch_indices,int):
+    if isinstance(epoch_indices, int):
         normalized_epoch_indices = [epoch_indices]
     elif isinstance(epoch_indices, list):
         normalized_epoch_indices = epoch_indices
