@@ -378,6 +378,14 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
                 blocks=blocks,
                 device=device_str
             )
+            # Convert torch tensor to numpy if needed
+            if hasattr(registered_plane, 'cpu'):
+                registered_plane = registered_plane.cpu().numpy()
             output_planes.append(registered_plane)
 
-        return np.stack(output_planes, axis=-1)
+        # Stack planes along last axis
+        if len(output_planes) == 1:
+            # Single plane - add axis at the end for consistency
+            return output_planes[0][..., np.newaxis]
+        else:
+            return np.stack(output_planes, axis=-1)
