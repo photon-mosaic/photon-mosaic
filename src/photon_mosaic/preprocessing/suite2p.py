@@ -106,8 +106,8 @@ def compute_motion_suite2p(
         Motion container with per-epoch displacements and reference metadata.
     """
 
-    # Import for suite2p 1.0.0.1+
-    from suite2p.default_ops import default_ops as default_settings
+    # Import suite2p modules - we always use v1.0.0.1
+    from suite2p import default_settings
     from suite2p.registration import register
 
     if settings is None:
@@ -119,9 +119,27 @@ def compute_motion_suite2p(
     else:
         resolved_settings = settings
 
-    # Use settings for suite2p 1.0.0.1+
+    # Initialize suite2p options with v1 defaults
     ops = default_settings()
-    ops.update(resolved_settings.model_dump(exclude={"debug", "tmp_dir", "data_type"}))
+
+    # Suite2p v1 returns nested settings, but registration functions expect flat dict
+    # Flatten all nested parameters to root level
+    flat_ops = {}
+    for key, value in ops.items():
+        if isinstance(value, dict):
+            # Add nested parameters to root level
+            flat_ops.update(value)
+        else:
+            flat_ops[key] = value
+
+    # Keep the original nested structure as well for compatibility
+    flat_ops.update(ops)
+
+    # Update with our custom settings
+    settings_dict = resolved_settings.model_dump(exclude={"debug", "tmp_dir", "data_type"})
+    flat_ops.update(settings_dict)
+
+    ops = flat_ops
 
     num_planes = imaging.get_num_planes()
     num_epochs = len(imaging.epochs)
@@ -137,13 +155,12 @@ def compute_motion_suite2p(
         ref_frames = first_epoch.get_series(0, n_ref)
         if ref_frames.ndim == 4:
             ref_frames = ref_frames[:, :, :, plane_idx]
-        # Compute reference image with device parameter for suite2p 1.0.0.1+
+        # Compute reference image
         device = torch.device("cpu")  # Using CPU for consistency, can be made configurable
-        device_str = "cpu"  # String version for functions that need it
+        device_str = "cpu"  # String format for certain functions
         reference = register.compute_reference(ref_frames, settings=ops, device=device)
 
-        # suite2p 1.0.0.1+: use compute_filters_and_norm
-        # Returns 9 values: added rmin, rmax at the end
+        # Compute filters and normalization for registration
         refAndMasks = register.compute_filters_and_norm(
             reference,
             norm_frames=ops.get("norm_frames", True),
@@ -171,11 +188,11 @@ def compute_motion_suite2p(
                 if batch.ndim == 4:
                     batch = batch[:, :, :, plane_idx]
 
-                # suite2p 1.0.0.1+: use compute_shifts for computing displacements
+                # Compute displacements for this batch
                 # Convert batch to torch tensor
                 batch_torch = torch.from_numpy(batch.astype('float32')).to(device_str)
 
-                # Call compute_shifts - it will unpack refAndMasks internally
+                # Compute shifts for alignment
                 yoff, xoff, cmax, yoff1, xoff1, cmax1, zest, cmax_all = register.compute_shifts(
                     refAndMasks,
                     batch_torch,
@@ -338,7 +355,7 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
                         if self.motion.blocks is not None:
                             blocks = self.motion.blocks[p]
 
-            # suite2p 1.0.0.1+: shift_frames with device parameter
+            # Apply motion correction shifts
             device_str = "cpu"  # Using CPU for consistency
 
             # Convert to torch tensors
@@ -361,11 +378,6 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
                 blocks=blocks,
                 device=device_str
             )
-            # shift_frames in 1.0.0.1+ returns numpy array, no conversion needed
             output_planes.append(registered_plane)
 
         return np.stack(output_planes, axis=-1)
-
-
-# Convenience function for backwards compatibility
-register_suite2p = RegisterSuite2PImaging
