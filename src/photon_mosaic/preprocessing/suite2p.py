@@ -122,7 +122,7 @@ def compute_motion_suite2p(
     ops = dict(all_settings["registration"])  # Just the registration sub-dict, already flat
 
     # Update with our custom settings
-    settings_dict = resolved_settings.model_dump(exclude={"debug", "tmp_dir", "data_type"})
+    settings_dict = resolved_settings.model_dump(exclude={"debug", "tmp_dir", "data_type", "device"})
     ops.update(settings_dict)
 
     num_planes = imaging.get_num_planes()
@@ -239,9 +239,16 @@ def compute_motion_suite2p(
     all_refAndMasks = [_refs_to_cpu(rm) for rm in all_refAndMasks]
 
     displacements = []
-    has_nonrigid = any(nonrigid is not None for nonrigid in plane_nonrigid)
+
+    # Only keep nonrigid artifacts when nonrigid registration is actually enabled.
+    # compute_shifts() always returns yoff1/xoff1 as a byproduct even when nonrigid=False,
+    # but those offsets are never applied by shift_frames() in that case. Storing them
+    # would mislead downstream QC into showing nonrigid metrics.
+    use_nonrigid = resolved_settings.nonrigid and any(
+        nonrigid is not None for nonrigid in plane_nonrigid
+    )
     nonrigid_offsets: list[list[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]] | None]] | None
-    if has_nonrigid:
+    if use_nonrigid:
         nonrigid_offsets = []
     else:
         nonrigid_offsets = None
@@ -251,7 +258,7 @@ def compute_motion_suite2p(
         displacements_epoch = np.stack(epoch_plane_disps, axis=1)
         displacements.append(displacements_epoch)
 
-        if has_nonrigid and nonrigid_offsets is not None:
+        if use_nonrigid and nonrigid_offsets is not None:
             epoch_offsets: list[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]] | None] = []
             for plane_idx in range(num_planes):
                 plane_nr = plane_nonrigid[plane_idx]
@@ -264,7 +271,7 @@ def compute_motion_suite2p(
         all_refAndMasks,
         ops,
         nonrigid_offsets=nonrigid_offsets,
-        blocks=blocks_per_plane,
+        blocks=blocks_per_plane if use_nonrigid else None,
     )
 
 
