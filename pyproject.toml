@@ -15,7 +15,6 @@ dependencies = [
     "roiextractors",
     "pydantic>=2",
     "pydantic-settings>=2",
-    "suite2p",
 ]
 
 license = {text = "MIT License"}
@@ -42,6 +41,9 @@ widgets = [
   "matplotlib",
   "ipywidgets",
 ]
+suite2p-registration = [
+  "suite2p==1.0.0.1",
+]
 dev = [
   "pytest",
   "pytest-cov",
@@ -51,6 +53,7 @@ dev = [
   "pre-commit",
   "ruff",
   "setuptools-scm",
+  "suite2p==1.0.0.1",
 ]
 
 [build-system]

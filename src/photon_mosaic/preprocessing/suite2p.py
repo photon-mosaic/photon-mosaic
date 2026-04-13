@@ -8,8 +8,6 @@ from photon_mosaic.core import BaseImaging, BaseImagingEpoch
 from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
 from .baseregistrationsettings import Suite2pRegistrationSettings
 
-import torch
-
 
 class Suite2PMotion:
     """Container for Suite2P motion correction artifacts."""
@@ -106,9 +104,9 @@ def compute_motion_suite2p(
         Motion container with per-epoch displacements and reference metadata.
     """
 
-    # Import suite2p modules - we always use v1.0.0.1
     from suite2p import default_settings
     from suite2p.registration import register
+    import torch
 
     if settings is None:
         resolved_settings = Suite2pRegistrationSettings(**kwargs)
@@ -141,9 +139,8 @@ def compute_motion_suite2p(
         ref_frames = first_epoch.get_series(0, n_ref)
         if ref_frames.ndim == 4:
             ref_frames = ref_frames[:, :, :, plane_idx]
-        # Compute reference image
-        device = torch.device("cpu")  # Using CPU for consistency, can be made configurable
-        device_str = "cpu"  # String format for certain functions
+        # Resolve device from settings
+        device = torch.device(resolved_settings.device)
         reference = register.compute_reference(ref_frames, settings=ops, device=device)
 
         # Compute filters and normalization for registration
@@ -156,7 +153,7 @@ def compute_motion_suite2p(
             block_size=tuple(ops.get("block_size", [128, 128])),
             lpad=3,  # Default value from suite2p
             subpixel=10,  # Default value from suite2p
-            device=device_str  # Use string for this function
+            device=device,
         )
         # Unpack the tuple with named variables
         maskMul, maskOffset, cfRefImg, maskMulNR, maskOffsetNR, cfRefImgNR, blocks, rmin, rmax = refAndMasks
@@ -177,9 +174,11 @@ def compute_motion_suite2p(
                 if batch.ndim == 4:
                     batch = batch[:, :, :, plane_idx]
 
-                # Compute displacements for this batch
                 # Convert batch to torch tensor
-                batch_torch = torch.from_numpy(batch.astype('float32')).to(device_str)
+                batch_torch = torch.from_numpy(batch).float()
+                if device.type == "cuda":
+                    batch_torch = batch_torch.pin_memory()
+                batch_torch = batch_torch.to(device)
 
                 # Compute shifts for alignment
                 yoff, xoff, cmax, yoff1, xoff1, cmax1, zest, cmax_all = register.compute_shifts(
@@ -193,11 +192,11 @@ def compute_motion_suite2p(
                 )
 
                 # Convert torch tensors back to numpy
-                yoff = yoff.cpu().numpy() if hasattr(yoff, 'cpu') else yoff
-                xoff = xoff.cpu().numpy() if hasattr(xoff, 'cpu') else xoff
+                yoff = yoff.cpu().numpy()
+                xoff = xoff.cpu().numpy()
                 if yoff1 is not None:
-                    yoff1 = yoff1.cpu().numpy() if hasattr(yoff1, 'cpu') else yoff1
-                    xoff1 = xoff1.cpu().numpy() if hasattr(xoff1, 'cpu') else xoff1
+                    yoff1 = yoff1.cpu().numpy()
+                    xoff1 = xoff1.cpu().numpy()
 
                 epoch_yoff.append(yoff)
                 epoch_xoff.append(xoff)
@@ -228,6 +227,16 @@ def compute_motion_suite2p(
         plane_displacements.append(plane_disp)
         plane_nonrigid.append(nonrigid)
         blocks_per_plane.append(blocks)
+
+    # Move refAndMasks to CPU to free device memory — they are only retained
+    # for inspection and are not used during on-the-fly registration.
+    def _refs_to_cpu(ref_tuple):
+        return tuple(
+            t.cpu() if isinstance(t, torch.Tensor) else t
+            for t in ref_tuple
+        )
+
+    all_refAndMasks = [_refs_to_cpu(rm) for rm in all_refAndMasks]
 
     displacements = []
     has_nonrigid = any(nonrigid is not None for nonrigid in plane_nonrigid)
@@ -305,9 +314,7 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
         from suite2p.registration import register
         import torch
 
-        print(f"        [SUITE2P] get_series({start_frame}, {end_frame})", flush=True)
         video = self.parent_imaging_epoch.get_series(start_frame, end_frame)
-        print(f"        [SUITE2P] got video shape: {video.shape}", flush=True)
         num_planes = video.shape[3] if video.ndim == 4 else 1
 
         if plane_indices is None:
@@ -349,21 +356,19 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
                         if self.motion.blocks is not None:
                             blocks = self.motion.blocks[p]
 
-            # Apply motion correction shifts
-            device_str = "cpu"  # Using CPU for consistency
+            # Apply motion correction shifts — always CPU for on-the-fly application
+            device = torch.device("cpu")
 
-            # Convert to torch tensors
-            plane_video_torch = torch.from_numpy(plane_video).to(device_str)
-            yoff_torch = torch.from_numpy(yoff.astype(np.int64)).to(device_str)
-            xoff_torch = torch.from_numpy(xoff.astype(np.int64)).to(device_str)
+            plane_video_torch = torch.from_numpy(plane_video).to(device)
+            yoff_torch = torch.from_numpy(yoff.astype(np.int64)).to(device)
+            xoff_torch = torch.from_numpy(xoff.astype(np.int64)).to(device)
 
             yoff1_torch = None
             xoff1_torch = None
             if yoff1 is not None:
-                yoff1_torch = torch.from_numpy(yoff1).to(device_str)
-                xoff1_torch = torch.from_numpy(xoff1).to(device_str)
+                yoff1_torch = torch.from_numpy(yoff1).to(device)
+                xoff1_torch = torch.from_numpy(xoff1).to(device)
 
-            print(f"        [SUITE2P] calling shift_frames for plane {p}", flush=True)
             registered_plane = register.shift_frames(
                 plane_video_torch,
                 yoff_torch,
@@ -371,25 +376,15 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
                 yoff1_torch,
                 xoff1_torch,
                 blocks=blocks,
-                device=device_str
+                device=device,
             )
-            print(f"        [SUITE2P] shift_frames done", flush=True)
-
             # Ensure registered_plane is always 3D (frames, height, width)
             if registered_plane.ndim == 2:
                 registered_plane = registered_plane[np.newaxis, :, :]
 
             output_planes.append(registered_plane)
 
-        # Stack planes along last axis
-        print(f"        [SUITE2P] stacking {len(output_planes)} planes", flush=True)
-        if len(output_planes) == 1:
-            # Single plane - add axis at the end for consistency
-            result = output_planes[0][..., np.newaxis]
-        else:
-            result = np.stack(output_planes, axis=-1)
-        print(f"        [SUITE2P] returning shape: {result.shape}", flush=True)
-        return result
+        return np.stack(output_planes, axis=-1)
 
 
 register_suite2p = RegisterSuite2PImaging

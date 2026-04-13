@@ -27,7 +27,7 @@ class Suite2pRegistrationSettings(BaseRegistrationSettings):
     )
     data_type: str = Field(default="h5", description="Processing h5 (default) or TIFF timeseries")
     do_registration: bool = Field(
-        default="true",
+        default=True,
         description="whether to register data (2 forces re-registration)",
     )
     batch_size: int = Field(default=500, description="Number of frames per batch")
