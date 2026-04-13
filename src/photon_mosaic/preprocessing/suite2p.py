@@ -317,7 +317,9 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
         from suite2p.registration import register
         import torch
 
+        print(f"        [SUITE2P] get_series({start_frame}, {end_frame})", flush=True)
         video = self.parent_imaging_epoch.get_series(start_frame, end_frame)
+        print(f"        [SUITE2P] got video shape: {video.shape}", flush=True)
         num_planes = video.shape[3] if video.ndim == 4 else 1
 
         if plane_indices is None:
@@ -335,6 +337,10 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
         for p in planes_to_process:
             plane_video = video[:, :, :, p] if video.ndim == 4 else video
             plane_video = plane_video.astype("float32", copy=True)
+
+            # Ensure plane_video is always 3D (frames, height, width)
+            if plane_video.ndim == 2:
+                plane_video = plane_video[np.newaxis, :, :]
 
             if disps.ndim == 3:
                 yoff = disps[start_frame:end_frame, p, 0].astype(int)
@@ -369,6 +375,7 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
                 yoff1_torch = torch.from_numpy(yoff1).to(device_str)
                 xoff1_torch = torch.from_numpy(xoff1).to(device_str)
 
+            print(f"        [SUITE2P] calling shift_frames for plane {p}", flush=True)
             registered_plane = register.shift_frames(
                 plane_video_torch,
                 yoff_torch,
@@ -378,14 +385,23 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
                 blocks=blocks,
                 device=device_str
             )
+            print(f"        [SUITE2P] shift_frames done", flush=True)
             # Convert torch tensor to numpy if needed
             if hasattr(registered_plane, 'cpu'):
                 registered_plane = registered_plane.cpu().numpy()
+
+            # Ensure registered_plane is always 3D (frames, height, width)
+            if registered_plane.ndim == 2:
+                registered_plane = registered_plane[np.newaxis, :, :]
+
             output_planes.append(registered_plane)
 
         # Stack planes along last axis
+        print(f"        [SUITE2P] stacking {len(output_planes)} planes", flush=True)
         if len(output_planes) == 1:
             # Single plane - add axis at the end for consistency
-            return output_planes[0][..., np.newaxis]
+            result = output_planes[0][..., np.newaxis]
         else:
-            return np.stack(output_planes, axis=-1)
+            result = np.stack(output_planes, axis=-1)
+        print(f"        [SUITE2P] returning shape: {result.shape}", flush=True)
+        return result
