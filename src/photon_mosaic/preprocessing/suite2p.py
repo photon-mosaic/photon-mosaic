@@ -405,3 +405,6 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
             result = np.stack(output_planes, axis=-1)
         print(f"        [SUITE2P] returning shape: {result.shape}", flush=True)
         return result
+
+
+register_suite2p = RegisterSuite2PImaging
