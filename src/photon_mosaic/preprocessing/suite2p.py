@@ -120,26 +120,12 @@ def compute_motion_suite2p(
         resolved_settings = settings
 
     # Initialize suite2p options with v1 defaults
-    ops = default_settings()
-
-    # Suite2p v1 returns nested settings, but registration functions expect flat dict
-    # Flatten all nested parameters to root level
-    flat_ops = {}
-    for key, value in ops.items():
-        if isinstance(value, dict):
-            # Add nested parameters to root level
-            flat_ops.update(value)
-        else:
-            flat_ops[key] = value
-
-    # Keep the original nested structure as well for compatibility
-    flat_ops.update(ops)
+    all_settings = default_settings()
+    ops = dict(all_settings["registration"])  # Just the registration sub-dict, already flat
 
     # Update with our custom settings
     settings_dict = resolved_settings.model_dump(exclude={"debug", "tmp_dir", "data_type"})
-    flat_ops.update(settings_dict)
-
-    ops = flat_ops
+    ops.update(settings_dict)
 
     num_planes = imaging.get_num_planes()
     num_epochs = len(imaging.epochs)
@@ -161,6 +147,7 @@ def compute_motion_suite2p(
         reference = register.compute_reference(ref_frames, settings=ops, device=device)
 
         # Compute filters and normalization for registration
+        # Returns: (maskMul, maskOffset, cfRefImg, maskMulNR, maskOffsetNR, cfRefImgNR, blocks, rmin, rmax)
         refAndMasks = register.compute_filters_and_norm(
             reference,
             norm_frames=ops.get("norm_frames", True),
@@ -171,6 +158,8 @@ def compute_motion_suite2p(
             subpixel=10,  # Default value from suite2p
             device=device_str  # Use string for this function
         )
+        # Unpack the tuple with named variables
+        maskMul, maskOffset, cfRefImg, maskMulNR, maskOffsetNR, cfRefImgNR, blocks, rmin, rmax = refAndMasks
 
         displacements: list[NDArray[np.floating[Any]]] = []
         nonrigid_offsets_list: list[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]] | None] = []
@@ -224,7 +213,6 @@ def compute_motion_suite2p(
             else:
                 nonrigid_offsets_list.append(None)
 
-        blocks = refAndMasks[6]
         if all(item is None for item in nonrigid_offsets_list):
             nonrigid_offsets_result: list[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]] | None] | None = (
                 None
@@ -386,9 +374,6 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
                 device=device_str
             )
             print(f"        [SUITE2P] shift_frames done", flush=True)
-            # Convert torch tensor to numpy if needed
-            if hasattr(registered_plane, 'cpu'):
-                registered_plane = registered_plane.cpu().numpy()
 
             # Ensure registered_plane is always 3D (frames, height, width)
             if registered_plane.ndim == 2:

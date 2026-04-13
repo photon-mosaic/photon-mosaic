@@ -174,6 +174,10 @@ class Suite2pRegistrationSettings(BaseRegistrationSettings):
         description="Number of steps to grid between smooth_sigma and smooth_sigma_time_max. "
         "Large values will add significant time to motion correction",
     )
+    device: str = Field(
+        default="cpu",
+        description="Torch device for registration: 'cpu', 'cuda', or 'mps'.",
+    )
 
     model_config = ConfigDict(env_prefix="SUITE2P_REGISTRATION_", case_sensitive=False, env_file=".env")
 
