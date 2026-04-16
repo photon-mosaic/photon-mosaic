@@ -24,6 +24,9 @@ class Suite2PMotion:
         | Sequence[Sequence[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]] | None]]
         | None = None,
         blocks: Sequence[Any] | None = None,
+        yranges: Sequence[Sequence[tuple[int, int]]] | None = None,
+        xranges: Sequence[Sequence[tuple[int, int]]] | None = None,
+        corrected_badframes: Sequence[Sequence[NDArray[np.bool_]]] | None = None,
         registration_outputs: dict | None = None,
     ) -> None:
         """Store displacement fields and metadata produced by Suite2P.
@@ -39,10 +42,17 @@ class Suite2PMotion:
         ops : dict[str, Any]
             Suite2P options used during registration.
         nonrigid_offsets : Sequence | None, optional
-            Per-epoch, per-plane non-rigid offsets if available.
+            Per-epoch, per-plane non-rigid offsets.
             Structure: ``[epoch][plane] -> (yoff1, xoff1)`` each ``(n_frames, n_blocks)``.
         blocks : Sequence | None, optional
             Suite2P block definitions when non-rigid registration is enabled.
+        yranges : Sequence | None, optional
+            Per-epoch, per-plane valid pixel row range ``[epoch][plane] -> (ymin, ymax)``.
+        xranges : Sequence | None, optional
+            Per-epoch, per-plane valid pixel column range ``[epoch][plane] -> (xmin, xmax)``.
+        corrected_badframes : Sequence | None, optional
+            Per-epoch, per-plane boolean bad-frame mask ``[epoch][plane] -> (n_frames,)``.
+            Combines the input ``badframes`` with frames flagged by large registration shifts.
         registration_outputs : dict | None, optional
             Additional outputs from the registration pipeline.
         """
@@ -53,6 +63,9 @@ class Suite2PMotion:
         self.ops = ops
         self.nonrigid_offsets = nonrigid_offsets
         self.blocks = blocks
+        self.yranges = yranges
+        self.xranges = xranges
+        self.corrected_badframes = corrected_badframes
         self.registration_outputs = registration_outputs
 
     @property
@@ -155,7 +168,7 @@ def compute_motion_suite2p(
         Motion container with per-epoch displacements.
     """
     import torch
-    from suite2p.registration.register import default_settings, register_frames
+    from suite2p.registration.register import compute_crop, default_settings, register_frames
 
     # Merge suite2p defaults → our settings → caller overrides
     ops = default_settings()
@@ -181,6 +194,9 @@ def compute_motion_suite2p(
 
     all_displacements: list[NDArray] = []
     all_nonrigid_offsets: list[list | None] = []
+    all_yranges: list[list[tuple[int, int]]] = []
+    all_xranges: list[list[tuple[int, int]]] = []
+    all_corrected_badframes: list[list[NDArray]] = []
 
     for epoch_idx in range(n_epochs):
         epoch = imaging.epochs[epoch_idx]
@@ -188,9 +204,13 @@ def compute_motion_suite2p(
 
         # Load entire epoch: (n_frames, H, W, n_planes) or (n_frames, H, W)
         all_frames = epoch.get_series(0, n_frames)
+        Ly, Lx = imaging.shape[0], imaging.shape[1]
+
+        badframes0 = np.zeros(n_frames, dtype=bool) if badframes is None else badframes.copy()
 
         epoch_yoff: list[NDArray] = []
         epoch_xoff: list[NDArray] = []
+        epoch_corrXY: list[NDArray] = []
         epoch_nr: list[tuple[NDArray, NDArray] | None] = []
         epoch_blocks: list[Any] = []
 
@@ -229,6 +249,7 @@ def compute_motion_suite2p(
 
             epoch_yoff.append(yoff)
             epoch_xoff.append(xoff)
+            epoch_corrXY.append(corrXY)
             epoch_nr.append((yoff1, xoff1) if yoff1 is not None else None)
 
             if epoch_idx == 0 and blocks is not None:
@@ -250,6 +271,29 @@ def compute_motion_suite2p(
         has_nonrigid = any(o is not None for o in epoch_nr)
         all_nonrigid_offsets.append(epoch_nr if has_nonrigid else None)
 
+        # Compute valid FOV region and refined bad-frame mask for each plane
+        epoch_yranges: list[tuple[int, int]] = []
+        epoch_xranges: list[tuple[int, int]] = []
+        epoch_cbf: list[NDArray] = []
+        for p in range(n_planes):
+            bf, yrange, xrange = compute_crop(
+                xoff=epoch_xoff[p],
+                yoff=epoch_yoff[p],
+                corrXY=epoch_corrXY[p],
+                th_badframes=ops.get("th_badframes", 1.0),
+                badframes=badframes0.copy(),
+                maxregshift=ops["maxregshift"],
+                Ly=Ly,
+                Lx=Lx,
+            )
+            epoch_yranges.append(tuple(yrange))
+            epoch_xranges.append(tuple(xrange))
+            epoch_cbf.append(bf)
+
+        all_yranges.append(epoch_yranges)
+        all_xranges.append(epoch_xranges)
+        all_corrected_badframes.append(epoch_cbf)
+
     nonrigid_offsets = (
         all_nonrigid_offsets
         if any(o is not None for o in all_nonrigid_offsets)
@@ -263,6 +307,9 @@ def compute_motion_suite2p(
         ops=ops,
         nonrigid_offsets=nonrigid_offsets,
         blocks=all_blocks,
+        yranges=all_yranges,
+        xranges=all_xranges,
+        corrected_badframes=all_corrected_badframes,
     )
 
 
