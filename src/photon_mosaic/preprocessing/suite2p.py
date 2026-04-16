@@ -171,7 +171,7 @@ def compute_motion_suite2p(
     from suite2p.registration.register import compute_crop, default_settings, register_frames
 
     # Merge suite2p defaults → our settings → caller overrides
-    ops = default_settings()
+    ops = default_settings()["registration"]
     if settings is None:
         user_settings = Suite2pRegistrationSettings()
     elif isinstance(settings, dict):
