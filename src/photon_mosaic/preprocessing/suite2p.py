@@ -22,6 +22,9 @@ class Suite2PMotion:
         | Sequence[Sequence[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]] | None]]
         | None = None,
         blocks: Sequence[Any] | None = None,
+        x_range: None,
+        y_range: None,
+        badframes: None
     ) -> None:
         """Store displacement fields and metadata produced by Suite2P.
 
@@ -272,6 +275,9 @@ def compute_motion_suite2p(
         ops,
         nonrigid_offsets=nonrigid_offsets,
         blocks=blocks_per_plane if use_nonrigid else None,
+        x_range=None,
+        y_range=None,
+        badframes=None
     )
 
 
