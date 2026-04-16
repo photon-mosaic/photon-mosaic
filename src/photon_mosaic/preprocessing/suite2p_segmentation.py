@@ -1,323 +1,283 @@
-from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
-from .baseregistrationsettings import BaseRegistrationSettings
-from photon_mosaic.core import BaseImaging, BaseImagingEpoch
+import logging
+import time
+from typing import Any, Sequence
+
+import numpy as np
+from numpy.typing import NDArray
 from pydantic import Field, field_validator
 from pydantic_settings import SettingsConfigDict
-import logging
-from typing import Optional
-import numpy as np
-import time
-import os
+
+from photon_mosaic.core import BaseImaging, BaseRois
+
+from .baseregistrationsettings import BaseRegistrationSettings
+
 
 class Suite2pSegmentationSettings(BaseRegistrationSettings):
-    """Segmentation image settings"""
+    """Settings for Suite2P ROI detection."""
 
-    # Basic parameters
-    input_dir: Path = Field(
-        default=Path("../data/"),
-        description="Directory containing the input data files.",
+    # Top-level detection parameters (passed directly to detection_wrapper)
+    diameter: list[float] = Field(
+        default=[12.0, 12.0],
+        description="Expected cell diameter in pixels [y, x]. 0 lets CellPose estimate it.",
     )
-    output_dir: Path = Field(
-        default=Path("../results/"),
-        description="Directory where output files will be saved.",
+    tau: float = Field(
+        default=1.0,
+        description="Timescale of the indicator (seconds). GCaMP6s ~1.5, GCaMP6f ~0.7.",
     )
-    tmp_dir: Path = Field(
-        default=Path("/scratch"),
-        description="Directory for temporary files created during processing.",
+    fs: float = Field(
+        default=30.0,
+        description="Sampling frequency of the imaging data in Hz.",
     )
-
-    # Cell detection parameters
-    diameter: int = Field(
-        default=0,
-        description=(
-            "Expected diameter of cells in pixels. "
-            "If set to 0, CellPose will estimate the diameter from the data."
-        ),
+    preclassify: float = Field(
+        default=0.0,
+        description="Apply classifier before refinement with probability threshold. 0 disables.",
     )
-    init: str = Field(
-        default="mean",
-        description=(
-            "Initialization method for finding masks. Options: "
-            "max/mean: Cellpose on max projection image divided by mean image; "
-            "mean: Cellpose on mean image; "
-            "enhanced_mean: Cellpose on enhanced mean image; "
-            "max: Cellpose on maximum projection image; "
-            "sourcery: Suite2p's functional mode without 'sparse_mode'; "
-            "sparsery: Suite2p's functional mode with 'sparse_mode'; "
-        ),
-    )    
-    bad_frames: list = Field(
-        default=[],
-        description="List of bad frames to exclude from segmentation"
-    ),
     device: str = Field(
-        default=None,
-        description="Device for computation"
-    ),
-    stat: np.ndarrray = Field(
-        default=None,
-        description="Array of ROI statistics dictionaries."
-    ),
-    save_path: str | Path = Field(
-        default=None,
-        description="where to save data" # this is likely redundant in this library
+        default="cpu",
+        description="Torch device for detection: 'cpu', 'cuda', or 'mps'.",
     )
-    functional_chan: int = Field(
-        default=1,
-        description="this channel is used to extract functional ROIs (1-based)",
-    )
-    threshold_scaling: int = Field(
-        default=1,
-        description="adjust the automatically determined threshold by this scalar multiplier",
-    )
-    max_overlap: float = Field(
-        default=0.75,
-        description="cells with more overlap than this get removed during triage, before refinement",
-    )
-    soma_crop: bool = Field(
-        default=False,
-        description="crop dendrites for cell classification stats like compactness",
-    )
-    allow_overlap: bool = Field(
-        default=False,
-        description="pixels that are overlapping are thrown out (False) or added to both ROIs (True)",
+
+    # Detection algorithm settings (passed as settings dict to detection_wrapper)
+    algorithm: str = Field(
+        default="sparsery",
+        description=(
+            "ROI detection algorithm. Options: 'sparsery' (suite2p sparse mode), "
+            "'sourcery' (suite2p dense mode), 'cellpose' (CellPose)."
+        ),
     )
     denoise: bool = Field(
         default=False,
-        description=(
-            "If True, applies denoising to the binned movie before cell detection."
-        ),
+        description="Apply denoising to binned movie before cell detection.",
     )
-    cellprob_threshold: float = Field(
-        default=0.0,
-        description=(
-            "Probability threshold for CellPose cell detection. "
-            "Decrease this threshold if CellPose is not returning enough ROIs."
-        ),
+    threshold_scaling: float = Field(
+        default=1.0,
+        description="Scale the automatically determined detection threshold.",
     )
-    flow_threshold: float = Field(
-        default=1.5,
-        description=(
-            "Flow threshold used by CellPose during cell detection. "
-            "Increase this threshold if CellPose is not returning enough ROIs."
-        ),
+    max_overlap: float = Field(
+        default=0.75,
+        description="ROIs with more overlap than this are removed during triage.",
     )
-    spatial_hp_cp: int = Field(
-        default=0,
-        description=(
-            "Window size for spatial high-pass filtering of the image before CellPose "
-            "detection. Set to 0 to disable filtering."
-        ),
+    soma_crop: bool = Field(
+        default=True,
+        description="Crop dendrites for cell classification stats like compactness.",
     )
-    pretrained_model: str = Field(
-        default="cyto",
-        description=(
-            "CellPose pretrained model to use. Common options: 'cyto' (standard model), "
-            "'cyto2' (improved model), or path to a custom model file."
-        ),
-    )
-    # Neuropil parameters
-    neuropil: str = Field(
-        default="mutualinfo",
-        description=(
-            "Method to estimate and subtract neuropil contamination, and whether to perform demixing. cnmf(-e) demix traces of "
-            "overlapping ROIs via NMF, suite2p & mutualinfo do not. "
-            "Options: 'suite2p' (fixed r=0.7"
-        ),
-    )
-
-
-    # CORR_PNR parameters
-    min_corr: float = Field(
-        default=0.6,
-        description=(
-            "Minimum local correlation for a component to be considered in corr_pnr "
-            "initialization. Higher values result in fewer, more reliable components."
-        ),
-    )
-    min_pnr: float = Field(
-        default=4,
-        description=(
-            "Minimum peak-to-noise ratio for a component to be considered in corr_pnr "
-            "initialization. Higher values result in fewer, more reliable components."
-        ),
-    )
-
-    # Component evaluation parameters
-    snr_thr: float = Field(
-        default=1.5,
-        description=(
-            "Signal-to-noise ratio threshold for component acceptance in CaImAn "
-            "evaluation. Components below this value will be rejected."
-        ),
-    )
-    rval_thr: float = Field(
-        default=0.6,
-        description=(
-            "Spatial correlation threshold for component acceptance in CaImAn "
-            "evaluation. Components below this value will be rejected."
-        ),
-    )
-    cnn_thr: float = Field(
-        default=0.9,
-        description=(
-            "CNN classifier threshold for component acceptance in CaImAn evaluation. "
-            "Components below this value will be rejected. Set to 0 to disable "
-            "CNN-based classification."
-        ),
-    )
-
-    # Output options
-    contour_video: bool = Field(
+    allow_overlap: bool = Field(
         default=False,
-        description=(
-            "If True, creates a video overlaying raw data, ROI activity, and residual "
-            "with contours for visualization and quality assessment."
-        ),
+        description="If False, overlapping pixels are discarded; if True, added to both ROIs.",
+    )
+    nbins: int = Field(
+        default=5000,
+        description="Number of bins for the activity histogram.",
+    )
+    highpass_time: int = Field(
+        default=100,
+        description="Window size (frames) for temporal high-pass filter before detection.",
     )
 
-    verbose: bool = Field(
-        default=False, description="Enable verbose logging and debug information."
-    )
-
-    # Config for pydantic-settings
     model_config = SettingsConfigDict(
-        env_file=".env", env_prefix="EXTRACTION_", case_sensitive=False, extra="ignore"
+        env_file=".env", env_prefix="SUITE2P_SEGMENTATION_", case_sensitive=False, extra="ignore"
     )
 
-    @field_validator("init", "neuropil")
+    @field_validator("algorithm")
     @classmethod
-    def lowercase_str_fields(cls, v: str) -> str:
-        """Convert string fields to lowercase"""
+    def lowercase_algorithm(cls, v: str) -> str:
         return v.lower()
 
-    @field_validator("rf")
-    @classmethod
-    def validate_rf(cls, v: int) -> Optional[int]:
-        if v == 0:
-            return None
-        return v
+    def to_detection_settings(self) -> dict[str, Any]:
+        """Build the ``settings`` dict expected by ``detection_wrapper``.
 
-    def validate_consistency(self) -> Optional[str]:
-        """Validate command line arguments for consistency"""
-        if self.neuropil == "cnmf" and self.init == "corr_pnr":
-            # We'll log a warning but still update the parameters
-            self.ssub = 1
-            return (
-                "'corr_pnr' initialization with neuropil model 'cnmf' does "
-                "not support spatial downsampling. Setting ssub to 1"
-            )
+        Starts from the defaults of the installed suite2p version so any fields
+        added in newer releases are preserved, then overlays the values defined here.
+        """
+        import inspect
 
-        if self.neuropil == "cnmf-e" and self.init == "greedy_roi":
-            raise ValueError(
-                "Can't use neuropil model 'cnmf-e' with 'greedy_roi' initialization"
-            )
+        from suite2p.detection import detection_wrapper  # noqa: PLC0415
 
-        if self.init in ("greedy_roi", "corr_pnr") and self.neuropil[:4] != "cnmf":
-            raise ValueError(
-                "Can't use Suite2p neuropil model with 'greedy_roi' or 'corr_pnr' initialization"
-            )
+        defaults: dict[str, Any] = inspect.signature(detection_wrapper).parameters["settings"].default
+        overrides = {
+            "algorithm": self.algorithm,
+            "denoise": self.denoise,
+            "threshold_scaling": self.threshold_scaling,
+            "max_overlap": self.max_overlap,
+            "soma_crop": self.soma_crop,
+            "nbins": self.nbins,
+            "highpass_time": self.highpass_time,
+        }
+        return {**defaults, **overrides}
 
-        # For backward compatibility
-        if self.init in ("1", "2", "3", "4"):
-            self.init = ("max/mean", "mean", "enhanced_mean", "max")[int(self.init) - 1]
 
-        return None  # No warning message
+class Suite2pDetectedRois(BaseRois):
+    """ROIs produced by running suite2p detection on a registered imaging object.
 
-    def model_post_init(self, _) -> None:
-        """Run validation after model initialization"""
-        warning = self.validate_consistency()
-        if warning:
-            logging.warning(warning)
+    Unlike :class:`~photon_mosaic.extractors.Suite2pRois`, this class stores the
+    ``stat`` array in memory rather than loading it from a saved folder.
+    """
 
-def run_suite2p_segmentation(registration_outputs,settings=Suite2pSegmentationSettings,):
-    plane_times = dict
-    yrange, xrange = registration_outputs["yrange"], registration_outputs["xrange"]
-    meanImg_chan2 = registration_outputs.get("meanImg_chan2", None)
-    from suite2p.detection import detection_wrapper
-    logging.info("----------- ROI DETECTION")
-    t11 = time.time()
-    if settings.stat is None:
-        bad_frames = settings.bad_frames
-        if badframes is not None:
-            bad_frames[badframes] = True
-        logging.info(f"Excluding {bad_frames.sum()} bad frames from detection")
-        if not isinstance(settings["diameter"], (list, tuple, np.ndarray)):
-            settings["diameter"] = np.array([settings["diameter"], settings["diameter"]])
-        elif isinstance(settings["diameter"], (list, tuple)):
-            settings["diameter"] = np.array(settings["diameter"])
-        if settings["diameter"].size == 1:
-            settings["diameter"] = np.array([settings["diameter"], settings["diameter"]])
-        detect_outputs, stat, redcell = detection_wrapper(f_reg, 
-                                                                eanImg_chan2=meanImg_chan2,
-                                                    yrange=yrange, xrange=xrange,
-                                                    tau=settings["tau"], fs=settings["fs"],
-                                                    diameter=settings["diameter"],
-                                                settings=settings["detection"], 
-                                                classifier_path=classfile,
-                                                badframes=bad_frames,
-                                                preclassify=settings["classification"]["preclassify"],
-                                                device=device)
-        np.save(os.path.join(save_path, "stat.npy"), stat)
-        np.save(os.path.join(save_path, "detect_outputs.npy"), detect_outputs)
-        if redcell is not None:
-            np.save(os.path.join(save_path, "redcell.npy"), redcell)
-        
-    plane_times["detection"] = time.time() - t11
-    logging.info("----------- Total %0.2f sec." % plane_times["detection"])
-
-    if len(stat) == 0:
-        logging.info("no ROIs found")
-        plane_times["total_plane_runtime"] = time.time() - t1
-        return registration_outputs, detect_outputs, stat, None, None, None, None, None, None, None, None, plane_times
-
-class SegmentSuite2PImaging(BasePreprocessor):
     def __init__(
         self,
-        imaging: BaseImaging,
-        settings: Suite2pSegmentationSettings | dict,
-        dtype: DTypeLike | None = None,
+        stats: list[dict[str, Any]],
+        shape: tuple[int, int, int],
+        sampling_frequency: float,
+        plane_assignments: NDArray[np.intp] | None = None,
     ) -> None:
-        """Wrap a `BaseImaging` object with preprocessing metadata.
+        """Create ROIs from an in-memory suite2p ``stat`` list.
 
         Parameters
         ----------
-        imaging : BaseImaging
-            Parent imaging object providing frames and metadata.
-        sampling_frequency : float | None, optional
-            Override for the output sampling frequency. Defaults to the parent's value.
-        dtype : DTypeLike | None, optional
-            Desired dtype for downstream processing. Defaults to parent's dtype.
+        stats : list[dict]
+            List of per-ROI stat dicts from ``detection_wrapper``.
+            Each dict must contain ``ypix``, ``xpix``, and ``lam``.
+        shape : tuple[int, int, int]
+            Spatial shape ``(height, width, n_planes)``.
+        sampling_frequency : float
+            Imaging sampling rate in Hz.
+        plane_assignments : NDArray | None, optional
+            Integer plane index for each ROI. Required when ``n_planes > 1``.
         """
+        roi_ids = np.arange(len(stats))
+        BaseRois.__init__(self, sampling_frequency=sampling_frequency, shape=shape, roi_ids=roi_ids)
 
-        BasePreprocessor.__init__(self, imaging)
-        
-        for epoch_idx, parent_epoch in enumerate(imaging.epochs):
-            epoch = SegmentSuite2PImagingEpoch(parent_epoch, motion, epoch_idx, **kwargs)
-            self.add_epoch(epoch)
+        self._stats = stats
+        self._plane_assignments = (
+            plane_assignments if plane_assignments is not None else np.zeros(len(stats), dtype=int)
+        )
 
-        self._kwargs = dict(imaging=imaging, motion=motion, **kwargs)
+        # Expose scalar stat fields as properties
+        skip = {"xpix", "ypix", "lam", "soma_crop", "overlap", "neuropil_mask"}
+        if stats:
+            for key in stats[0]:
+                if key in skip:
+                    continue
+                values = [s[key] for s in stats]
+                try:
+                    self.set_property(key, values)
+                except Exception:
+                    pass
 
-class SegmentSuite2PImagingEpoch(BasePreprocessorEpoch):
-    def __init__(self, parent_imaging_epoch: BaseImagingEpoch) -> None:
-        """Epoch wrapper that delegates metadata to its parent imaging epoch."""
-        BaseImagingEpoch.__init__(self, **parent_imaging_epoch.get_times_kwargs())
-        self.parent_imaging_epoch = parent_imaging_epoch
+        self._kwargs = dict(
+            stats=stats,
+            shape=shape,
+            sampling_frequency=sampling_frequency,
+            plane_assignments=plane_assignments,
+        )
 
-    def get_num_samples(self) -> int:
-        """Return the number of samples in the parent epoch."""
-        return self.parent_imaging_epoch.get_num_samples()
+    def get_roi_image_masks(self, roi_ids: list[int] | None = None) -> NDArray:
+        """Return binary image masks shaped ``(n_rois, H, W)`` or ``(n_rois, H, W, n_planes)``."""
+        if roi_ids is None:
+            roi_ids = self.roi_ids.tolist()
 
-    def get_series(
-        self,
-        start_frame: int,
-        end_frame: int,
-        plane_indices: int | slice | Sequence[int] | None = None,
-    ) -> NDArray[Any]:
-        """Return a frame series for the requested interval and planes.
+        H, W, n_planes = self.shape
+        masks = []
+        for roi_id in roi_ids:
+            stat = self._stats[roi_id]
+            if n_planes == 1:
+                mask = np.zeros((H, W), dtype=bool)
+                mask[stat["ypix"], stat["xpix"]] = True
+            else:
+                mask = np.zeros((H, W, n_planes), dtype=bool)
+                p = int(self._plane_assignments[roi_id])
+                mask[stat["ypix"], stat["xpix"], p] = True
+            masks.append(mask)
+        return np.array(masks)
 
-        Subclasses must override this to apply their specific preprocessing before
-        returning the requested frames.
-        """
 
-        raise NotImplementedError
+def detect_rois_suite2p(
+    imaging: BaseImaging,
+    yrange: Sequence[int] | None = None,
+    xrange: Sequence[int] | None = None,
+    badframes: NDArray[np.bool_] | None = None,
+    settings: Suite2pSegmentationSettings | dict[str, Any] | None = None,
+) -> Suite2pDetectedRois:
+    """Detect ROIs using suite2p's detection pipeline on a registered imaging object.
+
+    This function is intentionally decoupled from :class:`Suite2PMotion`.
+    ``yrange``, ``xrange``, and ``badframes`` can be sourced from anywhere —
+    e.g. ``motion.yranges[epoch][plane]`` or computed independently.
+
+    Parameters
+    ----------
+    imaging : BaseImaging
+        Motion-corrected imaging object. All epochs are averaged to build the
+        activity movie passed to ``detection_wrapper``.
+    yrange : sequence of int | None, optional
+        Valid pixel row range ``[ymin, ymax]`` from motion correction.
+        If None, the full image height is used.
+    xrange : sequence of int | None, optional
+        Valid pixel column range ``[xmin, xmax]`` from motion correction.
+        If None, the full image width is used.
+    badframes : NDArray[bool] | None, optional
+        Boolean mask ``(n_frames,)`` of frames to exclude from detection.
+    settings : Suite2pSegmentationSettings | dict | None, optional
+        Detection settings. Dicts are coerced into ``Suite2pSegmentationSettings``.
+
+    Returns
+    -------
+    Suite2pDetectedRois
+        Detected ROIs with pixel masks and suite2p stat properties.
+    """
+    import torch
+    from suite2p.detection import detection_wrapper
+
+    if settings is None:
+        cfg = Suite2pSegmentationSettings()
+    elif isinstance(settings, dict):
+        cfg = Suite2pSegmentationSettings(**settings)
+    else:
+        cfg = settings
+
+    device = torch.device(cfg.device)
+    H, W, n_planes = imaging.shape
+
+    yrange = list(yrange) if yrange is not None else [0, H]
+    xrange = list(xrange) if xrange is not None else [0, W]
+
+    all_stats: list[dict[str, Any]] = []
+    plane_assignments: list[int] = []
+
+    for p in range(n_planes):
+        logging.info(f"Suite2p detection — plane {p + 1}/{n_planes}")
+        t0 = time.time()
+
+        # Collect frames for this plane across all epochs
+        plane_chunks = []
+        for epoch_idx in range(imaging.get_num_epochs()):
+            n_frames = imaging.get_num_samples(segment_index=epoch_idx)
+            frames = imaging.epochs[epoch_idx].get_series(0, n_frames)
+            plane_frames = frames[:, :, :, p] if frames.ndim == 4 else frames
+            plane_chunks.append(plane_frames.astype(np.float32))
+        f_reg = np.concatenate(plane_chunks, axis=0)  # (total_frames, H, W)
+
+        # Align badframes length to concatenated frame count
+        bf = None
+        if badframes is not None:
+            bf = badframes.astype(bool)
+            if bf.shape[0] != f_reg.shape[0]:
+                logging.warning(
+                    f"badframes length {bf.shape[0]} != n_frames {f_reg.shape[0]}; ignoring"
+                )
+                bf = None
+
+        diameter = np.array(cfg.diameter, dtype=float)
+
+        _, stat, _ = detection_wrapper(
+            f_reg,
+            diameter=diameter,
+            tau=cfg.tau,
+            fs=cfg.fs,
+            yrange=yrange,
+            xrange=xrange,
+            badframes=bf,
+            settings=cfg.to_detection_settings(),
+            device=device,
+        )
+
+        logging.info(f"  found {len(stat)} ROIs in {time.time() - t0:.1f}s")
+        all_stats.extend(stat)
+        plane_assignments.extend([p] * len(stat))
+
+    return Suite2pDetectedRois(
+        stats=all_stats,
+        shape=(H, W, n_planes),
+        sampling_frequency=imaging.sampling_frequency,
+        plane_assignments=np.array(plane_assignments, dtype=int),
+    )
