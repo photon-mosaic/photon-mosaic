@@ -179,15 +179,23 @@ class Suite2pDetectedRois(BaseRois):
         return np.array(masks)
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
 def _coerce_segmentation_settings(
     settings: Suite2pSegmentationSettings | dict[str, Any] | None,
 ) -> Suite2pSegmentationSettings:
-    """Normalize user-provided settings into a validated settings object."""
+    """Normalize user-provided settings into a validated settings object.
+
+    Parameters
+    ----------
+    settings : Suite2pSegmentationSettings | dict | None
+        Settings as a validated object, a plain dict of overrides, or None
+        for defaults.  Dicts are unpacked into
+        :class:`Suite2pSegmentationSettings`; None returns a default instance.
+
+    Returns
+    -------
+    Suite2pSegmentationSettings
+        A fully validated settings object.
+    """
     if settings is None:
         return Suite2pSegmentationSettings()
     if isinstance(settings, dict):
@@ -201,7 +209,27 @@ def _collect_plane_movie(
     epoch_indices: Sequence[int],
     plane_index: int,
 ) -> NDArray[np.float32]:
-    """Load and concatenate the movie for one plane across selected epochs."""
+    """Load and concatenate the movie for one plane across selected epochs.
+
+    Iterates over the requested epochs, extracts the single-plane frames, and
+    returns them as one contiguous float32 array.  When only one epoch is
+    selected the concatenation is skipped.
+
+    Parameters
+    ----------
+    imaging : BaseImaging
+        Source imaging object (typically motion-corrected).
+    epoch_indices : Sequence[int]
+        Indices of the epochs to include, in the order they should be
+        concatenated.
+    plane_index : int
+        Zero-based index of the imaging plane to extract.
+
+    Returns
+    -------
+    NDArray[np.float32]
+        Movie array of shape ``(total_frames, height, width)``.
+    """
     plane_chunks = []
     for epoch_index in epoch_indices:
         n_frames = imaging.get_num_samples(segment_index=epoch_index)
