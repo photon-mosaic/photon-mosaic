@@ -214,11 +214,6 @@ def _collect_plane_movie(
     return np.concatenate(plane_chunks, axis=0)
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-
 def detect_rois_suite2p(
     imaging: BaseImaging,
     yrange: Sequence[int] | None = None,
