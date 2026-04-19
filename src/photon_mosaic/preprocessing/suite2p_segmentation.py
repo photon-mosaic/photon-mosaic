@@ -5,14 +5,12 @@ from typing import Any, Sequence
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import Field, field_validator
-from pydantic_settings import SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from photon_mosaic.core import BaseImaging, BaseRois
 
-from .baseregistrationsettings import BaseRegistrationSettings
 
-
-class Suite2pSegmentationSettings(BaseRegistrationSettings):
+class Suite2pSegmentationSettings(BaseSettings):
     """Settings for Suite2P ROI detection. Passed directly to
     detection_wrapper"""
 
@@ -99,6 +97,7 @@ class Suite2pSegmentationSettings(BaseRegistrationSettings):
             "threshold_scaling": self.threshold_scaling,
             "max_overlap": self.max_overlap,
             "soma_crop": self.soma_crop,
+            "allow_overlap": self.allow_overlap,
             "nbins": self.nbins,
             "highpass_time": self.highpass_time,
         }
@@ -151,7 +150,7 @@ class Suite2pDetectedRois(BaseRois):
                 try:
                     self.set_property(key, values)
                 except Exception:
-                    pass
+                    logging.debug("Could not set property %r from stat: %s", key, values[:3])
 
         self._kwargs = dict(
             stats=stats,
@@ -180,6 +179,46 @@ class Suite2pDetectedRois(BaseRois):
         return np.array(masks)
 
 
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+
+def _coerce_segmentation_settings(
+    settings: Suite2pSegmentationSettings | dict[str, Any] | None,
+) -> Suite2pSegmentationSettings:
+    """Normalize user-provided settings into a validated settings object."""
+    if settings is None:
+        return Suite2pSegmentationSettings()
+    if isinstance(settings, dict):
+        return Suite2pSegmentationSettings(**settings)
+    return settings
+
+
+def _collect_plane_movie(
+    imaging: BaseImaging,
+    *,
+    epoch_indices: Sequence[int],
+    plane_index: int,
+) -> NDArray[np.float32]:
+    """Load and concatenate the movie for one plane across selected epochs."""
+    plane_chunks = []
+    for epoch_index in epoch_indices:
+        n_frames = imaging.get_num_samples(segment_index=epoch_index)
+        frames = imaging.epochs[epoch_index].get_series(0, n_frames)
+        plane_frames = frames[:, :, :, plane_index] if frames.ndim == 4 else frames
+        plane_chunks.append(plane_frames.astype(np.float32))
+
+    if len(plane_chunks) == 1:
+        return plane_chunks[0]
+    return np.concatenate(plane_chunks, axis=0)
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+
 def detect_rois_suite2p(
     imaging: BaseImaging,
     yrange: Sequence[int] | None = None,
@@ -193,11 +232,15 @@ def detect_rois_suite2p(
     ``yrange``, ``xrange``, and ``badframes`` can be sourced from anywhere —
     e.g. ``motion.yranges[epoch][plane]`` or computed independently.
 
+    The returned :class:`Suite2pDetectedRois` automatically has the source
+    *imaging* registered so that fluorescence traces can be extracted from
+    the detected masks.
+
     Parameters
     ----------
     imaging : BaseImaging
-        Motion-corrected imaging object. All epochs are averaged to build the
-        activity movie passed to ``detection_wrapper``.
+        Motion-corrected imaging object. All epochs are concatenated to build
+        the activity movie passed to ``detection_wrapper``.
     yrange : sequence of int | None, optional
         Valid pixel row range ``[ymin, ymax]`` from motion correction.
         If None, the full image height is used.
@@ -217,64 +260,52 @@ def detect_rois_suite2p(
     import torch
     from suite2p.detection import detection_wrapper
 
-    if settings is None:
-        cfg = Suite2pSegmentationSettings()
-    elif isinstance(settings, dict):
-        cfg = Suite2pSegmentationSettings(**settings)
-    else:
-        cfg = settings
-
+    cfg = _coerce_segmentation_settings(settings)
     device = torch.device(cfg.device)
     H, W, n_planes = imaging.shape
 
-    yrange = list(yrange) if yrange is not None else [0, H]
-    xrange = list(xrange) if xrange is not None else [0, W]
+    resolved_yrange = list(yrange) if yrange is not None else [0, H]
+    resolved_xrange = list(xrange) if xrange is not None else [0, W]
+
+    epoch_indices = list(range(imaging.get_num_epochs()))
+    total_frames = sum(imaging.get_num_samples(segment_index=i) for i in epoch_indices)
+
+    if badframes is not None:
+        badframes = np.asarray(badframes, dtype=bool)
+        if badframes.shape[0] != total_frames:
+            raise ValueError(f"badframes length {badframes.shape[0]} does not match total frame count {total_frames}")
 
     all_stats: list[dict[str, Any]] = []
     plane_assignments: list[int] = []
+    diameter = np.array(cfg.diameter, dtype=float)
 
-    for p in range(n_planes):
-        logging.info(f"Suite2p detection — plane {p + 1}/{n_planes}")
+    for plane_index in range(n_planes):
+        logging.info(f"Suite2p detection — plane {plane_index + 1}/{n_planes}")
         t0 = time.time()
 
-        # Collect frames for this plane across all epochs
-        plane_chunks = []
-        for epoch_idx in range(imaging.get_num_epochs()):
-            n_frames = imaging.get_num_samples(segment_index=epoch_idx)
-            frames = imaging.epochs[epoch_idx].get_series(0, n_frames)
-            plane_frames = frames[:, :, :, p] if frames.ndim == 4 else frames
-            plane_chunks.append(plane_frames.astype(np.float32))
-        f_reg = np.concatenate(plane_chunks, axis=0)  # (total_frames, H, W)
-
-        # Align badframes length to concatenated frame count
-        bf = None
-        if badframes is not None:
-            bf = badframes.astype(bool)
-            if bf.shape[0] != f_reg.shape[0]:
-                logging.warning(f"badframes length {bf.shape[0]} != n_frames {f_reg.shape[0]}; ignoring")
-                bf = None
-
-        diameter = np.array(cfg.diameter, dtype=float)
+        f_reg = _collect_plane_movie(imaging, epoch_indices=epoch_indices, plane_index=plane_index)
 
         _, stat, _ = detection_wrapper(
             f_reg,
             diameter=diameter,
             tau=cfg.tau,
             fs=cfg.fs,
-            yrange=yrange,
-            xrange=xrange,
-            badframes=bf,
+            yrange=resolved_yrange,
+            xrange=resolved_xrange,
+            badframes=badframes,
             settings=cfg.to_detection_settings(),
             device=device,
         )
 
         logging.info(f"  found {len(stat)} ROIs in {time.time() - t0:.1f}s")
         all_stats.extend(stat)
-        plane_assignments.extend([p] * len(stat))
+        plane_assignments.extend([plane_index] * len(stat))
 
-    return Suite2pDetectedRois(
+    rois = Suite2pDetectedRois(
         stats=all_stats,
         shape=(H, W, n_planes),
         sampling_frequency=imaging.sampling_frequency,
         plane_assignments=np.array(plane_assignments, dtype=int),
     )
+    rois.register_imaging(imaging)
+    return rois
