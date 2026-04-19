@@ -13,9 +13,9 @@ from .baseregistrationsettings import BaseRegistrationSettings
 
 
 class Suite2pSegmentationSettings(BaseRegistrationSettings):
-    """Settings for Suite2P ROI detection."""
+    """Settings for Suite2P ROI detection. Passed directly to
+    detection_wrapper"""
 
-    # Top-level detection parameters (passed directly to detection_wrapper)
     diameter: list[float] = Field(
         default=[12.0, 12.0],
         description="Expected cell diameter in pixels [y, x]. 0 lets CellPose estimate it.",
@@ -37,7 +37,6 @@ class Suite2pSegmentationSettings(BaseRegistrationSettings):
         description="Torch device for detection: 'cpu', 'cuda', or 'mps'.",
     )
 
-    # Detection algorithm settings (passed as settings dict to detection_wrapper)
     algorithm: str = Field(
         default="sparsery",
         description=(
@@ -84,7 +83,7 @@ class Suite2pSegmentationSettings(BaseRegistrationSettings):
         return v.lower()
 
     def to_detection_settings(self) -> dict[str, Any]:
-        """Build the ``settings`` dict expected by ``detection_wrapper``.
+        """Integrate ``settings`` dict expected by ``detection_wrapper``.
 
         Starts from the defaults of the installed suite2p version so any fields
         added in newer releases are preserved, then overlays the values defined here.
