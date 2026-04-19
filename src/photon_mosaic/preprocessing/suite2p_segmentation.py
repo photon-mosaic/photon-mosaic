@@ -251,9 +251,7 @@ def detect_rois_suite2p(
         if badframes is not None:
             bf = badframes.astype(bool)
             if bf.shape[0] != f_reg.shape[0]:
-                logging.warning(
-                    f"badframes length {bf.shape[0]} != n_frames {f_reg.shape[0]}; ignoring"
-                )
+                logging.warning(f"badframes length {bf.shape[0]} != n_frames {f_reg.shape[0]}; ignoring")
                 bf = None
 
         diameter = np.array(cfg.diameter, dtype=float)
