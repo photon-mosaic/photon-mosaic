@@ -13,6 +13,8 @@ Loadable objects
 
 from pathlib import Path
 
+from spikeinterface.core.core_tools import is_path_remote
+
 _error_msg = (
     "{file_path} is not a recognised photon-mosaic folder. "
     "It should be the result of save() or save_as() on a "
@@ -43,6 +45,10 @@ def load(file_or_folder, **kwargs):
         or a spikeinterface ``BaseExtractor`` (Recording/Sorting).
     """
     path = Path(file_or_folder)
+
+    # --- remote zarr store (e.g. s3://, gcs://) --------------------------------
+    if is_path_remote(str(file_or_folder)):
+        return _load_zarr(file_or_folder, **kwargs)
 
     # --- zarr store ---------------------------------------------------------
     if str(path).endswith(".zarr") or (path.is_dir() and (path / ".zgroup").exists()):
