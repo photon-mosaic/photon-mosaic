@@ -44,11 +44,11 @@ def load(file_or_folder, **kwargs):
         A ``RoiAnalyzer``, ``BinaryFolderRois``, ``ZarrRois``,
         or a spikeinterface ``BaseExtractor`` (Recording/Sorting).
     """
-    path = Path(file_or_folder)
-
     # --- remote zarr store (e.g. s3://, gcs://) --------------------------------
     if is_path_remote(str(file_or_folder)):
         return _load_zarr(file_or_folder, **kwargs)
+
+    path = Path(file_or_folder)
 
     # --- zarr store ---------------------------------------------------------
     if str(path).endswith(".zarr") or (path.is_dir() and (path / ".zgroup").exists()):
