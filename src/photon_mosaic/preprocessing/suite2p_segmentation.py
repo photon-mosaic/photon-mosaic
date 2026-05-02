@@ -159,7 +159,7 @@ class Suite2pDetectedRois(BaseRois):
             plane_assignments=plane_assignments,
         )
 
-    def get_roi_image_masks(self, roi_ids: list[int] | None = None) -> NDArray:
+    def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> NDArray:
         """Return binary image masks shaped ``(n_rois, H, W)`` or ``(n_rois, H, W, n_planes)``."""
         if roi_ids is None:
             roi_ids = self.roi_ids.tolist()
@@ -167,13 +167,14 @@ class Suite2pDetectedRois(BaseRois):
         H, W, n_planes = self.shape
         masks = []
         for roi_id in roi_ids:
-            stat = self._stats[roi_id]
+            roi_index = int(roi_id)
+            stat = self._stats[roi_index]
             if n_planes == 1:
                 mask = np.zeros((H, W), dtype=bool)
                 mask[stat["ypix"], stat["xpix"]] = True
             else:
                 mask = np.zeros((H, W, n_planes), dtype=bool)
-                p = int(self._plane_assignments[roi_id])
+                p = int(self._plane_assignments[roi_index])
                 mask[stat["ypix"], stat["xpix"], p] = True
             masks.append(mask)
         return np.array(masks)
@@ -267,9 +268,7 @@ def _resolve_badframes(
     if isinstance(value, np.ndarray):
         total = int(sum(frame_counts))
         if value.shape[0] != total:
-            raise ValueError(
-                f"badframes length {value.shape[0]} does not match total frame count {total}"
-            )
+            raise ValueError(f"badframes length {value.shape[0]} does not match total frame count {total}")
         out: list[NDArray[np.bool_] | None] = []
         offset = 0
         for n in frame_counts:
@@ -278,9 +277,7 @@ def _resolve_badframes(
         return out
 
     if len(value) != n_epochs:
-        raise ValueError(
-            f"badframes list length {len(value)} does not match number of epochs {n_epochs}"
-        )
+        raise ValueError(f"badframes list length {len(value)} does not match number of epochs {n_epochs}")
     out = []
     for i, (b, n) in enumerate(zip(value, frame_counts)):
         if b is None:
@@ -288,9 +285,7 @@ def _resolve_badframes(
             continue
         b_arr = np.asarray(b, dtype=bool)
         if b_arr.shape[0] != n:
-            raise ValueError(
-                f"badframes[{i}] length {b_arr.shape[0]} does not match epoch frame count {n}"
-            )
+            raise ValueError(f"badframes[{i}] length {b_arr.shape[0]} does not match epoch frame count {n}")
         out.append(b_arr)
     return out
 
@@ -369,9 +364,7 @@ def _stream_bin_movie(
     for raw_tstart in tstarts:
         tstart = int(raw_tstart)
         tend = min(tstart + batch_size, n_frames)
-        data = _read_plane_range(
-            imaging, plane_index, epoch_indices, epoch_offsets, tstart, tend
-        )
+        data = _read_plane_range(imaging, plane_index, epoch_indices, epoch_offsets, tstart, tend)
 
         good = good_frames[tstart:tend]
         if good.mean() > 0.5:
@@ -505,9 +498,7 @@ def _detect_segmentation(
     """Bin and detect ROIs over a single contiguous span of epochs."""
     H, W, n_planes = imaging.shape
 
-    n_frames = int(
-        sum(imaging.get_num_samples(segment_index=i) for i in epoch_indices)
-    )
+    n_frames = int(sum(imaging.get_num_samples(segment_index=i) for i in epoch_indices))
     bin_size = int(max(1, n_frames // cfg.nbins, np.round(cfg.tau * cfg.fs)))
 
     all_stats: list[dict[str, Any]] = []
@@ -605,9 +596,7 @@ def detect_rois_suite2p(
     cfg = _coerce_segmentation_settings(settings)
     H, W, _ = imaging.shape
 
-    selected = (
-        list(range(imaging.get_num_epochs())) if epoch_indices is None else list(epoch_indices)
-    )
+    selected = list(range(imaging.get_num_epochs())) if epoch_indices is None else list(epoch_indices)
     n_eps = len(selected)
     frame_counts = [int(imaging.get_num_samples(segment_index=i)) for i in selected]
 
@@ -618,21 +607,16 @@ def detect_rois_suite2p(
     if scope == "all_epochs":
         if not all(yr == yranges[0] for yr in yranges):
             raise ValueError(
-                "yrange differs across selected epochs; use scope='per_epoch' "
-                "or pass a single uniform range."
+                "yrange differs across selected epochs; use scope='per_epoch' or pass a single uniform range."
             )
         if not all(xr == xranges[0] for xr in xranges):
             raise ValueError(
-                "xrange differs across selected epochs; use scope='per_epoch' "
-                "or pass a single uniform range."
+                "xrange differs across selected epochs; use scope='per_epoch' or pass a single uniform range."
             )
 
         if any(b is not None for b in bf_per_ep):
             merged_bf: NDArray[np.bool_] | None = np.concatenate(
-                [
-                    b if b is not None else np.zeros(n, dtype=bool)
-                    for b, n in zip(bf_per_ep, frame_counts)
-                ],
+                [b if b is not None else np.zeros(n, dtype=bool) for b, n in zip(bf_per_ep, frame_counts)],
                 axis=0,
             )
         else:
