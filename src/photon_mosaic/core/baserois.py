@@ -202,12 +202,12 @@ class BaseRois(BaseExtractor):
             Imaging with the same number of planes as the ROIs.
             Assigned to self._imaging.
         """
-        assert (
-            imaging.get_num_planes() == self.get_num_planes()
-        ), "The imaging has a different number of planes than the ROIs!"
-        assert np.isclose(
-            self.sampling_frequency, imaging.sampling_frequency, atol=0.1
-        ), "The imaging has a different sampling frequency than the ROIs!"
+        assert imaging.get_num_planes() == self.get_num_planes(), (
+            "The imaging has a different number of planes than the ROIs!"
+        )
+        assert np.isclose(self.sampling_frequency, imaging.sampling_frequency, atol=0.1), (
+            "The imaging has a different sampling frequency than the ROIs!"
+        )
         self._imaging = imaging
 
 

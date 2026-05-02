@@ -137,9 +137,7 @@ class TestDetectRoisSuite2p:
             badframes=[np.array([False, True]), np.array([True, False, False])],
         )
 
-        np.testing.assert_array_equal(
-            bin_calls[0]["badframes"], np.array([False, True, True, False, False])
-        )
+        np.testing.assert_array_equal(bin_calls[0]["badframes"], np.array([False, True, True, False, False]))
 
 
 # ---------------------------------------------------------------------------

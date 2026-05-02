@@ -115,9 +115,7 @@ def _compute_reference_wrapper(
     compute_bidi = settings.get("do_bidiphase", False) and settings.get("bidiphase", 0) == 0
 
     if refImg is None or compute_bidi:
-        ix_frames = np.linspace(
-            0, n_frames, 1 + min(settings.get("nimg_init", 200), n_frames), dtype=int
-        )[:-1]
+        ix_frames = np.linspace(0, n_frames, 1 + min(settings.get("nimg_init", 200), n_frames), dtype=int)[:-1]
         frames = f_align_in[ix_frames].copy()
 
     if compute_bidi:
@@ -294,11 +292,7 @@ def compute_motion_suite2p(
         all_xranges.append(epoch_xranges)
         all_corrected_badframes.append(epoch_cbf)
 
-    nonrigid_offsets = (
-        all_nonrigid_offsets
-        if any(o is not None for o in all_nonrigid_offsets)
-        else None
-    )
+    nonrigid_offsets = all_nonrigid_offsets if any(o is not None for o in all_nonrigid_offsets) else None
 
     return Suite2PMotion(
         imaging=imaging,
