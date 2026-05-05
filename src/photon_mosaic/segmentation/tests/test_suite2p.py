@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 
 from photon_mosaic.core.numpyimaging import NumpyImaging
-from photon_mosaic.preprocessing import suite2p_segmentation as seg
-from photon_mosaic.preprocessing.suite2p_segmentation import (
+from photon_mosaic.segmentation import suite2p as seg
+from photon_mosaic.segmentation.suite2p import (
     Suite2pDetectedRois,
     Suite2pEpochSegmentations,
     detect_rois_suite2p,
