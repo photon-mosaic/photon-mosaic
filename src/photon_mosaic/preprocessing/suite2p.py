@@ -74,6 +74,37 @@ class Suite2PMotion:
 
         return len(self.displacements)
 
+    def get_displacement_at_frames(
+        self,
+        frame_indices: int | NDArray[np.integer[Any]],
+        plane_index: int | None = None,
+        epoch_index: int = 0,
+    ) -> NDArray[np.floating[Any]]:
+        """Return the (y, x) displacements for the requested frames.
+
+        Parameters
+        ----------
+        frame_indices : int | NDArray[int]
+            Frame index or array of frame indices into the chosen epoch.
+        plane_index : int | None, optional
+            If given, return only that plane's displacements. Otherwise the
+            full ``(n_planes, 2)`` slice is returned for each frame.
+        epoch_index : int, optional
+            Epoch to look up. Defaults to 0.
+
+        Returns
+        -------
+        NDArray
+            Shape ``(n_planes, 2)`` for a scalar ``frame_indices`` with no
+            ``plane_index``; ``(2,)`` if ``plane_index`` is given. For an
+            array of ``frame_indices`` the leading axis is the number of
+            requested frames.
+        """
+        disps = self.displacements[epoch_index]
+        if plane_index is None:
+            return disps[frame_indices]
+        return disps[frame_indices, plane_index]
+
 
 def _compute_reference_wrapper(
     f_align_in: NDArray,
@@ -256,13 +287,10 @@ def compute_motion_suite2p(
         if epoch_idx == 0 and epoch_blocks:
             all_blocks = epoch_blocks
 
-        # Stack planes → (n_frames, n_planes, 2) or (n_frames, 2) for single-plane
-        if n_planes > 1:
-            disps = np.stack(
-                [np.stack(epoch_yoff, axis=1), np.stack(epoch_xoff, axis=1)], axis=-1
-            )  # (n_frames, n_planes, 2)
-        else:
-            disps = np.stack([epoch_yoff[0], epoch_xoff[0]], axis=-1)  # (n_frames, 2)
+        # Always stack to (n_frames, n_planes, 2) — single-plane keeps a length-1 plane axis.
+        disps = np.stack(
+            [np.stack(epoch_yoff, axis=1), np.stack(epoch_xoff, axis=1)], axis=-1
+        )  # (n_frames, n_planes, 2)
 
         all_displacements.append(disps)
 
@@ -376,12 +404,8 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
             if plane_video.ndim == 2:
                 plane_video = plane_video[np.newaxis, :, :]
 
-            if disps.ndim == 3:
-                yoff = disps[start_frame:end_frame, p, 0].astype(int)
-                xoff = disps[start_frame:end_frame, p, 1].astype(int)
-            else:
-                yoff = disps[start_frame:end_frame, 0].astype(int)
-                xoff = disps[start_frame:end_frame, 1].astype(int)
+            yoff = disps[start_frame:end_frame, p, 0].astype(int)
+            xoff = disps[start_frame:end_frame, p, 1].astype(int)
 
             yoff1 = xoff1 = blocks = None
             if self.motion.nonrigid_offsets is not None:
