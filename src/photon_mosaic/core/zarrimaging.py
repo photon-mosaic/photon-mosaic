@@ -2,9 +2,9 @@ from pathlib import Path
 
 import numpy as np
 import zarr
-from spikeinterface.core.chunkable_tools import write_chunkable_to_zarr
 from spikeinterface.core.core_tools import check_json, retrieve_importing_provenance
 from spikeinterface.core.job_tools import split_job_kwargs
+from spikeinterface.core.time_series_tools import _write_time_series_to_zarr
 from spikeinterface.core.zarrextractors import (
     add_properties_and_annotations,
     get_default_zarr_compressor,
@@ -150,7 +150,7 @@ def add_imaging_to_zarr_group(
         The dtype to use for the video datasets. If None, the dtype of the imaging data
         will be used.
     **kwargs:
-        Additional keyword arguments to pass to the write_chunkable_to_zarr function. This can include
+        Additional keyword arguments to pass to the _write_time_series_to_zarr function. This can include
         zarr-specific arguments (e.g., compressor, filters) as well as job-related arguments
         (e.g., n_jobs).
     """
@@ -187,8 +187,8 @@ def add_imaging_to_zarr_group(
     compressor_times = compressor_by_dataset.get("times", global_compressor)
     filters_times = filters_by_dataset.get("times", global_filters)
 
-    write_chunkable_to_zarr(
-        chunkable=imaging,
+    _write_time_series_to_zarr(
+        time_series=imaging,
         zarr_group=zarr_group,
         dataset_paths=dataset_paths,
         dataset_timestamps_paths=dataset_timestamps_paths,
