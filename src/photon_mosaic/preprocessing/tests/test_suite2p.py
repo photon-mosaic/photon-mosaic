@@ -8,9 +8,9 @@ from photon_mosaic.preprocessing.suite2p_registration import (
     RegisterSuite2PImaging,
     RegisterSuite2PImagingEpoch,
     Suite2PMotion,
+    Suite2pRegistrationSettings,
     compute_motion_suite2p,
     register_suite2p,
-    Suite2pRegistrationSettings
 )
 
 

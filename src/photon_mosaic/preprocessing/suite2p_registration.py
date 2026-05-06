@@ -446,9 +446,7 @@ def compute_motion_suite2p(
             all_blocks = epoch_blocks
 
         # Stack planes → always (n_frames, n_planes, 2)
-        disps = np.stack(
-            [np.stack(epoch_yoff, axis=1), np.stack(epoch_xoff, axis=1)], axis=-1
-        )
+        disps = np.stack([np.stack(epoch_yoff, axis=1), np.stack(epoch_xoff, axis=1)], axis=-1)
 
         all_displacements.append(disps)
 
