@@ -4,8 +4,6 @@ from .roiextractors import (
     BaseROIExtractorImagingEpoch,
 )
 
-from .suite2prois import read_suite2p_rois
-
 # Build __all__ to include all exports
 __all__ = [
     "BaseROIExtractorImaging",

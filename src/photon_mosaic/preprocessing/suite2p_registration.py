@@ -1,109 +1,185 @@
 import logging
 import time
+from pathlib import Path
 from typing import Any, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
+from pydantic import ConfigDict, Field
+from pydantic_settings import BaseSettings
 
-from photon_mosaic.core import BaseImaging, BaseImagingEpoch
+from photon_mosaic.core import BaseImaging, BaseImagingEpoch, Motion
 
 from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
-from .baseregistrationsettings import Suite2pRegistrationSettings
 
 
-class Suite2PMotion:
-    """Container for Suite2P motion correction artifacts."""
+class Suite2pRegistrationSettings(BaseSettings):
+    """Settings for Suite2P motion correction.
 
-    def __init__(
-        self,
-        imaging: BaseImaging,
-        displacements: Sequence[NDArray[np.floating[Any]]],
-        refAndMasks: Any,
-        ops: dict[str, Any],
-        nonrigid_offsets: Sequence[Sequence[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]]] | None]
-        | Sequence[Sequence[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]] | None]]
-        | None = None,
-        blocks: Sequence[Any] | None = None,
-        yranges: Sequence[Sequence[tuple[int, int]]] | None = None,
-        xranges: Sequence[Sequence[tuple[int, int]]] | None = None,
-        corrected_badframes: Sequence[Sequence[NDArray[np.bool_]]] | None = None,
-        registration_outputs: dict | None = None,
-    ) -> None:
-        """Store displacement fields and metadata produced by Suite2P.
+    This class defines all configuration parameters for motion correction using Suite2P.
+    Values can be provided via constructor, environment variables, or .env file.
+    """
 
-        Parameters
-        ----------
-        imaging : BaseImaging
-            Imaging object associated with the computed motion.
-        displacements : Sequence[NDArray]
-            Per-epoch displacement arrays shaped ``(frames, planes, 2)`` or ``(frames, 2)``.
-        refAndMasks : Any
-            Suite2P reference images returned by ``_compute_reference_wrapper``.
-        ops : dict[str, Any]
-            Suite2P options used during registration.
-        nonrigid_offsets : Sequence | None, optional
-            Per-epoch, per-plane non-rigid offsets.
-            Structure: ``[epoch][plane] -> (yoff1, xoff1)`` each ``(n_frames, n_blocks)``.
-        blocks : Sequence | None, optional
-            Suite2P block definitions when non-rigid registration is enabled.
-        yranges : Sequence | None, optional
-            Per-epoch, per-plane valid pixel row range ``[epoch][plane] -> (ymin, ymax)``.
-        xranges : Sequence | None, optional
-            Per-epoch, per-plane valid pixel column range ``[epoch][plane] -> (xmin, xmax)``.
-        corrected_badframes : Sequence | None, optional
-            Per-epoch, per-plane boolean bad-frame mask ``[epoch][plane] -> (n_frames,)``.
-            Combines the input ``badframes`` with frames flagged by large registration shifts.
-        registration_outputs : dict | None, optional
-            Additional outputs from the registration pipeline.
-        """
+    debug: bool = Field(default=False, description="Run with partial dataset")
+    tmp_dir: str | Path = Field(
+        default=Path("/scratch"),
+        description="Directory into which to write temporary files produced by Suite2P",
+    )
+    data_type: str = Field(default="h5", description="Processing h5 (default) or TIFF timeseries")
+    do_registration: bool = Field(
+        default=True,
+        description="whether to register data (2 forces re-registration)",
+    )
+    batch_size: int = Field(default=500, description="Number of frames per batch")
+    align_by_chan: int = Field(
+        default=1,
+        description="when multi-channel, you can align by non-functional channel (1-based)",
+    )
+    maxregshift: float = Field(
+        default=0.1,
+        description="max allowed registration shift, as a fraction of "
+        "frame max(width and height). This will be ignored if force_refImg is set to True",
+    )
+    force_refImg: bool = Field(default=True, description="Force the use of an external reference image")
+    nonrigid: bool = Field(default=True, description="Whether to use non-rigid registration")
+    block_size: list = Field(default_factory=lambda: [128, 128], description="Block size for non-rigid registration.")
+    snr_thresh: float = Field(
+        default=1.2,
+        description="if any nonrigid block is below this threshold, it gets smoothed "
+        "until above this threshold. 1.0 results in no smoothing",
+    )
+    maxregshiftNR: int = Field(
+        default=5,
+        description="maximum pixel shift allowed for nonrigid, relative to rigid",
+    )
+    outlier_detrend_window: float = Field(
+        default=3.0,
+        description="For outlier rejection in the xoff/yoff outputs of suite2p, the offsets are first de-trended "
+        "with a median filter of this duration [seconds]. "
+        "This value is ~30 or 90 samples in size for 11 and 31 Hz sampling rates respectively.",
+    )
+    outlier_maxregshift: float = Field(
+        default=0.05,
+        description="Units [fraction FOV dim]. After median-filter detrending, outliers more than this value are "
+        "clipped to this value in x and y offset, independently. "
+        "This is similar to Suite2P's internal maxregshift, but allows for low-frequency drift. "
+        "Default value of 0.05 is typically clipping outliers to "
+        "512 * 0.05 = 25 pixels above or below the median trend.",
+    )
+    clip_negative: bool = Field(
+        default=False,
+        description="Whether or not to clip negative pixel values in output. Because the pixel values "
+        "in the raw movies are set by the current coming off a photomultiplier tube, there can "
+        "be pixels with negative values (current has a sign), possibly due to noise in the rig. "
+        "Some segmentation algorithms cannot handle negative values in the movie, so we have this "
+        "option to artificially set those pixels to zero.",
+    )
+    max_reference_iterations: int = Field(
+        default=8,
+        description="Maximum number of iterations for creating a reference image",
+    )
+    auto_remove_empty_frames: bool = Field(
+        default=True,
+        description="Automatically detect empty noise frames at the start and end of the movie. "
+        "Overrides values set in "
+        "trim_frames_start and trim_frames_end. Some movies arrive with otherwise quality data but contain a set of "
+        "frames that are empty and contain pure noise. When processed, these frames tend to receive "
+        "large random shifts that throw off motion border calculation. Turning on this setting automatically "
+        "detects these frames before processing and removes them from reference image creation, automated smoothing "
+        "parameter searches, and finally the motion border calculation. The frames are still written however any "
+        "shift estimated is removed and their shift is set to 0 to avoid large motion borders.",
+    )
+    trim_frames_start: int = Field(
+        default=0,
+        description="Number of frames to remove from the start of the movie if known. "
+        "Removes frames from motion border calculation "
+        "and resets the frame shifts found. Frames are still written to motion correction. Raises an error if "
+        "auto_remove_empty_frames is set and trim_frames_start > 0",
+    )
+    trim_frames_end: int = Field(
+        default=0,
+        description="Number of frames to remove from the end of the movie if known. "
+        "Removes frames from motion border calculation "
+        "and resets the frame shifts found. Frames are still written to motion correction. Raises an error if "
+        "auto_remove_empty_frames is set and trim_frames_start > 0",
+    )
+    do_optimize_motion_params: bool = Field(
+        default=False,
+        description="Do a search for best parameters of smooth_sigma and smooth_sigma_time. "
+        "Adds significant runtime cost to "
+        "motion correction and should only be run once per experiment with the resulting parameters being stored "
+        "for later use.",
+    )
+    smooth_sigma_time: int = Field(
+        default=0,
+        description="gaussian smoothing in time. If do_optimize_motion_params is set, this will be overridden",
+    )
+    smooth_sigma: float = Field(
+        default=1.15,
+        description="~1 good for 2P recordings, recommend 3-5 for 1P recordings. "
+        "If do_optimize_motion_params is set, this will be overridden",
+    )
+    use_ave_image_as_reference: bool = Field(
+        default=False,
+        description="Only available if `do_optimize_motion_params` is set. "
+        "After the a best set of smoothing parameters is found, "
+        "use the resulting average image as the reference for the full registration. This can be used as two step "
+        "registration by setting by setting smooth_sigma_min=smooth_sigma_max and "
+        "smooth_sigma_time_min=smooth_sigma_time_max and steps=1.",
+    )
+    # Additional parameters that were hardcoded in the original code
+    movie_lower_quantile: float = Field(
+        default=0.1,
+        description="Lower quantile threshold for avg projection histogram adjustment of movie",
+    )
+    movie_upper_quantile: float = Field(
+        default=0.999,
+        description="Upper quantile threshold for avg projection histogram adjustment of movie",
+    )
+    preview_frame_bin_seconds: float = Field(
+        default=2.0,
+        description="Before creating the webm, the movies will be averaged into bins of this many seconds",
+    )
+    preview_playback_factor: float = Field(
+        default=10.0,
+        description="The preview movie will playback at this factor times real-time",
+    )
+    n_batches: int = Field(
+        default=20,
+        description="Number of batches to load from the movie for smoothing parameter testing. "
+        "Batches are evenly spaced throughout the movie.",
+    )
+    smooth_sigma_min: float = Field(
+        default=0.65,
+        description="Minimum value of the parameter search for smooth_sigma",
+    )
+    smooth_sigma_max: float = Field(
+        default=2.15,
+        description="Maximum value of the parameter search for smooth_sigma",
+    )
+    smooth_sigma_steps: int = Field(
+        default=4,
+        description="Number of steps to grid between smooth_sigma and smooth_sigma_max",
+    )
+    smooth_sigma_time_min: float = Field(
+        default=0,
+        description="Minimum value of the parameter search for smooth_sigma_time",
+    )
+    smooth_sigma_time_max: float = Field(
+        default=6,
+        description="Maximum value of the parameter search for smooth_sigma_time",
+    )
+    smooth_sigma_time_steps: int = Field(
+        default=7,
+        description="Number of steps to grid between smooth_sigma and smooth_sigma_time_max. "
+        "Large values will add significant time to motion correction",
+    )
+    device: str = Field(
+        default="cpu",
+        description="Torch device for registration: 'cpu', 'cuda', or 'mps'.",
+    )
 
-        self.imaging = imaging
-        self.displacements = displacements
-        self.refAndMasks = refAndMasks
-        self.ops = ops
-        self.nonrigid_offsets = nonrigid_offsets
-        self.blocks = blocks
-        self.yranges = yranges
-        self.xranges = xranges
-        self.corrected_badframes = corrected_badframes
-        self.registration_outputs = registration_outputs
-
-    @property
-    def num_epochs(self) -> int:
-        """Number of epochs represented in the stored displacements."""
-
-        return len(self.displacements)
-
-    def get_displacement_at_frames(
-        self,
-        frame_indices: int | NDArray[np.integer[Any]],
-        plane_index: int | None = None,
-        epoch_index: int = 0,
-    ) -> NDArray[np.floating[Any]]:
-        """Return the (y, x) displacements for the requested frames.
-
-        Parameters
-        ----------
-        frame_indices : int | NDArray[int]
-            Frame index or array of frame indices into the chosen epoch.
-        plane_index : int | None, optional
-            If given, return only that plane's displacements. Otherwise the
-            full ``(n_planes, 2)`` slice is returned for each frame.
-        epoch_index : int, optional
-            Epoch to look up. Defaults to 0.
-
-        Returns
-        -------
-        NDArray
-            Shape ``(n_planes, 2)`` for a scalar ``frame_indices`` with no
-            ``plane_index``; ``(2,)`` if ``plane_index`` is given. For an
-            array of ``frame_indices`` the leading axis is the number of
-            requested frames.
-        """
-        disps = self.displacements[epoch_index]
-        if plane_index is None:
-            return disps[frame_indices]
-        return disps[frame_indices, plane_index]
+    model_config = ConfigDict(env_prefix="SUITE2P_REGISTRATION_", case_sensitive=False, env_file=".env")
 
 
 def _compute_reference_wrapper(
@@ -171,12 +247,12 @@ def compute_motion_suite2p(
     settings: Suite2pRegistrationSettings | dict[str, Any] | None = None,
     badframes: NDArray | None = None,
     **kwargs: Any,
-) -> Suite2PMotion:
+) -> Motion:
     """Pre-compute Suite2P displacements for all planes and epochs.
 
     Computes the reference image and per-frame rigid (and optionally nonrigid)
     shifts without applying them to the data. Shifts are stored in the returned
-    ``Suite2PMotion`` object and applied lazily by ``RegisterSuite2PImagingEpoch``.
+    ``Motion`` object and applied lazily by ``RegisterSuite2PImagingEpoch``.
 
     Parameters
     ----------
@@ -193,7 +269,7 @@ def compute_motion_suite2p(
 
     Returns
     -------
-    Suite2PMotion
+    Motion
         Motion container with per-epoch displacements.
     """
     import torch
@@ -287,10 +363,8 @@ def compute_motion_suite2p(
         if epoch_idx == 0 and epoch_blocks:
             all_blocks = epoch_blocks
 
-        # Always stack to (n_frames, n_planes, 2) — single-plane keeps a length-1 plane axis.
-        disps = np.stack(
-            [np.stack(epoch_yoff, axis=1), np.stack(epoch_xoff, axis=1)], axis=-1
-        )  # (n_frames, n_planes, 2)
+        # Stack planes → always (n_frames, n_planes, 2)
+        disps = np.stack([np.stack(epoch_yoff, axis=1), np.stack(epoch_xoff, axis=1)], axis=-1)
 
         all_displacements.append(disps)
 
@@ -322,7 +396,7 @@ def compute_motion_suite2p(
 
     nonrigid_offsets = all_nonrigid_offsets if any(o is not None for o in all_nonrigid_offsets) else None
 
-    return Suite2PMotion(
+    return Motion(
         imaging=imaging,
         displacements=all_displacements,
         refAndMasks=refImgs,
@@ -338,7 +412,7 @@ def compute_motion_suite2p(
 class RegisterSuite2PImaging(BasePreprocessor):
     """Apply pre-computed Suite2P motion correction on-the-fly."""
 
-    def __init__(self, imaging: BaseImaging, motion: Suite2PMotion, **kwargs: Any) -> None:
+    def __init__(self, imaging: BaseImaging, motion: Motion, **kwargs: Any) -> None:
         """Build an imaging view that applies stored motion fields lazily."""
         BasePreprocessor.__init__(self, imaging)
 
@@ -360,7 +434,7 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
     def __init__(
         self,
         parent_imaging_epoch: BaseImagingEpoch,
-        motion: Suite2PMotion,
+        motion: Motion,
         epoch_index: int,
         **kwargs: Any,
     ) -> None:
@@ -394,9 +468,11 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
             planes_to_process = list(plane_indices)
 
         disps = self.motion.displacements[self.epoch_index]
-        output_planes = []
+        n_frames = end_frame - start_frame
+        H, W = video.shape[1], video.shape[2]
+        output = np.empty((n_frames, H, W, len(planes_to_process)), dtype=np.float32)
 
-        for p in planes_to_process:
+        for i, p in enumerate(planes_to_process):
             plane_video = video[:, :, :, p] if video.ndim == 4 else video
             plane_video = plane_video.astype("float32", copy=True)
 
@@ -445,9 +521,9 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
             if registered_plane.ndim == 2:
                 registered_plane = registered_plane[np.newaxis, :, :]
 
-            output_planes.append(registered_plane)
+            output[..., i] = registered_plane
 
-        return np.stack(output_planes, axis=-1)
+        return output
 
 
 register_suite2p = RegisterSuite2PImaging

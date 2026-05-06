@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from photon_mosaic.core.generators import generate_random_imaging
+from photon_mosaic.core import generate_random_imaging
 from photon_mosaic.preprocessing.basepreprocessor import (
     BasePreprocessor,
     BasePreprocessorEpoch,

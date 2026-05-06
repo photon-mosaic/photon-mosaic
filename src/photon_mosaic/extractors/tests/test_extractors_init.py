@@ -4,7 +4,6 @@ from photon_mosaic.extractors.roiextractors import (
     BaseROIExtractorImagingEpoch,
     get_classes_and_functions_to_import,
 )
-from photon_mosaic.extractors.suite2prois import read_suite2p_rois
 
 
 def test_base_classes_exported():
@@ -12,11 +11,6 @@ def test_base_classes_exported():
     assert hasattr(extractors_module, "BaseROIExtractorImagingEpoch")
     assert extractors_module.BaseROIExtractorImaging is BaseROIExtractorImaging
     assert extractors_module.BaseROIExtractorImagingEpoch is BaseROIExtractorImagingEpoch
-
-
-def test_read_suite2p_rois_exported():
-    assert hasattr(extractors_module, "read_suite2p_rois")
-    assert extractors_module.read_suite2p_rois is read_suite2p_rois
 
 
 def test_all_contains_base_exports():
