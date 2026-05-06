@@ -6,6 +6,7 @@ from photon_mosaic.preprocessing.suite2p_registration import (
     Suite2pRegistrationSettings,
 )
 
+
 class TestSuite2pDefaults:
     @pytest.fixture()
     def settings(self):
