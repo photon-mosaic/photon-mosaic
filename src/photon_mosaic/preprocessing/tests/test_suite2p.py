@@ -4,13 +4,13 @@ from pydantic import ValidationError
 
 from photon_mosaic.core.generators import generate_random_imaging
 from photon_mosaic.core.numpyimaging import NumpyImaging
-from photon_mosaic.preprocessing.baseregistrationsettings import Suite2pRegistrationSettings
-from photon_mosaic.preprocessing.suite2p import (
+from photon_mosaic.preprocessing.suite2p_registration import (
     RegisterSuite2PImaging,
     RegisterSuite2PImagingEpoch,
     Suite2PMotion,
     compute_motion_suite2p,
     register_suite2p,
+    Suite2pRegistrationSettings
 )
 
 
