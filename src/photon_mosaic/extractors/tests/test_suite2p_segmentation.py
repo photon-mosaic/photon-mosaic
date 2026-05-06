@@ -1,13 +1,13 @@
 import numpy as np
 import pytest
 
-from photon_mosaic.core.numpyimaging import NumpyImaging
-from photon_mosaic.segmentation import suite2p as seg
-from photon_mosaic.segmentation.suite2p import (
+from photon_mosaic.core import NumpyImaging
+from photon_mosaic.extractors import (
     Suite2pDetectedRois,
     Suite2pEpochSegmentations,
     detect_rois_suite2p,
 )
+from photon_mosaic.extractors import suite2p_segmentation as seg
 
 
 def _install_fake_inner(monkeypatch):
