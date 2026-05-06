@@ -468,9 +468,11 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
             planes_to_process = list(plane_indices)
 
         disps = self.motion.displacements[self.epoch_index]
-        output_planes = []
+        n_frames = end_frame - start_frame
+        H, W = video.shape[1], video.shape[2]
+        output = np.empty((n_frames, H, W, len(planes_to_process)), dtype=np.float32)
 
-        for p in planes_to_process:
+        for i, p in enumerate(planes_to_process):
             plane_video = video[:, :, :, p] if video.ndim == 4 else video
             plane_video = plane_video.astype("float32", copy=True)
 
@@ -519,9 +521,9 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
             if registered_plane.ndim == 2:
                 registered_plane = registered_plane[np.newaxis, :, :]
 
-            output_planes.append(registered_plane)
+            output[..., i] = registered_plane
 
-        return np.stack(output_planes, axis=-1)
+        return output
 
 
 register_suite2p = RegisterSuite2PImaging
