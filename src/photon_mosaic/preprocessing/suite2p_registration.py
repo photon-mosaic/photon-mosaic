@@ -11,7 +11,6 @@ from pydantic_settings import BaseSettings
 from photon_mosaic.core import BaseImaging, BaseImagingEpoch
 
 from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
-from .baseregistrationsettings import Suite2pRegistrationSettings
 
 
 class Suite2pRegistrationSettings(BaseSettings):
