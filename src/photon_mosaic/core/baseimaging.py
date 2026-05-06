@@ -3,16 +3,16 @@ from math import prod
 import numpy as np
 from numpy.typing import ArrayLike, DTypeLike
 from spikeinterface.core.base import BaseExtractor
-from spikeinterface.core.chunkable import ChunkableMixin, ChunkableSegment
-from spikeinterface.core.chunkable_tools import get_chunks, write_binary
 from spikeinterface.core.core_tools import convert_bytes_to_str, convert_seconds_to_str
+from spikeinterface.core.time_series import TimeSeries, TimeSeriesSegment
+from spikeinterface.core.time_series_tools import get_chunks, write_binary
 
 
-class BaseImaging(BaseExtractor, ChunkableMixin):
+class BaseImaging(BaseExtractor, TimeSeries):
     """
     Base class for imaging extractors.
 
-    The class inherits from `BaseExtractor` and `ChunkableMixin` to provide common functionality
+    The class inherits from `BaseExtractor` and `TimeSeries` to provide common functionality
     for imaging data handling.
 
     Each `BaseImaging` instance is associated to a single "channel".
@@ -461,7 +461,7 @@ class BaseImaging(BaseExtractor, ChunkableMixin):
         return cached
 
 
-class BaseImagingEpoch(ChunkableSegment):
+class BaseImagingEpoch(TimeSeriesSegment):
     """
     Abstract class representing a video epoch.
     """
