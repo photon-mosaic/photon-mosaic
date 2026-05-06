@@ -2,12 +2,10 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from photon_mosaic.core.generators import generate_random_imaging
-from photon_mosaic.core.numpyimaging import NumpyImaging
+from photon_mosaic.core import Motion, NumpyImaging, generate_random_imaging
 from photon_mosaic.preprocessing.suite2p_registration import (
     RegisterSuite2PImaging,
     RegisterSuite2PImagingEpoch,
-    Suite2PMotion,
     Suite2pRegistrationSettings,
     compute_motion_suite2p,
     register_suite2p,
@@ -67,74 +65,6 @@ def _make_shifted_imaging(num_frames, num_planes=1, height=16, width=16, shifts=
     return NumpyImaging(imaging_series=videos, sampling_frequency=sampling_frequency)
 
 
-class TestSuite2PMotion:
-    @pytest.fixture()
-    def imaging_single(self):
-        return generate_random_imaging(
-            num_frames=10,
-            height=8,
-            width=9,
-            num_planes=1,
-            sampling_frequency=30.0,
-            seed=0,
-        )
-
-    @pytest.fixture()
-    def imaging_multi(self):
-        return generate_random_imaging(
-            num_frames=10,
-            height=8,
-            width=9,
-            num_planes=3,
-            sampling_frequency=30.0,
-            seed=1,
-        )
-
-    @pytest.fixture()
-    def motion_single(self, imaging_single):
-        displacements = [np.random.default_rng(0).random((10, 1, 2))]
-        return Suite2PMotion(
-            imaging=imaging_single,
-            displacements=displacements,
-            refAndMasks=("ref", "masks"),
-            ops={"bidiphase": 0},
-            blocks=[None],
-        )
-
-    def test_attributes(self, imaging_single, motion_single):
-        assert motion_single.imaging is imaging_single
-        assert motion_single.num_epochs == 1
-        assert motion_single.refAndMasks == ("ref", "masks")
-        assert motion_single.ops == {"bidiphase": 0}
-
-    def test_num_epochs_matches_displacements(self, imaging_single):
-        disps = [np.zeros((5, 1, 2)), np.zeros((8, 1, 2))]
-        m = Suite2PMotion(imaging_single, disps, None, {})
-        assert m.num_epochs == 2
-
-    def test_get_displacement_at_frames_single_int(self, motion_single):
-        d = motion_single.get_displacement_at_frames(3)
-        assert d.shape == (1, 2)
-        np.testing.assert_array_equal(d, motion_single.displacements[0][3])
-
-    def test_get_displacement_at_frames_array(self, motion_single):
-        indices = np.array([1, 4, 7])
-        d = motion_single.get_displacement_at_frames(indices)
-        assert d.shape == (3, 1, 2)
-        np.testing.assert_array_equal(d, motion_single.displacements[0][indices])
-
-    def test_get_displacement_at_frames_plane_index(self, imaging_multi):
-        disps = [np.random.default_rng(2).random((10, 3, 2))]
-        motion = Suite2PMotion(imaging_multi, disps, None, {})
-        single_val = motion.get_displacement_at_frames(0, plane_index=1)
-        assert single_val.shape == (2,)
-        np.testing.assert_array_equal(single_val, disps[0][0, 1])
-
-        multi_val = motion.get_displacement_at_frames(np.array([2, 5]), plane_index=2)
-        assert multi_val.shape == (2, 2)
-        np.testing.assert_array_equal(multi_val, disps[0][[2, 5], 2])
-
-
 class TestComputeMotionSettingsResolution:
     def test_none_settings_creates_defaults_from_kwargs(self):
         settings = None
@@ -185,7 +115,7 @@ class TestComputeMotionSuite2p:
             num_frames=6, num_planes=1, height=12, width=12, shifts=shifts, sampling_frequency=10.0
         )
         motion = compute_motion_suite2p(imaging, settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=False))
-        assert isinstance(motion, Suite2PMotion)
+        assert isinstance(motion, Motion)
         assert motion.num_epochs == 1
         assert motion.displacements[0].shape == (6, 1, 2)
 
@@ -268,7 +198,7 @@ class TestRegisterSuite2PImaging:
     @pytest.fixture()
     def motion(self, imaging):
         displacements = [np.zeros((10, 1, 2))]
-        return Suite2PMotion(imaging, displacements, ("ref", "masks"), {"bidiphase": 0})
+        return Motion(imaging, displacements, ("ref", "masks"), {"bidiphase": 0})
 
     def test_construction(self, imaging, motion):
         reg = RegisterSuite2PImaging(imaging, motion)
@@ -277,7 +207,7 @@ class TestRegisterSuite2PImaging:
 
     def test_epoch_mismatch_raises(self, imaging):
         displacements = [np.zeros((10, 1, 2)), np.zeros((10, 1, 2))]
-        motion = Suite2PMotion(imaging, displacements, None, {})
+        motion = Motion(imaging, displacements, None, {})
         with pytest.raises(ValueError, match="epochs"):
             RegisterSuite2PImaging(imaging, motion)
 

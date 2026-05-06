@@ -8,7 +8,7 @@ from numpy.typing import NDArray
 from pydantic import ConfigDict, Field
 from pydantic_settings import BaseSettings
 
-from photon_mosaic.core import BaseImaging, BaseImagingEpoch
+from photon_mosaic.core import BaseImaging, BaseImagingEpoch, Motion
 
 from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
 
@@ -182,88 +182,6 @@ class Suite2pRegistrationSettings(BaseSettings):
     model_config = ConfigDict(env_prefix="SUITE2P_REGISTRATION_", case_sensitive=False, env_file=".env")
 
 
-class Suite2PMotion:
-    """Container for Suite2P motion correction artifacts."""
-
-    def __init__(
-        self,
-        imaging: BaseImaging,
-        displacements: Sequence[NDArray[np.floating[Any]]],
-        refAndMasks: Any,
-        ops: dict[str, Any],
-        nonrigid_offsets: Sequence[Sequence[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]]] | None]
-        | Sequence[Sequence[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]] | None]]
-        | None = None,
-        blocks: Sequence[Any] | None = None,
-        yranges: Sequence[Sequence[tuple[int, int]]] | None = None,
-        xranges: Sequence[Sequence[tuple[int, int]]] | None = None,
-        corrected_badframes: Sequence[Sequence[NDArray[np.bool_]]] | None = None,
-        registration_outputs: dict | None = None,
-    ) -> None:
-        """Store displacement fields and metadata produced by Suite2P.
-
-        Parameters
-        ----------
-        imaging : BaseImaging
-            Imaging object associated with the computed motion.
-        displacements : Sequence[NDArray]
-            Per-epoch displacement arrays shaped ``(frames, planes, 2)`` or ``(frames, 2)``.
-        refAndMasks : Any
-            Suite2P reference images returned by ``_compute_reference_wrapper``.
-        ops : dict[str, Any]
-            Suite2P options used during registration.
-        nonrigid_offsets : Sequence | None, optional
-            Per-epoch, per-plane non-rigid offsets.
-            Structure: ``[epoch][plane] -> (yoff1, xoff1)`` each ``(n_frames, n_blocks)``.
-        blocks : Sequence | None, optional
-            Suite2P block definitions when non-rigid registration is enabled.
-        yranges : Sequence | None, optional
-            Per-epoch, per-plane valid pixel row range ``[epoch][plane] -> (ymin, ymax)``.
-        xranges : Sequence | None, optional
-            Per-epoch, per-plane valid pixel column range ``[epoch][plane] -> (xmin, xmax)``.
-        corrected_badframes : Sequence | None, optional
-            Per-epoch, per-plane boolean bad-frame mask ``[epoch][plane] -> (n_frames,)``.
-            Combines the input ``badframes`` with frames flagged by large registration shifts.
-        registration_outputs : dict | None, optional
-            Additional outputs from the registration pipeline.
-        """
-
-        self.imaging = imaging
-        self.displacements = displacements
-        self.refAndMasks = refAndMasks
-        self.ops = ops
-        self.nonrigid_offsets = nonrigid_offsets
-        self.blocks = blocks
-        self.yranges = yranges
-        self.xranges = xranges
-        self.corrected_badframes = corrected_badframes
-        self.registration_outputs = registration_outputs
-
-    @property
-    def num_epochs(self) -> int:
-        """Number of epochs represented in the stored displacements."""
-
-        return len(self.displacements)
-
-    def get_displacement_at_frames(
-        self,
-        frame_indices: int | NDArray[np.integer],
-        plane_index: int | None = None,
-        epoch_index: int = 0,
-    ) -> NDArray[np.floating[Any]]:
-        """Return displacement vectors for the requested frames.
-
-        With ``plane_index=None`` the planes axis is preserved
-        (``(..., n_planes, 2)``); with an integer ``plane_index`` it is dropped
-        (``(..., 2)``).
-        """
-
-        disps = self.displacements[epoch_index]
-        if plane_index is None:
-            return disps[frame_indices]
-        return disps[frame_indices, plane_index]
-
-
 def _compute_reference_wrapper(
     f_align_in: NDArray,
     badframes: NDArray | None,
@@ -329,12 +247,12 @@ def compute_motion_suite2p(
     settings: Suite2pRegistrationSettings | dict[str, Any] | None = None,
     badframes: NDArray | None = None,
     **kwargs: Any,
-) -> Suite2PMotion:
+) -> Motion:
     """Pre-compute Suite2P displacements for all planes and epochs.
 
     Computes the reference image and per-frame rigid (and optionally nonrigid)
     shifts without applying them to the data. Shifts are stored in the returned
-    ``Suite2PMotion`` object and applied lazily by ``RegisterSuite2PImagingEpoch``.
+    ``Motion`` object and applied lazily by ``RegisterSuite2PImagingEpoch``.
 
     Parameters
     ----------
@@ -351,7 +269,7 @@ def compute_motion_suite2p(
 
     Returns
     -------
-    Suite2PMotion
+    Motion
         Motion container with per-epoch displacements.
     """
     import torch
@@ -478,7 +396,7 @@ def compute_motion_suite2p(
 
     nonrigid_offsets = all_nonrigid_offsets if any(o is not None for o in all_nonrigid_offsets) else None
 
-    return Suite2PMotion(
+    return Motion(
         imaging=imaging,
         displacements=all_displacements,
         refAndMasks=refImgs,
@@ -494,7 +412,7 @@ def compute_motion_suite2p(
 class RegisterSuite2PImaging(BasePreprocessor):
     """Apply pre-computed Suite2P motion correction on-the-fly."""
 
-    def __init__(self, imaging: BaseImaging, motion: Suite2PMotion, **kwargs: Any) -> None:
+    def __init__(self, imaging: BaseImaging, motion: Motion, **kwargs: Any) -> None:
         """Build an imaging view that applies stored motion fields lazily."""
         BasePreprocessor.__init__(self, imaging)
 
@@ -516,7 +434,7 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
     def __init__(
         self,
         parent_imaging_epoch: BaseImagingEpoch,
-        motion: Suite2PMotion,
+        motion: Motion,
         epoch_index: int,
         **kwargs: Any,
     ) -> None:
