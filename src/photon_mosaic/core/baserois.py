@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import numpy as np
 from numpy.typing import ArrayLike
 from spikeinterface.core.base import BaseExtractor
@@ -176,7 +179,7 @@ class BaseRois(BaseExtractor):
 
         return pixel_masks
 
-    def select_rois(self, roi_ids: ArrayLike) -> "SelectRois":
+    def select_rois(self, roi_ids: ArrayLike) -> "BaseRois":
         """Select a subset of ROIs.
 
         Parameters
@@ -189,6 +192,8 @@ class BaseRois(BaseExtractor):
         SelectRois
             A new BaseRois object containing only the selected ROIs.
         """
+        from .selectrois import SelectRois
+
         return SelectRois(self, roi_ids)
 
     def register_imaging(self, imaging: BaseImaging):
@@ -235,8 +240,7 @@ class BaseRois(BaseExtractor):
             raise ValueError(f"format {format!r} not supported for BaseRois, use 'binary' or 'zarr'")
 
     def _save_binary(self, **save_kwargs):
-        import json
-        from pathlib import Path
+        from .binaryrois import BinaryFolderRois, BinaryRois
 
         folder = Path(save_kwargs["folder"])
         folder.mkdir(parents=True, exist_ok=True)
@@ -252,36 +256,17 @@ class BaseRois(BaseExtractor):
         with open(folder / "metadata.json", "w") as f:
             json.dump(metadata, f, indent=4)
 
-        # Provenance
-        provenance = dict(
-            class_="photon_mosaic.core.binaryrois.BinaryRois",
-            kwargs=dict(
-                file_path=str((folder / "roi_image_masks.npy").absolute()),
-                sampling_frequency=metadata["sampling_frequency"],
-                roi_ids=self.roi_ids.tolist(),
-                shape=metadata["shape"],
-            ),
+        binary_rois = BinaryRois(
+            file_path=folder / "roi_image_masks.npy",
+            sampling_frequency=self.sampling_frequency,
+            roi_ids=self.roi_ids,
+            shape=self.shape,
         )
-        with open(folder / "binary.json", "w") as f:
-            json.dump(provenance, f, indent=4)
+        binary_rois.dump(folder / "binary.json", relative_to=folder)
 
-        # Save properties
-        properties_folder = folder / "properties"
-        properties_folder.mkdir(exist_ok=True)
-        for key in self.get_property_keys():
-            values = self.get_property(key)
-            np.save(properties_folder / f"{key}.npy", values)
+        cached = BinaryFolderRois(folder_path=folder)
 
-        # Save annotations
-        annotations = self.get_annotation_keys()
-        if annotations:
-            ann_dict = {key: self.get_annotation(key) for key in annotations}
-            with open(folder / "annotations.json", "w") as f:
-                json.dump(ann_dict, f, indent=4)
-
-        from .binaryrois import BinaryFolderRois
-
-        return BinaryFolderRois(folder_path=folder)
+        return cached
 
     def _save_zarr(self, **save_kwargs):
         import zarr
@@ -295,43 +280,6 @@ class BaseRois(BaseExtractor):
         zarr_root = zarr.open(str(zarr_path), mode="w", storage_options=storage_options)
         rois_group = zarr_root.create_group("rois")
         save_rois_to_zarr(self, rois_group, saving_options=saving_options)
-
         zarr.consolidate_metadata(zarr_root.store)
 
-        return ZarrRois(zarr_path, zarr_group_name="rois", storage_options=storage_options)
-
-
-class SelectRois(BaseRois):
-    """Class to select a subset of ROIs from an existing BaseRois object."""
-
-    def __init__(self, rois: BaseRois, roi_ids: ArrayLike):
-        self._source_rois = rois
-        self._selected_roi_ids = np.array(roi_ids)
-
-        # Validate selected ROI IDs
-        source_roi_ids = rois.roi_ids.tolist()
-        for roi_id in self._selected_roi_ids:
-            if roi_id not in source_roi_ids:
-                raise ValueError(f"ROI ID {roi_id} not found in source ROIs.")
-
-        BaseRois.__init__(
-            self,
-            sampling_frequency=rois.sampling_frequency,
-            shape=rois.shape,
-            roi_ids=self._selected_roi_ids,
-        )
-        rois.copy_metadata(self, only_main=False, ids=self.roi_ids)
-        self._parent = rois
-
-        if rois._imaging is not None:
-            self.register_imaging(rois._imaging)
-
-        self._kwargs = dict(rois=rois, roi_ids=roi_ids)
-
-    def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> np.ndarray:
-        if roi_ids is None:
-            roi_ids = self.roi_ids.tolist()
-
-        # Get masks from source rois
-        source_masks = self._source_rois.get_roi_image_masks(roi_ids)
-        return source_masks
+        return ZarrRois(zarr_path, storage_options=storage_options)

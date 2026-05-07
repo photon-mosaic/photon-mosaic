@@ -62,7 +62,7 @@ class FluorescenceExtension(AnalyzerExtension):
 
     def _select_extension_data(self, roi_ids):
         roi_indices = self.roi_analyzer.rois.ids_to_indices(roi_ids)
-        return self.data["fluorescence"][roi_indices]
+        return {"fluorescence": self.data["fluorescence"][:, roi_indices]}
 
 
 class FluorescenceNode(PipelineNode):
