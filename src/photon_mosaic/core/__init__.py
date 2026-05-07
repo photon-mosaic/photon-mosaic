@@ -4,4 +4,4 @@ from .numpyimaging import NumpyImaging
 from .generators import generate_random_imaging, generate_rois
 from .binaryimaging import read_binary
 from .split import SelectEpochImaging, split_epochs
-from .registration import Motion
+from .motion import Motion

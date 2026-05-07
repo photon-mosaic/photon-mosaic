@@ -258,14 +258,14 @@ class Suite2PMotion(Motion):
         blocks: Sequence[Any] | None = None,
         yranges: Sequence[Sequence[tuple[int, int]]] | None = None,
         xranges: Sequence[Sequence[tuple[int, int]]] | None = None,
-        corrected_badframes: Sequence[Sequence[NDArray[np.bool_]]] | None = None,
+        corrected_badframes: Sequence[NDArray[np.bool_]] | None = None,
     ) -> None:
         """Store Suite2P registration outputs.
 
         Parameters
         ----------
         imaging, displacements, reference, yranges, xranges, corrected_badframes
-            See :class:`photon_mosaic.core.registration.Motion`.
+            See :class:`photon_mosaic.core.motion.Motion`.
         ops : dict[str, Any]
             Suite2P options used during registration.
         nonrigid_offsets : Sequence | None, optional
@@ -347,7 +347,7 @@ def compute_motion_suite2p(
     all_nonrigid_offsets: list[list | None] = []
     all_yranges: list[list[tuple[int, int]]] = []
     all_xranges: list[list[tuple[int, int]]] = []
-    all_corrected_badframes: list[list[NDArray]] = []
+    all_corrected_badframes: list[NDArray] = []
 
     for epoch_idx in range(n_epochs):
         epoch = imaging.epochs[epoch_idx]
@@ -438,7 +438,9 @@ def compute_motion_suite2p(
 
         all_yranges.append(epoch_yranges)
         all_xranges.append(epoch_xranges)
-        all_corrected_badframes.append(epoch_cbf)
+        # Bad frames are a property of the time axis (a corrupted volume frame
+        # is bad on all planes) — collapse Suite2P's per-plane masks into one.
+        all_corrected_badframes.append(np.logical_or.reduce(epoch_cbf))
 
     nonrigid_offsets = all_nonrigid_offsets if any(o is not None for o in all_nonrigid_offsets) else None
 

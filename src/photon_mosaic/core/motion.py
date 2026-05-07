@@ -22,7 +22,7 @@ class Motion:
         reference: Any = None,
         yranges: Sequence[Sequence[tuple[int, int]]] | None = None,
         xranges: Sequence[Sequence[tuple[int, int]]] | None = None,
-        corrected_badframes: Sequence[Sequence[NDArray[np.bool_]]] | None = None,
+        corrected_badframes: Sequence[NDArray[np.bool_]] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
         """Store displacement fields and shared metadata.
@@ -43,9 +43,11 @@ class Motion:
             Per-epoch, per-plane valid pixel column range
             ``[epoch][plane] -> (xmin, xmax)``.
         corrected_badframes : Sequence | None, optional
-            Per-epoch, per-plane boolean bad-frame mask
-            ``[epoch][plane] -> (n_frames,)``. Combines any input bad-frame
-            mask with frames flagged by large registration shifts.
+            Per-epoch boolean bad-frame mask ``[epoch] -> (n_frames,)``.
+            Bad frames are treated as a property of the time axis (a corrupted
+            volume frame is bad on all planes), so a single mask per epoch is
+            stored. Combines any input bad-frame mask with frames flagged by
+            large registration shifts.
         metadata : dict | None, optional
             Free-form algorithm-agnostic metadata.
         """
