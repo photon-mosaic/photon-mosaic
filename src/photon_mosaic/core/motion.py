@@ -43,11 +43,11 @@ class Motion:
             Per-epoch, per-plane valid pixel column range
             ``[epoch][plane] -> (xmin, xmax)``.
         corrected_badframes : Sequence | None, optional
-            Per-epoch boolean bad-frame mask ``[epoch] -> (n_frames,)``.
-            Bad frames are treated as a property of the time axis (a corrupted
-            volume frame is bad on all planes), so a single mask per epoch is
-            stored. Combines any input bad-frame mask with frames flagged by
-            large registration shifts.
+            Per-epoch boolean mask of frames to exclude from downstream
+            analysis, shaped ``[epoch] -> (n_frames,)``. Bad frames are treated
+            as a property of the time axis (a corrupted volume frame is bad on
+            all planes), so a single mask per epoch is stored. How the mask is
+            populated depends on the backend.
         metadata : dict | None, optional
             Free-form algorithm-agnostic metadata.
         """

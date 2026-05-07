@@ -264,8 +264,14 @@ class Suite2PMotion(Motion):
 
         Parameters
         ----------
-        imaging, displacements, reference, yranges, xranges, corrected_badframes
+        imaging, displacements, reference, yranges, xranges
             See :class:`photon_mosaic.core.motion.Motion`.
+        corrected_badframes : Sequence | None, optional
+            Per-epoch bad-frame mask (see :class:`photon_mosaic.core.motion.Motion`).
+            For Suite2P this is the union of any caller-supplied ``badframes``
+            with frames whose registration shift exceeded ``maxregshift``,
+            then combined across planes (a frame flagged on any plane is
+            flagged for the whole volume).
         ops : dict[str, Any]
             Suite2P options used during registration.
         nonrigid_offsets : Sequence | None, optional
