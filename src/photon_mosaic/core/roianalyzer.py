@@ -7,19 +7,25 @@ BaseRois and BaseImaging instead of BaseSorting and BaseRecording.
 
 import importlib
 import json
+import os
+import pickle
 import shutil
 import warnings
+import weakref
+from copy import copy
 from itertools import chain
 from pathlib import Path
+from time import perf_counter
 from typing import Any, Literal
 
 import numpy as np
-from spikeinterface.core.baseanalyzer import BaseAnalyzer, BaseAnalyzerExtension
 from spikeinterface.core.core_tools import (
     check_json,
     clean_zarr_folder_name,
     is_path_remote,
+    retrieve_importing_provenance,
 )
+from spikeinterface.core.job_tools import split_job_kwargs
 
 import photon_mosaic
 
@@ -118,7 +124,7 @@ def load_roi_analyzer(
 # ---------------------------------------------------------------------------
 
 
-class RoiAnalyzer(BaseAnalyzer):
+class RoiAnalyzer:
     """Pair BaseRois and BaseImaging for extensible post-processing analysis.
 
     Maintains a collection of computed AnalyzerExtension instances. Supports
@@ -127,9 +133,6 @@ class RoiAnalyzer(BaseAnalyzer):
     Do not instantiate directly — use :func:`create_roi_analyzer` or
     :meth:`RoiAnalyzer.create`.
     """
-
-    _input_name = "imaging"
-    _output_name = "rois"
 
     def __init__(
         self,
@@ -140,71 +143,17 @@ class RoiAnalyzer(BaseAnalyzer):
         backend_options: dict | None = None,
     ):
         # Fast init — validation is done in create / load
-        self._init_base(
-            output_extractor=rois,
-            input_extractor=imaging,
-            input_attributes=imaging_attributes,
-            format=format,
-            backend_options=backend_options,
-        )
+        self.rois = rois
+        self._imaging = imaging
+        self.imaging_attributes = imaging_attributes
+        self.format = format
+        self.folder: str | Path | None = None
 
-    # ------------------------------------------------------------------
-    # Property aliases (map generic base names to PM terminology)
-    # ------------------------------------------------------------------
+        self._temporary_imaging: BaseImaging | None = None
+        self._backend_options = {} if backend_options is None else backend_options
 
-    @property
-    def rois(self):
-        return self._output_extractor
-
-    @rois.setter
-    def rois(self, value):
-        self._output_extractor = value
-
-    @property
-    def imaging_attributes(self):
-        return self._input_attributes
-
-    @imaging_attributes.setter
-    def imaging_attributes(self, value):
-        self._input_attributes = value
-
-    @property
-    def _imaging(self):
-        return self._input_extractor
-
-    @_imaging.setter
-    def _imaging(self, value):
-        self._input_extractor = value
-
-    @property
-    def _temporary_imaging(self):
-        return self._temporary_input
-
-    @_temporary_imaging.setter
-    def _temporary_imaging(self, value):
-        self._temporary_input = value
-
-    # ------------------------------------------------------------------
-    # Registry hooks (delegate to module-level functions)
-    # ------------------------------------------------------------------
-
-    def _get_extension_class(self, extension_name):
-        return get_extension_class(extension_name)
-
-    def _get_children_dependencies(self, extension_name):
-        return _get_children_dependencies(extension_name)
-
-    def _sort_extensions_by_dependency(self, extensions):
-        return _sort_extensions_by_dependency(extensions)
-
-    def _get_available_extensions(self):
-        return get_available_analyzer_extensions()
-
-    def _get_default_extension_params(self, extension_name):
-        return get_default_analyzer_extension_params(extension_name)
-
-    def _get_extra_pipeline_kwargs(self):
-        return {"check_for_peak_source": False}
+        # Extensions are not loaded at init
+        self.extensions: dict[str, AnalyzerExtension] = dict()
 
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
@@ -433,7 +382,11 @@ class RoiAnalyzer(BaseAnalyzer):
     # Zarr backend
     # ------------------------------------------------------------------
 
-    # _get_zarr_root is inherited from BaseAnalyzer
+    def _get_zarr_root(self, mode="r+"):
+        from spikeinterface.core.zarrextractors import super_zarr_open
+
+        storage_options = self._backend_options.get("storage_options", {})
+        return super_zarr_open(str(self.folder), mode=mode, storage_options=storage_options)
 
     @classmethod
     def create_zarr(cls, folder, rois, imaging, imaging_attributes, backend_options):
@@ -766,7 +719,11 @@ class RoiAnalyzer(BaseAnalyzer):
 
     @property
     def imaging(self) -> BaseImaging:
-        return self.input_extractor
+        if not self.has_imaging() and not self.has_temporary_imaging():
+            raise ValueError("RoiAnalyzer could not load the imaging")
+        imaging = self._temporary_imaging or self._imaging
+        assert imaging is not None
+        return imaging
 
     @property
     def roi_ids(self) -> np.ndarray:
@@ -787,10 +744,10 @@ class RoiAnalyzer(BaseAnalyzer):
         return self.shape[2]
 
     def has_imaging(self) -> bool:
-        return self.has_input()
+        return self._imaging is not None
 
     def has_temporary_imaging(self) -> bool:
-        return self.has_temporary_input()
+        return self._temporary_imaging is not None
 
     def get_num_rois(self) -> int:
         return self.rois.get_num_rois()
@@ -820,7 +777,16 @@ class RoiAnalyzer(BaseAnalyzer):
     def get_dtype(self):
         return np.dtype(self.imaging_attributes["dtype"])
 
-    # is_read_only is inherited from BaseAnalyzer
+    def is_read_only(self) -> bool:
+        if self.format == "memory":
+            return False
+        assert self.folder is not None
+        if self.format == "binary_folder":
+            return not os.access(self.folder, os.W_OK)
+        else:
+            if not is_path_remote(str(self.folder)):
+                return not os.access(self.folder, os.W_OK)
+            return False
 
     def get_rois_provenance(self):
         """Get the original rois object if possible, otherwise None."""
@@ -853,12 +819,266 @@ class RoiAnalyzer(BaseAnalyzer):
     # ------------------------------------------------------------------
     # Extension management
     # ------------------------------------------------------------------
-    # compute, compute_one_extension, compute_several_extensions,
-    # get_saved_extension_names, get_extension, load_extension,
-    # load_all_saved_extension, delete_extension,
-    # get_loaded_extension_names, has_extension,
-    # get_computable_extensions, get_default_extension_params
-    # are all inherited from BaseAnalyzer
+
+    def compute(self, input, save=True, extension_params=None, verbose=False, **kwargs) -> "AnalyzerExtension | None":
+        """Compute one or several extensions.
+
+        Parameters
+        ----------
+        input : str | dict | list
+            Extension name (str), dict of {name: params}, or list of names.
+        save : bool, default: True
+            Whether to persist computed extensions.
+        extension_params : dict | None
+            Per-extension params when ``input`` is a list.
+        verbose : bool
+            Print progress.
+        **kwargs
+            Passed to the extension's ``set_params`` (if str) or as job_kwargs.
+
+        Returns
+        -------
+        AnalyzerExtension | None
+            The extension instance if input is a string, None otherwise.
+        """
+        if isinstance(input, str):
+            return self.compute_one_extension(extension_name=input, save=save, verbose=verbose, **kwargs)
+        elif isinstance(input, dict):
+            params_, job_kwargs = split_job_kwargs(kwargs)
+            assert len(params_) == 0, f"Unexpected arguments: {set(params_)}"
+            self.compute_several_extensions(extensions=input, save=save, verbose=verbose, **job_kwargs)
+        elif isinstance(input, list):
+            params_, job_kwargs = split_job_kwargs(kwargs)
+            assert len(params_) == 0, f"Unexpected arguments: {set(params_)}"
+            extensions: dict[str, dict[str, Any]] = {k: {} for k in input}
+            if extension_params is not None:
+                for name, params in extension_params.items():
+                    assert name in input, f"Extension '{name}' not in input list"
+                    extensions[name] = params
+            self.compute_several_extensions(extensions=extensions, save=save, verbose=verbose, **job_kwargs)
+        else:
+            raise ValueError("compute() expects a str, dict, or list")
+        return None
+
+    def compute_one_extension(self, extension_name, save=True, verbose=False, **kwargs) -> "AnalyzerExtension":
+        """Compute a single extension.
+
+        Automatically deletes dependent extensions to keep data coherent.
+        """
+        extension_class = get_extension_class(extension_name)
+
+        # Delete children that depend on this extension
+        for child in _get_children_dependencies(extension_name):
+            if self.has_extension(child):
+                if verbose:
+                    print(f"Deleting extension: {child}")
+                self.delete_extension(child)
+
+        params, job_kwargs = split_job_kwargs(kwargs)
+
+        # Check dependencies
+        if extension_class.need_imaging:
+            assert (
+                self.has_imaging() or self.has_temporary_imaging()
+            ), f"Extension '{extension_name}' requires the imaging"
+        for dep in extension_class.get_required_dependencies(**params):
+            if "|" in dep:
+                ok = any(self.get_extension(d) is not None for d in dep.split("|"))
+            else:
+                ok = self.get_extension(dep) is not None
+            assert ok, f"Extension '{extension_name}' requires '{dep}' to be computed first"
+
+        ext_instance = extension_class(self)
+        ext_instance.set_params(save=save, **params)
+        if extension_class.need_job_kwargs:
+            ext_instance.run(save=save, verbose=verbose, **job_kwargs)
+        else:
+            ext_instance.run(save=save, verbose=verbose)
+
+        self.extensions[extension_name] = ext_instance
+        return ext_instance
+
+    def compute_several_extensions(self, extensions, save=True, verbose=False, **job_kwargs):
+        """Compute several extensions respecting dependency order.
+
+        Parameters
+        ----------
+        extensions : dict
+            Mapping of extension_name -> params dict.
+        save : bool
+            Whether to persist.
+        verbose : bool
+            Print progress.
+        **job_kwargs
+            Parallelization kwargs.
+        """
+        # Validate dependencies
+        ext_names = list(extensions.keys())
+        for name, params in extensions.items():
+            for dep in get_extension_class(name).get_required_dependencies(**params):
+                if "|" in dep:
+                    ok = any(self.has_extension(d) or d in ext_names for d in dep.split("|"))
+                else:
+                    ok = self.has_extension(dep) or dep in ext_names
+                assert ok, f"Extension '{name}' requires '{dep}' to be computed first"
+
+        sorted_exts = _sort_extensions_by_dependency(extensions)
+
+        # Delete children of all extensions we're about to recompute
+        for name in sorted_exts:
+            for child in _get_children_dependencies(name):
+                if verbose:
+                    print(f"Deleting extension: {child}")
+                self.delete_extension(child)
+
+        # Group: pipeline vs non-pipeline
+        pipeline_exts = {}
+        pre_pipeline_exts = {}
+        post_pipeline_exts = {}
+        for name, params in sorted_exts.items():
+            ext_class = get_extension_class(name)
+            if ext_class.use_nodepipeline:
+                pipeline_exts[name] = params
+            elif any(
+                get_extension_class(d).use_nodepipeline
+                for d in ext_class.get_any_dependencies(**params)
+                if d in sorted_exts
+            ):
+                post_pipeline_exts[name] = params
+            else:
+                pre_pipeline_exts[name] = params
+
+        # Pre-pipeline
+        for name, params in pre_pipeline_exts.items():
+            ext_class = get_extension_class(name)
+            if ext_class.need_job_kwargs:
+                self.compute_one_extension(name, save=save, verbose=verbose, **params, **job_kwargs)
+            else:
+                self.compute_one_extension(name, save=save, verbose=verbose, **params)
+
+        # Pipeline extensions (run together via node pipeline)
+        if len(pipeline_exts) > 0:
+            from spikeinterface.core.node_pipeline import run_node_pipeline
+
+            all_nodes = []
+            result_routage = []
+            instances = {}
+
+            for name, params in pipeline_exts.items():
+                ext_class = get_extension_class(name)
+                assert self.has_imaging() or self.has_temporary_imaging(), f"Extension '{name}' requires the imaging"
+                for var in ext_class.nodepipeline_variables:
+                    result_routage.append((name, var))
+
+                inst = ext_class(self)
+                inst.set_params(save=save, **params)
+                instances[name] = inst
+                all_nodes.extend(inst.get_pipeline_nodes())
+
+            job_name = "Compute: " + " + ".join(pipeline_exts.keys())
+            t0 = perf_counter()
+            results = run_node_pipeline(
+                self.imaging,
+                all_nodes,
+                job_kwargs=job_kwargs,
+                job_name=job_name,
+                gather_mode="memory",
+                squeeze_output=False,
+                verbose=verbose,
+                check_for_peak_source=False,
+            )
+            runtime_s = perf_counter() - t0
+
+            for r, result in enumerate(results):
+                ext_name, var_name = result_routage[r]
+                instances[ext_name].data[var_name] = result
+                instances[ext_name].run_info["runtime_s"] = runtime_s
+                instances[ext_name].run_info["run_completed"] = True
+
+            for name, inst in instances.items():
+                self.extensions[name] = inst
+                if save:
+                    inst.save()
+
+        # Post-pipeline
+        for name, params in post_pipeline_exts.items():
+            ext_class = get_extension_class(name)
+            if ext_class.need_job_kwargs:
+                self.compute_one_extension(name, save=save, verbose=verbose, **params, **job_kwargs)
+            else:
+                self.compute_one_extension(name, save=save, verbose=verbose, **params)
+
+    def get_saved_extension_names(self) -> list[str]:
+        """Get extension names saved on disk (without loading data)."""
+        saved = []
+        if self.format == "binary_folder":
+            assert isinstance(self.folder, Path)
+            ext_folder = self.folder / "extensions"
+            if ext_folder.is_dir():
+                for d in ext_folder.iterdir():
+                    if d.is_dir() and (d / "params.json").is_file():
+                        saved.append(d.stem)
+        elif self.format == "zarr":
+            zarr_root = self._get_zarr_root(mode="r")
+            if "extensions" in zarr_root.keys():
+                for name in zarr_root["extensions"].keys():
+                    if "params" in zarr_root["extensions"][name].attrs.keys():
+                        saved.append(name)
+        return saved
+
+    def get_extension(self, extension_name: str) -> "AnalyzerExtension | None":
+        """Get an extension, auto-loading from disk if needed. Returns None if not computed."""
+        if extension_name in self.extensions:
+            return self.extensions[extension_name]
+        elif self.format != "memory" and self.has_extension(extension_name):
+            self.load_extension(extension_name)
+            return self.extensions[extension_name]
+        return None
+
+    def load_extension(self, extension_name: str) -> "AnalyzerExtension | None":
+        """Load an extension from disk into memory."""
+        assert self.format != "memory", "load_extension() is for non-memory formats"
+
+        extension_class = get_extension_class(extension_name)
+        if extension_class is None:
+            return None
+
+        ext_instance = extension_class.load(self)
+        self.extensions[extension_name] = ext_instance
+        return ext_instance
+
+    def load_all_saved_extension(self):
+        """Load all saved extensions into memory."""
+        for name in self.get_saved_extension_names():
+            self.load_extension(name)
+
+    def delete_extension(self, extension_name) -> None:
+        """Delete an extension from memory and from disk."""
+        if self.format != "memory" and self.has_extension(extension_name):
+            ext = self.load_extension(extension_name)
+            if ext is not None:
+                ext.delete()
+        self.extensions.pop(extension_name, None)
+
+    def get_loaded_extension_names(self) -> list[str]:
+        """Return names of currently loaded extensions."""
+        return list(self.extensions.keys())
+
+    def has_extension(self, extension_name: str) -> bool:
+        """Check if an extension exists (in memory or on disk)."""
+        if extension_name in self.extensions:
+            return True
+        if self.format == "memory":
+            return False
+        return extension_name in self.get_saved_extension_names()
+
+    def get_computable_extensions(self) -> list[str]:
+        """List all registered extension names."""
+        return get_available_analyzer_extensions()
+
+    def get_default_extension_params(self, extension_name: str) -> dict:
+        """Get default params for an extension."""
+        return get_default_analyzer_extension_params(extension_name)
 
 
 # ---------------------------------------------------------------------------
@@ -973,13 +1193,8 @@ def get_default_analyzer_extension_params(extension_name: str) -> dict:
 # ---------------------------------------------------------------------------
 
 
-class AnalyzerExtension(BaseAnalyzerExtension):
-    """Extension class for RoiAnalyzer.
-
-    Adds RoiAnalyzer-specific features on top of BaseAnalyzerExtension:
-      * ``roi_analyzer`` property
-      * ``need_imaging`` attribute
-      * ``function_factory()`` for backwards-compatible ``compute_xxx()`` helpers
+class AnalyzerExtension:
+    """Base class for RoiAnalyzer extensions.
 
     Subclasses must set ``extension_name`` and implement:
 
@@ -993,47 +1208,413 @@ class AnalyzerExtension(BaseAnalyzerExtension):
     * ``_get_pipeline_nodes()`` — if ``use_nodepipeline = True``
     """
 
+    extension_name: str | None = None
+    depend_on: list[str] = []
     need_imaging = False
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        # Sync PM-specific need_imaging → generic need_input
-        if "need_imaging" in cls.__dict__:
-            cls.need_input = cls.__dict__["need_imaging"]
+    use_nodepipeline = False
+    nodepipeline_variables = None
+    need_job_kwargs = False
+    need_backward_compatibility_on_load = False
 
     def __init__(self, roi_analyzer):
-        super().__init__(roi_analyzer)
+        self._roi_analyzer = weakref.ref(roi_analyzer)
+        self.params = None
+        self.run_info = self._default_run_info_dict()
+        self.data = dict()
+
+    def _default_run_info_dict(self):
+        return dict(run_completed=False, runtime_s=None)
 
     # ------------------------------------------------------------------
-    # PM-specific properties
+    # Abstract methods — subclasses must implement these
+    # ------------------------------------------------------------------
+
+    def _run(self, **kwargs):
+        raise NotImplementedError
+
+    def _set_params(self, **params):
+        raise NotImplementedError
+
+    def _select_extension_data(self, roi_ids):
+        raise NotImplementedError
+
+    def _get_pipeline_nodes(self):
+        raise NotImplementedError
+
+    def _get_data(self):
+        raise NotImplementedError
+
+    def _handle_backward_compatibility_on_load(self):
+        pass
+
+    # ------------------------------------------------------------------
+    # Properties
     # ------------------------------------------------------------------
 
     @property
     def roi_analyzer(self):
-        return self.analyzer
+        analyzer = self._roi_analyzer()
+        if analyzer is None:
+            raise ValueError(f"Extension '{self.extension_name}' lost its RoiAnalyzer (garbage collected)")
+        return analyzer
+
+    @property
+    def format(self):
+        return self.roi_analyzer.format
+
+    @property
+    def folder(self):
+        return self.roi_analyzer.folder
 
     # ------------------------------------------------------------------
-    # CSV index coercion hook
+    # Dependency introspection
     # ------------------------------------------------------------------
 
-    def _get_entity_ids(self):
-        return self.roi_analyzer.roi_ids
+    @classmethod
+    def get_required_dependencies(cls, **params):
+        return cls.depend_on
 
-    # ------------------------------------------------------------------
-    # Copy with PM parameter name
-    # ------------------------------------------------------------------
+    @classmethod
+    def get_optional_dependencies(cls, **params):
+        return []
 
-    def copy(self, new_roi_analyzer, roi_ids=None):
-        """Copy this extension to a new RoiAnalyzer, optionally filtering to roi_ids."""
-        return super().copy(new_roi_analyzer, ids=roi_ids)
-
-    # ------------------------------------------------------------------
-    # Override get_default_params to use the module-level function
-    # ------------------------------------------------------------------
+    @classmethod
+    def get_any_dependencies(cls, **params):
+        required = cls.get_required_dependencies(**params)
+        optional = cls.get_optional_dependencies(**params)
+        return list(chain.from_iterable(d.split("|") for d in required + optional))
 
     @classmethod
     def get_default_params(cls):
         return get_default_analyzer_extension_params(cls.extension_name)
+
+    # ------------------------------------------------------------------
+    # Load / save
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def load(cls, roi_analyzer):
+        ext = cls(roi_analyzer)
+        ext.load_params()
+        ext.load_run_info()
+        if ext.run_info is not None and ext.run_info["run_completed"]:
+            ext.load_data()
+            if cls.need_backward_compatibility_on_load:
+                ext._handle_backward_compatibility_on_load()
+            if len(ext.data) > 0:
+                return ext
+        else:
+            ext.load_data()
+            if cls.need_backward_compatibility_on_load:
+                ext._handle_backward_compatibility_on_load()
+            if len(ext.data) > 0:
+                return ext
+        return None
+
+    def load_run_info(self):
+        run_info = None
+        if self.format == "binary_folder":
+            path = self._get_binary_extension_folder() / "run_info.json"
+            if path.is_file():
+                with open(path) as f:
+                    run_info = json.load(f)
+        elif self.format == "zarr":
+            group = self._get_zarr_extension_group(mode="r")
+            run_info = group.attrs.get("run_info", None)
+        if run_info is None:
+            warnings.warn(f"No run_info for '{self.extension_name}'; extension should be re-computed.")
+        self.run_info = run_info
+
+    def load_params(self):
+        if self.format == "binary_folder":
+            path = self._get_binary_extension_folder() / "params.json"
+            assert path.is_file(), f"No params file for extension '{self.extension_name}'"
+            with open(path) as f:
+                self.params = json.load(f)
+        elif self.format == "zarr":
+            group = self._get_zarr_extension_group(mode="r")
+            assert "params" in group.attrs, f"No params for extension '{self.extension_name}'"
+            self.params = group.attrs["params"]
+
+    def load_data(self):
+        try:
+            import pandas as pd
+
+            HAS_PANDAS = True
+        except ImportError:
+            HAS_PANDAS = False
+
+        if self.format == "binary_folder":
+            folder = self._get_binary_extension_folder()
+            for fpath in folder.iterdir():
+                if fpath.name in ("params.json", "info.json", "run_info.json") or fpath.name.startswith("._"):
+                    continue
+                name = fpath.stem
+                if fpath.suffix == ".json":
+                    with fpath.open() as f:
+                        self.set_data(name, json.load(f))
+                elif fpath.suffix == ".npy":
+                    self.set_data(name, np.load(fpath))
+                elif fpath.suffix == ".csv" and HAS_PANDAS:
+                    df = pd.read_csv(fpath, index_col=0)
+                    roi_ids = self.roi_analyzer.roi_ids
+                    if df.shape[0] == roi_ids.size and df.index.dtype != roi_ids.dtype:
+                        df.index = df.index.astype(roi_ids.dtype)
+                    self.set_data(name, df)
+                elif fpath.suffix == ".pkl":
+                    with fpath.open("rb") as f:
+                        self.set_data(name, pickle.load(f))
+
+        elif self.format == "zarr":
+            group = self._get_zarr_extension_group(mode="r")
+            for name in group.keys():
+                item = group[name]
+                if "dict" in item.attrs:
+                    self.set_data(name, item[0])
+                elif "dataframe" in item.attrs:
+                    if HAS_PANDAS:
+                        index = item["index"]
+                        df = pd.DataFrame(index=index)
+                        for col in item.keys():
+                            if col != "index":
+                                df[col] = item[col][:]
+                        self.set_data(name, df.convert_dtypes())
+                elif "object" in item.attrs:
+                    self.set_data(name, item[0])
+                else:
+                    self.set_data(name, np.array(item))
+
+        if len(self.data) == 0:
+            warnings.warn(f"No data for '{self.extension_name}'; extension should be re-computed.")
+
+    def run(self, save=True, **kwargs):
+        if save and not self.roi_analyzer.is_read_only():
+            self._save_params()
+            self._save_importing_provenance()
+
+        t0 = perf_counter()
+        self._run(**kwargs)
+        self.run_info["runtime_s"] = perf_counter() - t0
+        self.run_info["run_completed"] = True
+
+        if save and not self.roi_analyzer.is_read_only():
+            self._save_run_info()
+            self._save_data()
+            if self.format == "zarr":
+                import zarr
+
+                zarr.consolidate_metadata(self.roi_analyzer._get_zarr_root().store)
+
+    def save(self):
+        self._save_params()
+        self._save_importing_provenance()
+        self._save_run_info()
+        self._save_data()
+        if self.format == "zarr":
+            import zarr
+
+            zarr.consolidate_metadata(self.roi_analyzer._get_zarr_root().store)
+
+    def copy(self, new_roi_analyzer, roi_ids=None):
+        """Copy this extension to a new RoiAnalyzer, optionally filtering to roi_ids."""
+        new_ext = self.__class__(new_roi_analyzer)
+        new_ext.params = self.params.copy()
+        if roi_ids is None:
+            new_ext.data = self.data
+        else:
+            new_ext.data = self._select_extension_data(roi_ids)
+        new_ext.run_info = copy(self.run_info)
+        new_ext.save()
+        return new_ext
+
+    def delete(self):
+        """Delete extension from disk and clear in-memory data."""
+        self._delete_extension_folder()
+        self.params = None
+        self.run_info = self._default_run_info_dict()
+        self.data = dict()
+
+    def reset(self):
+        """Reset extension: clear data and recreate empty folder."""
+        self._reset_extension_folder()
+        self.params = None
+        self.run_info = self._default_run_info_dict()
+        self.data = dict()
+
+    def set_params(self, save=True, **params):
+        """Set parameters and optionally persist."""
+        if save:
+            self._reset_extension_folder()
+        params = self._set_params(**params)
+        self.params = params
+        if self.roi_analyzer.is_read_only():
+            return
+        if save:
+            self._save_params()
+            self._save_importing_provenance()
+
+    def get_data(self, *args, **kwargs):
+        if self.run_info is not None:
+            assert self.run_info[
+                "run_completed"
+            ], f"Extension '{self.extension_name}' must be run before retrieving data"
+        assert len(self.data) > 0, "Extension has been run but no data found."
+        return self._get_data(*args, **kwargs)
+
+    def set_data(self, name, value):
+        self.data[name] = value
+
+    def get_pipeline_nodes(self):
+        assert self.use_nodepipeline, "get_pipeline_nodes() requires use_nodepipeline=True"
+        return self._get_pipeline_nodes()
+
+    # ------------------------------------------------------------------
+    # Folder / zarr helpers
+    # ------------------------------------------------------------------
+
+    def _get_binary_extension_folder(self):
+        return self.folder / "extensions" / self.extension_name
+
+    def _get_zarr_extension_group(self, mode="r+"):
+        zarr_root = self.roi_analyzer._get_zarr_root(mode=mode)
+        return zarr_root["extensions"][self.extension_name]
+
+    def _reset_extension_folder(self):
+        if self.format == "binary_folder":
+            folder = self._get_binary_extension_folder()
+            if folder.is_dir():
+                shutil.rmtree(folder)
+            folder.mkdir(exist_ok=False, parents=True)
+        elif self.format == "zarr":
+            import zarr
+
+            zarr_root = self.roi_analyzer._get_zarr_root(mode="r+")
+            zarr_root["extensions"].create_group(self.extension_name, overwrite=True)
+            zarr.consolidate_metadata(zarr_root.store)
+
+    def _delete_extension_folder(self):
+        if self.format == "binary_folder":
+            folder = self._get_binary_extension_folder()
+            if folder.is_dir():
+                shutil.rmtree(folder)
+        elif self.format == "zarr":
+            import zarr
+
+            zarr_root = self.roi_analyzer._get_zarr_root(mode="r+")
+            if self.extension_name in zarr_root["extensions"]:
+                del zarr_root["extensions"][self.extension_name]
+                zarr.consolidate_metadata(zarr_root.store)
+
+    def _save_params(self):
+        params_to_save = self.params.copy()
+        self._reset_extension_folder()
+
+        if self.format == "binary_folder":
+            folder = self._get_binary_extension_folder()
+            folder.mkdir(exist_ok=True, parents=True)
+            (folder / "params.json").write_text(json.dumps(check_json(params_to_save), indent=4), encoding="utf8")
+        elif self.format == "zarr":
+            group = self._get_zarr_extension_group(mode="r+")
+            group.attrs["params"] = check_json(params_to_save)
+
+    def _save_importing_provenance(self):
+        info = retrieve_importing_provenance(self.__class__)
+        if self.format == "binary_folder":
+            folder = self._get_binary_extension_folder()
+            folder.mkdir(exist_ok=True, parents=True)
+            (folder / "info.json").write_text(json.dumps(info, indent=4), encoding="utf8")
+        elif self.format == "zarr":
+            group = self._get_zarr_extension_group(mode="r+")
+            group.attrs["info"] = info
+
+    def _save_run_info(self):
+        if self.run_info is None:
+            return
+        run_info = self.run_info.copy()
+        if self.format == "binary_folder":
+            folder = self._get_binary_extension_folder()
+            (folder / "run_info.json").write_text(json.dumps(run_info, indent=4), encoding="utf8")
+        elif self.format == "zarr":
+            group = self._get_zarr_extension_group(mode="r+")
+            group.attrs["run_info"] = run_info
+
+    def _save_data(self):
+        if self.format == "memory":
+            return
+        if self.roi_analyzer.is_read_only():
+            raise ValueError(f"RoiAnalyzer is read-only; cannot save extension '{self.extension_name}'")
+
+        try:
+            import pandas as pd
+
+            HAS_PANDAS = True
+        except ImportError:
+            HAS_PANDAS = False
+
+        if self.format == "binary_folder":
+            folder = self._get_binary_extension_folder()
+            for name, data in self.data.items():
+                if isinstance(data, dict):
+                    with (folder / f"{name}.json").open("w") as f:
+                        json.dump(check_json(data), f)
+                elif isinstance(data, np.ndarray):
+                    data_file = folder / f"{name}.npy"
+                    if isinstance(data, np.memmap) and data_file.exists():
+                        pass  # already on disk
+                    else:
+                        np.save(data_file, data)
+                elif HAS_PANDAS and isinstance(data, pd.DataFrame):
+                    data.to_csv(folder / f"{name}.csv", index=True)
+                else:
+                    try:
+                        with (folder / f"{name}.pkl").open("wb") as f:
+                            pickle.dump(data, f)
+                    except Exception:
+                        raise Exception(f"Could not save '{name}' as extension data")
+
+        elif self.format == "zarr":
+            import numcodecs
+            from spikeinterface.core.zarrextractors import get_default_zarr_compressor
+
+            saving_options = self.roi_analyzer._backend_options.get("saving_options", {})
+            group = self._get_zarr_extension_group(mode="r+")
+            if "compressor" not in saving_options:
+                saving_options["compressor"] = get_default_zarr_compressor()
+
+            for name, data in self.data.items():
+                if name in group:
+                    del group[name]
+                if isinstance(data, (dict, list)):
+                    group.create_dataset(
+                        name=name,
+                        data=np.array([check_json(data)], dtype=object),
+                        object_codec=numcodecs.JSON(),
+                    )
+                    group[name].attrs["dict"] = True
+                elif isinstance(data, np.ndarray):
+                    group.create_dataset(name=name, data=data, **saving_options)
+                elif HAS_PANDAS and isinstance(data, pd.DataFrame):
+                    df_group = group.create_group(name)
+                    indices = data.index.to_numpy()
+                    if indices.dtype.kind == "O":
+                        indices = indices.astype(str)
+                    df_group.create_dataset(name="index", data=indices)
+                    for col in data.columns:
+                        col_data = data[col].to_numpy()
+                        if col_data.dtype.kind == "O":
+                            col_data = col_data.astype(str)
+                        df_group.create_dataset(name=col, data=col_data)
+                    df_group.attrs["dataframe"] = True
+                else:
+                    try:
+                        group.create_dataset(
+                            name=name,
+                            data=np.array([data], dtype=object),
+                            object_codec=numcodecs.Pickle(),
+                        )
+                    except Exception:
+                        raise Exception(f"Could not save '{name}' as extension data")
+                    group[name].attrs["object"] = True
 
     # ------------------------------------------------------------------
     # Function factory for backwards-compatible compute_xxx() helpers
