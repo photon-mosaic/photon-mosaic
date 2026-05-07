@@ -130,3 +130,101 @@ def generate_rois(
 
     roi_ids = np.arange(num_rois) if roi_ids is None else roi_ids
     return NumpyRois(roi_image_masks=roi_masks, roi_ids=roi_ids, sampling_frequency=sampling_frequency)
+
+
+def generate_imaging_with_rois(
+    num_frames: int = 1000,
+    height: int = 256,
+    width: int = 256,
+    num_planes: int = 1,
+    num_rois: int = 20,
+    radius_range: tuple[int, int] | tuple[int, int, int] = (5, 15),
+    sampling_frequency: float = 30.0,
+    decay_seconds: float = 2.0,
+    weighted_rois: bool = False,
+    seed: int | None = None,
+) -> tuple[BaseRois, NumpyImaging]:
+    """Generate a random NumpyImaging object and corresponding ROIs with fluorescence activity.
+
+    Creates synthetic imaging data with exponentially decaying fluorescence bumps
+    injected at random times for each ROI.
+
+    Parameters
+    ----------
+    num_frames : int, default: 1000
+        Number of frames in the imaging data.
+    height : int, default: 256
+        Height of each frame in pixels.
+    width : int, default: 256
+        Width of each frame in pixels.
+    num_planes : int, default: 1
+        Number of imaging planes.
+    num_rois : int, default: 20
+        Number of ROIs to generate.
+    radius_range : tuple[int, int] | tuple[int, int, int], default: (5, 15)
+        Range of radii for circular ROIs.
+    sampling_frequency : float, default: 30.0
+        Sampling frequency in Hz.
+    decay_seconds : float, default: 2.0
+        Duration of exponential decay for fluorescence events in seconds.
+    weighted_rois : bool, default: False
+        Whether to create weighted masks.
+    seed : int | None, default: None
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    rois : BaseRois
+        The generated ROIs.
+    imaging : NumpyImaging
+        The imaging data with injected fluorescence activity.
+    """
+    rng = np.random.default_rng(seed)
+    imaging_seed = int(rng.integers(0, 2**31))
+    rois_seed = int(rng.integers(0, 2**31))
+
+    imaging = generate_random_imaging(
+        num_frames=num_frames,
+        height=height,
+        width=width,
+        num_planes=num_planes,
+        sampling_frequency=sampling_frequency,
+        seed=imaging_seed,
+    )
+    rois = generate_rois(
+        num_rois=num_rois,
+        height=height,
+        width=width,
+        radius_range=radius_range,
+        sampling_frequency=sampling_frequency,
+        weighted=weighted_rois,
+        num_planes=num_planes,
+        seed=rois_seed,
+    )
+
+    # Access the underlying video array from the single epoch
+    video = imaging.epochs[0]._video  # shape: (num_frames, H, W, P)
+
+    # Create an exponential decay kernel
+    decay_length = int(sampling_frequency * decay_seconds)
+    kernel = np.exp(-np.arange(decay_length) / sampling_frequency)
+
+    # Add exponentially decaying fluorescence bumps to the imaging data
+    masks = rois.get_roi_image_masks()  # (num_rois, H, W) or (num_rois, H, W, P)
+    for roi_idx in range(rois.get_num_rois()):
+        roi_mask = masks[roi_idx]  # (H, W) or (H, W, P)
+        if roi_mask.ndim == 2:
+            roi_mask = roi_mask[:, :, np.newaxis]  # (H, W, 1) to match 4D video
+
+        num_events = rng.integers(5, 15)
+        event_times = rng.choice(num_frames, size=num_events, replace=False)
+
+        for t in event_times:
+            end_t = min(t + decay_length, num_frames)
+            kernel_end = end_t - t
+            # kernel slice (K, 1, 1, 1) * roi_mask (H, W, P) -> (K, H, W, P)
+            video[t:end_t] += roi_mask * kernel[:kernel_end, None, None, None]
+
+    rois.register_imaging(imaging)  # Link the ROIs to the imaging data
+
+    return rois, imaging

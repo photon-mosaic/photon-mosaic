@@ -503,3 +503,9 @@ class BaseImagingEpoch(TimeSeriesSegment):
         """
         # must be implemented in subclass
         raise NotImplementedError
+
+    def get_data(self, start_frame: int, end_frame: int, indices: list | np.ndarray | None = None) -> np.ndarray:
+        """
+        General retrieval function for time series objects
+        """
+        return self.get_series(start_frame=start_frame, end_frame=end_frame, plane_indices=indices)
