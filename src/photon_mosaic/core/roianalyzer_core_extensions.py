@@ -2,7 +2,9 @@ import numpy as np
 from spikeinterface.core.job_tools import fix_job_kwargs
 from spikeinterface.core.node_pipeline import PipelineNode, run_node_pipeline
 
-from photon_mosaic.core import AnalyzerExtension, BaseImaging, BaseRois, register_result_extension
+from .baseimaging import BaseImaging
+from .baserois import BaseRois
+from .roianalyzer import AnalyzerExtension, register_result_extension
 
 
 class FluorescenceExtension(AnalyzerExtension):
