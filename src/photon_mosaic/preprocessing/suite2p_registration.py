@@ -184,7 +184,6 @@ class Suite2pRegistrationSettings(BaseSettings):
 
 def _compute_reference_wrapper(
     f_align_in: NDArray,
-    badframes: NDArray | None,
     settings: dict,
     refImg: NDArray | None = None,
     device=None,
@@ -195,8 +194,6 @@ def _compute_reference_wrapper(
     ----------
     f_align_in : NDArray
         Frames shaped ``(n_frames, Ly, Lx)``.
-    badframes : NDArray | None
-        Boolean mask of bad frames, or None.
     settings : dict
         Suite2p settings dict (merged with suite2p defaults).
     refImg : NDArray | None, optional
@@ -242,12 +239,66 @@ def _compute_reference_wrapper(
     return refImg, bidiphase
 
 
+class Suite2PMotion(Motion):
+    """Motion artifacts produced by Suite2P registration.
+
+    Adds Suite2P-specific fields (``ops``, block coordinates, non-rigid offsets)
+    on top of the algorithm-agnostic :class:`Motion` container.
+    """
+
+    def __init__(
+        self,
+        imaging: BaseImaging,
+        displacements: Sequence[NDArray[np.floating[Any]]],
+        ops: dict[str, Any],
+        reference: Any = None,
+        nonrigid_offsets: Sequence[Sequence[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]]] | None]
+        | Sequence[Sequence[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]] | None]]
+        | None = None,
+        blocks: Sequence[Any] | None = None,
+        yranges: Sequence[Sequence[tuple[int, int]]] | None = None,
+        xranges: Sequence[Sequence[tuple[int, int]]] | None = None,
+        corrected_badframes: Sequence[NDArray[np.bool_]] | None = None,
+    ) -> None:
+        """Store Suite2P registration outputs.
+
+        Parameters
+        ----------
+        imaging, displacements, reference, yranges, xranges
+            See :class:`photon_mosaic.core.motion.Motion`.
+        corrected_badframes : Sequence | None, optional
+            Per-epoch bad-frame mask (see :class:`photon_mosaic.core.motion.Motion`).
+            For Suite2P this is the union of any caller-supplied ``badframes``
+            with frames whose registration shift exceeded ``maxregshift``,
+            then combined across planes (a frame flagged on any plane is
+            flagged for the whole volume).
+        ops : dict[str, Any]
+            Suite2P options used during registration.
+        nonrigid_offsets : Sequence | None, optional
+            Per-epoch, per-plane non-rigid offsets.
+            Structure: ``[epoch][plane] -> (yoff1, xoff1)`` each ``(n_frames, n_blocks)``.
+        blocks : Sequence | None, optional
+            Suite2P block definitions when non-rigid registration is enabled.
+        """
+        super().__init__(
+            imaging=imaging,
+            displacements=displacements,
+            reference=reference,
+            yranges=yranges,
+            xranges=xranges,
+            corrected_badframes=corrected_badframes,
+        )
+        self.ops = ops
+        self.nonrigid_offsets = nonrigid_offsets
+        self.blocks = blocks
+
+
 def compute_motion_suite2p(
     imaging: BaseImaging,
     settings: Suite2pRegistrationSettings | dict[str, Any] | None = None,
     badframes: NDArray | None = None,
     **kwargs: Any,
-) -> Motion:
+) -> "Suite2PMotion":
     """Pre-compute Suite2P displacements for all planes and epochs.
 
     Computes the reference image and per-frame rigid (and optionally nonrigid)
@@ -269,8 +320,9 @@ def compute_motion_suite2p(
 
     Returns
     -------
-    Motion
-        Motion container with per-epoch displacements.
+    Suite2PMotion
+        Motion container with per-epoch displacements and Suite2P-specific
+        fields (``ops``, ``blocks``, ``nonrigid_offsets``).
     """
     import torch
     from suite2p.registration.register import compute_crop, default_settings, register_frames
@@ -301,7 +353,7 @@ def compute_motion_suite2p(
     all_nonrigid_offsets: list[list | None] = []
     all_yranges: list[list[tuple[int, int]]] = []
     all_xranges: list[list[tuple[int, int]]] = []
-    all_corrected_badframes: list[list[NDArray]] = []
+    all_corrected_badframes: list[NDArray] = []
 
     for epoch_idx in range(n_epochs):
         epoch = imaging.epochs[epoch_idx]
@@ -327,9 +379,7 @@ def compute_motion_suite2p(
 
             # Compute reference once from the first epoch
             if epoch_idx == 0:
-                refImgs[p], bidiphases[p] = _compute_reference_wrapper(
-                    plane_frames, badframes, ops, refImg=None, device=device
-                )
+                refImgs[p], bidiphases[p] = _compute_reference_wrapper(plane_frames, ops, refImg=None, device=device)
 
             # Compute shifts without applying them to the frames
             _, _, _, offsets_all, blocks = register_frames(
@@ -392,15 +442,17 @@ def compute_motion_suite2p(
 
         all_yranges.append(epoch_yranges)
         all_xranges.append(epoch_xranges)
-        all_corrected_badframes.append(epoch_cbf)
+        # Bad frames are a property of the time axis (a corrupted volume frame
+        # is bad on all planes) — collapse Suite2P's per-plane masks into one.
+        all_corrected_badframes.append(np.logical_or.reduce(epoch_cbf))
 
     nonrigid_offsets = all_nonrigid_offsets if any(o is not None for o in all_nonrigid_offsets) else None
 
-    return Motion(
+    return Suite2PMotion(
         imaging=imaging,
         displacements=all_displacements,
-        refAndMasks=refImgs,
         ops=ops,
+        reference=refImgs,
         nonrigid_offsets=nonrigid_offsets,
         blocks=all_blocks,
         yranges=all_yranges,
@@ -412,7 +464,7 @@ def compute_motion_suite2p(
 class RegisterSuite2PImaging(BasePreprocessor):
     """Apply pre-computed Suite2P motion correction on-the-fly."""
 
-    def __init__(self, imaging: BaseImaging, motion: Motion, **kwargs: Any) -> None:
+    def __init__(self, imaging: BaseImaging, motion: Suite2PMotion, **kwargs: Any) -> None:
         """Build an imaging view that applies stored motion fields lazily."""
         BasePreprocessor.__init__(self, imaging)
 
@@ -434,7 +486,7 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
     def __init__(
         self,
         parent_imaging_epoch: BaseImagingEpoch,
-        motion: Motion,
+        motion: Suite2PMotion,
         epoch_index: int,
         **kwargs: Any,
     ) -> None:

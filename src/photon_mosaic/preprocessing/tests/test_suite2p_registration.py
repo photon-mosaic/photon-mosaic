@@ -6,6 +6,7 @@ from photon_mosaic.core import Motion, NumpyImaging, generate_random_imaging
 from photon_mosaic.preprocessing.suite2p_registration import (
     RegisterSuite2PImaging,
     RegisterSuite2PImagingEpoch,
+    Suite2PMotion,
     Suite2pRegistrationSettings,
     compute_motion_suite2p,
     register_suite2p,
@@ -115,6 +116,7 @@ class TestComputeMotionSuite2p:
             num_frames=6, num_planes=1, height=12, width=12, shifts=shifts, sampling_frequency=10.0
         )
         motion = compute_motion_suite2p(imaging, settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=False))
+        assert isinstance(motion, Suite2PMotion)
         assert isinstance(motion, Motion)
         assert motion.num_epochs == 1
         assert motion.displacements[0].shape == (6, 1, 2)
@@ -177,7 +179,7 @@ class TestComputeMotionSuite2p:
         motion = compute_motion_suite2p(imaging, settings=Suite2pRegistrationSettings(batch_size=2, nonrigid=False))
         assert motion.displacements[0].shape == (4, 3, 2)
         assert motion.displacements[1].shape == (3, 3, 2)
-        assert len(motion.refAndMasks) == 3
+        assert len(motion.reference) == 3
 
         reg = RegisterSuite2PImaging(imaging, motion)
         out0 = reg.epochs[0].get_series(0, 4)
@@ -198,7 +200,12 @@ class TestRegisterSuite2PImaging:
     @pytest.fixture()
     def motion(self, imaging):
         displacements = [np.zeros((10, 1, 2))]
-        return Motion(imaging, displacements, ("ref", "masks"), {"bidiphase": 0})
+        return Suite2PMotion(
+            imaging=imaging,
+            displacements=displacements,
+            ops={"bidiphase": 0},
+            reference=("ref", "masks"),
+        )
 
     def test_construction(self, imaging, motion):
         reg = RegisterSuite2PImaging(imaging, motion)
@@ -207,7 +214,7 @@ class TestRegisterSuite2PImaging:
 
     def test_epoch_mismatch_raises(self, imaging):
         displacements = [np.zeros((10, 1, 2)), np.zeros((10, 1, 2))]
-        motion = Motion(imaging, displacements, None, {})
+        motion = Suite2PMotion(imaging=imaging, displacements=displacements, ops={})
         with pytest.raises(ValueError, match="epochs"):
             RegisterSuite2PImaging(imaging, motion)
 
