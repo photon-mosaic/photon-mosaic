@@ -95,15 +95,16 @@ def test_neuropil_per_roi_subtraction(imaging, rois, chunk):
     """Per-ROI neuropil masks should subtract per-ROI neuropil traces."""
     rng = np.random.default_rng(123)
     neuropil = rng.random((NUM_ROIS, H, W)).astype(np.float32)
+    neuropil_weight = 0.7
 
-    node = FluorescenceNode(imaging, rois, neuropil=neuropil)
+    node = FluorescenceNode(imaging, rois, neuropil=neuropil, neuropil_weight=neuropil_weight)
     (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
 
     # Compute expected manually
     chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
     masks_flat = rois.get_roi_image_masks().reshape(NUM_ROIS, -1).astype(np.float32)
     neuropil_flat = neuropil.reshape(NUM_ROIS, -1).astype(np.float32)
-    expected = chunk_flat @ masks_flat.T - chunk_flat @ neuropil_flat.T
+    expected = chunk_flat @ masks_flat.T - neuropil_weight * (chunk_flat @ neuropil_flat.T)
 
     np.testing.assert_allclose(fluorescence, expected, rtol=1e-5)
 
@@ -124,23 +125,25 @@ def test_neuropil_global_subtraction(imaging, rois, chunk):
     """A single global neuropil mask (H, W) should broadcast across ROIs."""
     rng = np.random.default_rng(456)
     neuropil = rng.random((H, W)).astype(np.float32)
+    neuropil_weight = 0.7
 
-    node = FluorescenceNode(imaging, rois, neuropil=neuropil)
+    node = FluorescenceNode(imaging, rois, neuropil=neuropil, neuropil_weight=neuropil_weight)
     (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
 
     chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
     masks_flat = rois.get_roi_image_masks().reshape(NUM_ROIS, -1).astype(np.float32)
     neuropil_flat = neuropil.reshape(1, -1).astype(np.float32)
-    expected = chunk_flat @ masks_flat.T - chunk_flat @ neuropil_flat.T  # (T, N) - (T, 1)
+    expected = chunk_flat @ masks_flat.T - neuropil_weight * (chunk_flat @ neuropil_flat.T)  # (T, N) - (T, 1)
 
     np.testing.assert_allclose(fluorescence, expected, rtol=1e-5)
 
 
 def test_neuropil_global_broadcasts_correctly(imaging, rois, chunk):
-    """Global neuropil should subtract the same value from every ROI per frame."""
+    """Global neuropil should subtract the same weighted value from every ROI per frame."""
     # Use a uniform neuropil mask so the neuropil trace is easy to predict
     neuropil = np.ones((H, W), dtype=np.float32)
-    node = FluorescenceNode(imaging, rois, neuropil=neuropil)
+    neuropil_weight = 0.7
+    node = FluorescenceNode(imaging, rois, neuropil=neuropil, neuropil_weight=neuropil_weight)
     (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
 
     # The global neuropil trace is the sum of each frame
@@ -151,7 +154,57 @@ def test_neuropil_global_broadcasts_correctly(imaging, rois, chunk):
     node_no_np = FluorescenceNode(imaging, rois)
     (fluor_no_np,) = node_no_np.compute(chunk, 0, NUM_FRAMES, 0, 0)
 
-    np.testing.assert_allclose(fluorescence, fluor_no_np - global_trace, rtol=1e-5)
+    np.testing.assert_allclose(fluorescence, fluor_no_np - neuropil_weight * global_trace, rtol=1e-5)
+
+
+# ---------------------------------------------------------------------------
+# neuropil_weight parameter
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("neuropil_weight", [0.0, 0.3, 0.7, 1.0, 1.5])
+def test_neuropil_weight_scales_subtraction(imaging, rois, chunk, neuropil_weight):
+    """Varying neuropil_weight should linearly scale the subtracted neuropil trace."""
+    rng = np.random.default_rng(789)
+    neuropil = rng.random((NUM_ROIS, H, W)).astype(np.float32)
+
+    node = FluorescenceNode(imaging, rois, neuropil=neuropil, neuropil_weight=neuropil_weight)
+    (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+
+    chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
+    masks_flat = rois.get_roi_image_masks().reshape(NUM_ROIS, -1).astype(np.float32)
+    neuropil_flat = neuropil.reshape(NUM_ROIS, -1).astype(np.float32)
+    expected = chunk_flat @ masks_flat.T - neuropil_weight * (chunk_flat @ neuropil_flat.T)
+
+    np.testing.assert_allclose(fluorescence, expected, rtol=1e-5)
+
+
+def test_neuropil_weight_zero_equals_no_subtraction(imaging, rois, chunk):
+    """neuropil_weight=0 should produce identical results to passing no neuropil."""
+    rng = np.random.default_rng(321)
+    neuropil = rng.random((NUM_ROIS, H, W)).astype(np.float32)
+
+    node_weighted = FluorescenceNode(imaging, rois, neuropil=neuropil, neuropil_weight=0.0)
+    (fluor_weighted,) = node_weighted.compute(chunk, 0, NUM_FRAMES, 0, 0)
+
+    node_none = FluorescenceNode(imaging, rois, neuropil=None)
+    (fluor_none,) = node_none.compute(chunk, 0, NUM_FRAMES, 0, 0)
+
+    np.testing.assert_allclose(fluor_weighted, fluor_none, rtol=1e-5)
+
+
+def test_neuropil_weight_default(imaging, rois, chunk):
+    """The default neuropil_weight should be 0.7."""
+    rng = np.random.default_rng(654)
+    neuropil = rng.random((NUM_ROIS, H, W)).astype(np.float32)
+
+    node_default = FluorescenceNode(imaging, rois, neuropil=neuropil)
+    (fluor_default,) = node_default.compute(chunk, 0, NUM_FRAMES, 0, 0)
+
+    node_explicit = FluorescenceNode(imaging, rois, neuropil=neuropil, neuropil_weight=0.7)
+    (fluor_explicit,) = node_explicit.compute(chunk, 0, NUM_FRAMES, 0, 0)
+
+    np.testing.assert_allclose(fluor_default, fluor_explicit, rtol=1e-5)
 
 
 # ---------------------------------------------------------------------------

@@ -18,8 +18,8 @@ class FluorescenceExtension(AnalyzerExtension):
     def get_optional_dependencies(cls, **params):
         return ["neuropil"]
 
-    def _set_params(self, use_neuropil=True):
-        return dict(use_neuropil=use_neuropil)
+    def _set_params(self, use_neuropil=True, neuropil_weight=1.0):
+        return dict(use_neuropil=use_neuropil, neuropil_weight=neuropil_weight)
 
     def _run(self, verbose=False, **job_kwargs):
         gather_mode = "memory"
@@ -71,6 +71,7 @@ class FluorescenceNode(PipelineNode):
         imaging: BaseImaging,
         rois: BaseRois,
         neuropil: np.ndarray | None = None,
+        neuropil_weight: float = 0.7,
     ):
         """
         Pipeline node to extract fluorescence traces from ROIs, with optional neuropil subtraction.
@@ -84,6 +85,8 @@ class FluorescenceNode(PipelineNode):
         neuropil : np.ndarray, optional
             Optional neuropil mask(s) to subtract from the fluorescence traces.
             Should have shape (num_rois, height, width) or (height, width).
+        neuropil_weight : float, optional
+            Weight to apply to the neuropil signal before subtraction (default is 0.7).
         """
         PipelineNode.__init__(
             self,
@@ -93,6 +96,7 @@ class FluorescenceNode(PipelineNode):
         )
         self.rois = rois
         self.neuropil = neuropil
+        self.neuropil_weight = neuropil_weight
 
         # Precompute flattened masks for efficient matrix multiplication
         masks = rois.get_roi_image_masks()  # (N, H, W) or (N, H, W, P)
@@ -125,7 +129,7 @@ class FluorescenceNode(PipelineNode):
         if self._neuropil_flat is not None:
             # (T, 1) for global or (T, N) for per-ROI
             neuropil_trace = chunk_flat @ self._neuropil_flat.T
-            fluorescence -= neuropil_trace
+            fluorescence -= self.neuropil_weight * neuropil_trace
 
         return (fluorescence,)
 
