@@ -379,9 +379,7 @@ def compute_motion_suite2p(
 
             # Compute reference once from the first epoch
             if epoch_idx == 0:
-                refImgs[p], bidiphases[p] = _compute_reference_wrapper(
-                    plane_frames, ops, refImg=None, device=device
-                )
+                refImgs[p], bidiphases[p] = _compute_reference_wrapper(plane_frames, ops, refImg=None, device=device)
 
             # Compute shifts without applying them to the frames
             _, _, _, offsets_all, blocks = register_frames(
