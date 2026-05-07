@@ -65,11 +65,11 @@ class ZarrRois(BaseRois):
         )
 
     def get_roi_image_masks(self, roi_ids=None):
-        masks = np.array(self._rois_group["roi_image_masks"])
+        roi_image_masks = self._rois_group["roi_image_masks"]
         if roi_ids is None:
-            return masks
+            return np.array(roi_image_masks)
         roi_indices = self.ids_to_indices(roi_ids)
-        return masks[roi_indices]
+        return np.array(roi_image_masks[roi_indices])
 
 
 def save_rois_to_zarr(rois: BaseRois, zarr_group, saving_options: dict | None = None) -> None:
@@ -86,8 +86,13 @@ def save_rois_to_zarr(rois: BaseRois, zarr_group, saving_options: dict | None = 
     """
     saving_options = saving_options or {}
 
-    image_masks = rois.get_roi_image_masks()
-    zarr_group.create_dataset("roi_image_masks", data=np.asarray(image_masks), **saving_options)
+    image_masks = np.asarray(rois.get_roi_image_masks())
+    # Chunk along the ROI axis (first dimension) for efficient per-ROI access,
+    # unless the caller has already specified a chunk layout.
+    if "chunks" not in saving_options:
+        roi_chunks = (1,) + image_masks.shape[1:]
+        saving_options = {**saving_options, "chunks": roi_chunks}
+    zarr_group.create_dataset("roi_image_masks", data=image_masks, **saving_options)
 
     roi_ids = np.array(rois.roi_ids)
     if roi_ids.dtype.kind == "U":
