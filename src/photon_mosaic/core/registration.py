@@ -7,61 +7,56 @@ from photon_mosaic.core import BaseImaging
 
 
 class Motion:
-    """Container for Suite2P motion correction artifacts."""
+    """Algorithm-agnostic container for motion correction artifacts.
+
+    Holds outputs that any motion correction backend (Suite2P, CaImAn, ...) is
+    expected to produce. Backend-specific fields (e.g. Suite2P ``ops`` or
+    block-wise non-rigid offsets) belong on dedicated subclasses such as
+    ``Suite2PMotion``.
+    """
 
     def __init__(
         self,
         imaging: BaseImaging,
         displacements: Sequence[NDArray[np.floating[Any]]],
-        refAndMasks: Any,
-        ops: dict[str, Any],
-        nonrigid_offsets: Sequence[Sequence[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]]] | None]
-        | Sequence[Sequence[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]] | None]]
-        | None = None,
-        blocks: Sequence[Any] | None = None,
+        reference: Any = None,
         yranges: Sequence[Sequence[tuple[int, int]]] | None = None,
         xranges: Sequence[Sequence[tuple[int, int]]] | None = None,
         corrected_badframes: Sequence[Sequence[NDArray[np.bool_]]] | None = None,
-        registration_outputs: dict | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
-        """Store displacement fields and metadata produced by Suite2P.
+        """Store displacement fields and shared metadata.
 
         Parameters
         ----------
         imaging : BaseImaging
             Imaging object associated with the computed motion.
         displacements : Sequence[NDArray]
-            Per-epoch displacement arrays shaped ``(frames, planes, 2)`` or ``(frames, 2)``.
-        refAndMasks : Any
-            Suite2P reference images returned by ``_compute_reference_wrapper``.
-        ops : dict[str, Any]
-            Suite2P options used during registration.
-        nonrigid_offsets : Sequence | None, optional
-            Per-epoch, per-plane non-rigid offsets.
-            Structure: ``[epoch][plane] -> (yoff1, xoff1)`` each ``(n_frames, n_blocks)``.
-        blocks : Sequence | None, optional
-            Suite2P block definitions when non-rigid registration is enabled.
+            Per-epoch rigid displacement arrays shaped ``(frames, planes, 2)``
+            or ``(frames, 2)`` in ``(y, x)`` order.
+        reference : Any, optional
+            Per-plane reference image(s) used by the registration algorithm.
         yranges : Sequence | None, optional
-            Per-epoch, per-plane valid pixel row range ``[epoch][plane] -> (ymin, ymax)``.
+            Per-epoch, per-plane valid pixel row range
+            ``[epoch][plane] -> (ymin, ymax)``.
         xranges : Sequence | None, optional
-            Per-epoch, per-plane valid pixel column range ``[epoch][plane] -> (xmin, xmax)``.
+            Per-epoch, per-plane valid pixel column range
+            ``[epoch][plane] -> (xmin, xmax)``.
         corrected_badframes : Sequence | None, optional
-            Per-epoch, per-plane boolean bad-frame mask ``[epoch][plane] -> (n_frames,)``.
-            Combines the input ``badframes`` with frames flagged by large registration shifts.
-        registration_outputs : dict | None, optional
-            Additional outputs from the registration pipeline.
+            Per-epoch, per-plane boolean bad-frame mask
+            ``[epoch][plane] -> (n_frames,)``. Combines any input bad-frame
+            mask with frames flagged by large registration shifts.
+        metadata : dict | None, optional
+            Free-form algorithm-agnostic metadata.
         """
 
         self.imaging = imaging
         self.displacements = displacements
-        self.refAndMasks = refAndMasks
-        self.ops = ops
-        self.nonrigid_offsets = nonrigid_offsets
-        self.blocks = blocks
+        self.reference = reference
         self.yranges = yranges
         self.xranges = xranges
         self.corrected_badframes = corrected_badframes
-        self.registration_outputs = registration_outputs
+        self.metadata = metadata if metadata is not None else {}
 
     @property
     def num_epochs(self) -> int:

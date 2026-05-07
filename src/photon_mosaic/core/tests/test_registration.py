@@ -35,20 +35,24 @@ class TestMotion:
         return Motion(
             imaging=imaging_single,
             displacements=displacements,
-            refAndMasks=("ref", "masks"),
-            ops={"bidiphase": 0},
-            blocks=[None],
+            reference=("ref_plane_0",),
+            metadata={"backend": "test"},
         )
 
     def test_attributes(self, imaging_single, motion_single):
         assert motion_single.imaging is imaging_single
         assert motion_single.num_epochs == 1
-        assert motion_single.refAndMasks == ("ref", "masks")
-        assert motion_single.ops == {"bidiphase": 0}
+        assert motion_single.reference == ("ref_plane_0",)
+        assert motion_single.metadata == {"backend": "test"}
+
+    def test_metadata_defaults_to_empty_dict(self, imaging_single):
+        disps = [np.zeros((5, 1, 2))]
+        m = Motion(imaging_single, disps)
+        assert m.metadata == {}
 
     def test_num_epochs_matches_displacements(self, imaging_single):
         disps = [np.zeros((5, 1, 2)), np.zeros((8, 1, 2))]
-        m = Motion(imaging_single, disps, None, {})
+        m = Motion(imaging_single, disps)
         assert m.num_epochs == 2
 
     def test_get_displacement_at_frames_single_int(self, motion_single):
@@ -64,7 +68,7 @@ class TestMotion:
 
     def test_get_displacement_at_frames_plane_index(self, imaging_multi):
         disps = [np.random.default_rng(2).random((10, 3, 2))]
-        motion = Motion(imaging_multi, disps, None, {})
+        motion = Motion(imaging_multi, disps)
         single_val = motion.get_displacement_at_frames(0, plane_index=1)
         assert single_val.shape == (2,)
         np.testing.assert_array_equal(single_val, disps[0][0, 1])
