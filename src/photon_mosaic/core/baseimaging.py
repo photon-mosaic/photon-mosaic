@@ -265,18 +265,6 @@ class BaseImaging(BaseExtractor, TimeSeries):
         """
         return self.get_total_samples()
 
-    def get_num_segments(self) -> int:  # pragma: no cover
-        """Get the number of imaging segments.
-        This is needed for SpikeInterface compatibility, but the photon-mosaic nomenclature is
-        "epochs" instead. Use `get_num_epochs()` is preferred.
-
-        Returns
-        -------
-        int
-            The number of imaging segments.
-        """
-        return len(self.segments)
-
     def get_num_epochs(self) -> int:
         """Get the number of imaging epochs.
 

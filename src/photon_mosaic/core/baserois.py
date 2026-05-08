@@ -39,7 +39,7 @@ class BaseRois(BaseExtractor):
         shape = self._shape
         # Format shape string based on whether data is volumetric or not
         shape_repr = f"{shape[0]} rows x {shape[1]} columns "
-        return f"{name}:\n" f"{self.get_num_rois()} ROIs - " f"{shape_repr}"
+        return f"{name}:\n{self.get_num_rois()} ROIs - {shape_repr}"
 
     def _repr_html_(self, display_name=True):
         common_style = "margin-left: 10px;"

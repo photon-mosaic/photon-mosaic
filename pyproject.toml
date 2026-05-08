@@ -12,7 +12,9 @@ requires-python = ">=3.10.0"
 dynamic = ["version"]
 dependencies = [
     "spikeinterface @ git+https://github.com/SpikeInterface/spikeinterface.git@409d1f548f1c56829731f93dc61b1bed71f43006",
-    "roiextractors"
+    "roiextractors",
+    "pydantic>=2",
+    "pydantic-settings>=2",
 ]
 
 license = {text = "MIT License"}
@@ -39,6 +41,9 @@ widgets = [
   "matplotlib",
   "ipywidgets",
 ]
+suite2p-registration = [
+  "suite2p==1.0.0.1",
+]
 dev = [
   "pytest",
   "pytest-cov",
@@ -48,6 +53,7 @@ dev = [
   "pre-commit",
   "ruff",
   "setuptools-scm",
+  "suite2p==1.0.0.1",
 ]
 
 [build-system]
