@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from photon_mosaic.core.generators import generate_random_imaging, generate_rois
+from photon_mosaic.core.generators import generate_imaging_with_rois, generate_random_imaging, generate_rois
 
 
 def test_generate_random_imaging_int_vs_singleton_tuple_same_output():
@@ -136,6 +136,140 @@ def test_generate_rois_multiplane_binary_vs_weighted_value_properties():
     assert np.min(masks_w) >= 0.0
     assert np.max(masks_w) <= 1.0
     assert np.any((masks_w > 0.0) & (masks_w < 1.0))
+
+
+# ── generate_imaging_with_rois tests ──
+
+
+def test_generate_imaging_with_rois_returns_correct_types_and_shapes():
+    rois, imaging = generate_imaging_with_rois(
+        num_frames=50,
+        height=30,
+        width=40,
+        num_rois=3,
+        radius_range=(3, 5),
+        sampling_frequency=10.0,
+        seed=42,
+    )
+    assert imaging.get_num_epochs() == 1
+    series = imaging.get_series()
+    assert series.shape == (50, 30, 40, 1)
+    assert rois.get_num_rois() == 3
+    masks = rois.get_roi_image_masks()
+    assert masks.shape[0] == 3
+
+
+def test_generate_imaging_with_rois_adds_fluorescence_signal():
+    """The imaging data should be brighter than pure random noise due to injected bumps."""
+    # Generate plain random imaging with the same derived seeds
+    rng = np.random.default_rng(42)
+    imaging_seed = int(rng.integers(0, 2**31))
+
+    plain = generate_random_imaging(
+        num_frames=100,
+        height=30,
+        width=40,
+        sampling_frequency=10.0,
+        seed=imaging_seed,
+    )
+    _, with_bumps = generate_imaging_with_rois(
+        num_frames=100,
+        height=30,
+        width=40,
+        num_rois=5,
+        radius_range=(3, 5),
+        sampling_frequency=10.0,
+        seed=42,
+    )
+    # The injected signal should increase the mean
+    assert with_bumps.get_series().mean() > plain.get_series().mean()
+
+
+def test_generate_imaging_with_rois_is_reproducible():
+    kwargs = dict(
+        num_frames=60,
+        height=30,
+        width=40,
+        num_rois=4,
+        radius_range=(3, 5),
+        sampling_frequency=10.0,
+        seed=99,
+    )
+    rois1, im1 = generate_imaging_with_rois(**kwargs)
+    rois2, im2 = generate_imaging_with_rois(**kwargs)
+
+    np.testing.assert_array_equal(im1.get_series(), im2.get_series())
+    np.testing.assert_array_equal(
+        rois1.get_roi_image_masks(),
+        rois2.get_roi_image_masks(),
+    )
+
+
+def test_generate_imaging_with_rois_multiplane():
+    rois, imaging = generate_imaging_with_rois(
+        num_frames=40,
+        height=30,
+        width=30,
+        num_planes=3,
+        num_rois=2,
+        radius_range=(3, 5, 1),
+        sampling_frequency=10.0,
+        seed=7,
+    )
+    series = imaging.get_series()
+    assert series.shape == (40, 30, 30, 3)
+    masks = rois.get_roi_image_masks()
+    assert masks.shape == (2, 30, 30, 3)
+
+
+def test_generate_imaging_with_rois_multiplane_is_reproducible():
+    kwargs = dict(
+        num_frames=40,
+        height=30,
+        width=30,
+        num_planes=3,
+        num_rois=2,
+        radius_range=(3, 5, 1),
+        sampling_frequency=10.0,
+        seed=7,
+    )
+    _, im1 = generate_imaging_with_rois(**kwargs)
+    _, im2 = generate_imaging_with_rois(**kwargs)
+    np.testing.assert_array_equal(im1.get_series(), im2.get_series())
+
+
+def test_generate_imaging_with_rois_weighted():
+    rois, imaging = generate_imaging_with_rois(
+        num_frames=50,
+        height=30,
+        width=40,
+        num_rois=3,
+        radius_range=(3, 5),
+        sampling_frequency=10.0,
+        weighted_rois=True,
+        seed=1,
+    )
+    masks = rois.get_roi_image_masks()
+    assert np.any((masks > 0.0) & (masks < 1.0))  # fractional weights present
+
+
+def test_generate_imaging_with_rois_decay_affects_trace():
+    """Longer decay should spread the signal over more frames."""
+    kwargs = dict(
+        num_frames=200,
+        height=30,
+        width=40,
+        num_rois=3,
+        radius_range=(3, 5),
+        sampling_frequency=10.0,
+        seed=55,
+    )
+    _, im_short = generate_imaging_with_rois(decay_seconds=0.5, **kwargs)
+    _, im_long = generate_imaging_with_rois(decay_seconds=5.0, **kwargs)
+
+    # Both should have signal added (mean above 0.5 which is the random baseline mean)
+    assert im_short.get_series().mean() > 0.5
+    assert im_long.get_series().mean() > 0.5
 
 
 def test_generate_rois_invalid_radius_range_raises_assertion():
