@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from photon_mosaic.extractors.suite2prois import Suite2pRois, read_suite2p_rois
+from photon_mosaic.segmentation.suite2prois import Suite2pRois, read_suite2p_rois
 
 
 def _make_suite2p_folder(tmp_path, num_rois=5, height=64, width=64, fs=31.2, include_iscell=True):
