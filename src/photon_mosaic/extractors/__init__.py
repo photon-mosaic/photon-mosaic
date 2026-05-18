@@ -3,21 +3,11 @@ from .roiextractors import (
     BaseROIExtractorImaging,
     BaseROIExtractorImagingEpoch,
 )
-from .suite2p_segmentation import (
-    Suite2pDetectedRois,
-    Suite2pEpochSegmentations,
-    Suite2pSegmentationSettings,
-    detect_rois_suite2p,
-)
 
 # Build __all__ to include all exports
 __all__ = [
     "BaseROIExtractorImaging",
     "BaseROIExtractorImagingEpoch",
-    "Suite2pDetectedRois",
-    "Suite2pEpochSegmentations",
-    "Suite2pSegmentationSettings",
-    "detect_rois_suite2p",
 ]
 
 
