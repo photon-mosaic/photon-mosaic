@@ -154,10 +154,7 @@ class TestImagingSeriesWidgetInit:
         assert w.data_plot["frame_rate"] == small_imaging.sampling_frequency
 
     def test_plot_ipywidgets_clamps_contrast_sample_to_num_frames(self):
-        # Regression: the contrast-sampling step used a hardcoded num_samples=100
-        # call to imaging.get_series(0, 100). NumpyImaging silently truncates, but
-        # strict extractors (e.g. ScanImageImagingExtractor) raise IndexError when
-        # end > num_samples. The widget must clamp the request to dp.num_frames.
+        # Contrast sampling must request at most num_frames, not a hardcoded 100.
         tiny = generate_random_imaging(num_frames=10, height=16, width=16, seed=0)
         captured = []
         sentinel = RuntimeError("stop after recording")
