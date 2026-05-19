@@ -520,9 +520,16 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
             planes_to_process = list(plane_indices)
 
         disps = self.motion.displacements[self.epoch_index]
-        n_frames = end_frame - start_frame
+        # Use the actual frame count returned by the parent epoch — when
+        # end_frame exceeds the available samples, NumpyImagingEpoch and
+        # friends silently truncate, so we must match that. The empty-range
+        # case occurs when spikeinterface chunking asks past the end.
+        n_frames = video.shape[0]
+        end_frame = start_frame + n_frames
         H, W = video.shape[1], video.shape[2]
         output = np.empty((n_frames, H, W, len(planes_to_process)), dtype=np.float32)
+        if n_frames == 0:
+            return output
 
         for i, p in enumerate(planes_to_process):
             plane_video = video[:, :, :, p] if video.ndim == 4 else video

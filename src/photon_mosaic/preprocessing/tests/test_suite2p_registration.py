@@ -290,6 +290,32 @@ class TestRegisterSuite2PImagingEpoch:
         np.testing.assert_allclose(result[..., 0], result[0:1, ..., 0].repeat(5, axis=0), atol=1e-3)
         np.testing.assert_allclose(result[..., 1], result[0:1, ..., 1].repeat(5, axis=0), atol=1e-3)
 
+    def test_get_series_end_frame_past_end_truncates(self, imaging, motion):
+        # Parent NumpyImagingEpoch silently truncates when end_frame > num_samples
+        # (it slices the underlying ndarray). The registration wrapper must match
+        # that contract — historically it pre-allocated a buffer of end-start frames
+        # and crashed broadcasting the shorter shifted result into it.
+        parent_epoch = imaging.epochs[0]
+        epoch = RegisterSuite2PImagingEpoch(parent_epoch, motion, 0)
+        n = epoch.get_num_samples()
+
+        result = epoch.get_series(0, n + 50)
+
+        assert result.shape == (n, 12, 12, 1)
+
+    def test_get_series_empty_range_past_end(self, imaging, motion):
+        # spikeinterface chunking can ask for a range entirely past the recording end
+        # (e.g. when chunk_size doesn't evenly divide num_samples). The wrapper must
+        # return an empty array instead of calling Suite2P's shift_frames with an
+        # empty tensor list, which raises "stack expects a non-empty TensorList".
+        parent_epoch = imaging.epochs[0]
+        epoch = RegisterSuite2PImagingEpoch(parent_epoch, motion, 0)
+        n = epoch.get_num_samples()
+
+        result = epoch.get_series(n + 10, n + 20)
+
+        assert result.shape == (0, 12, 12, 1)
+
 
 def test_register_suite2p_is_alias():
     assert register_suite2p is RegisterSuite2PImaging
