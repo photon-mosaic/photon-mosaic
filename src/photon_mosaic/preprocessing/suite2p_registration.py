@@ -520,10 +520,7 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
             planes_to_process = list(plane_indices)
 
         disps = self.motion.displacements[self.epoch_index]
-        # Use the actual frame count returned by the parent epoch — when
-        # end_frame exceeds the available samples, NumpyImagingEpoch and
-        # friends silently truncate, so we must match that. The empty-range
-        # case occurs when spikeinterface chunking asks past the end.
+        # Match parent epoch truncation when end_frame is past the recording.
         n_frames = video.shape[0]
         end_frame = start_frame + n_frames
         H, W = video.shape[1], video.shape[2]

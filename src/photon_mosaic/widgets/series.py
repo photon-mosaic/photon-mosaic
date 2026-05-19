@@ -117,10 +117,7 @@ class ImagingSeriesWidget(BaseWidget):
         self.play_thread = None
         self.playback_fps = min(10.0, dp.frame_rate)  # Default playback speed
 
-        # Calculate global contrast range from multiple frames for consistent colorbar
-        # Sample frames throughout the video to get representative range. Clamp to
-        # dp.num_frames so we don't over-request from extractors that don't
-        # silently truncate past the end of the recording.
+        # Sample up to 100 frames to compute a global vmin/vmax for the colormap.
         num_samples = min(100, dp.num_frames)
 
         # Store global vmin/vmax for each view
