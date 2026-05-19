@@ -302,17 +302,14 @@ class TestRegisterSuite2PImagingEpoch:
         assert result.shape == (n, 12, 12, 1)
         assert any("exceeds recording length" in rec.message for rec in caplog.records)
 
-    def test_get_series_empty_range_past_end(self, imaging, motion, caplog):
-        # Range entirely past the end clamps to empty without invoking suite2p.
+    def test_get_series_start_past_end_raises(self, imaging, motion):
+        # start_frame past the recording is a caller bug; raise instead of papering over.
         parent_epoch = imaging.epochs[0]
         epoch = RegisterSuite2PImagingEpoch(parent_epoch, motion, 0)
         n = epoch.get_num_samples()
 
-        with caplog.at_level("WARNING"):
-            result = epoch.get_series(n + 10, n + 20)
-
-        assert result.shape == (0, 12, 12, 1)
-        assert any("exceeds recording length" in rec.message for rec in caplog.records)
+        with pytest.raises(ValueError, match="past end_frame"):
+            epoch.get_series(n + 10, n + 20)
 
 
 def test_register_suite2p_is_alias():

@@ -517,7 +517,9 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
             )
             end_frame = num_samples
         if start_frame > end_frame:
-            start_frame = end_frame
+            raise ValueError(
+                f"start_frame ({start_frame}) is past end_frame ({end_frame}); " f"recording length is {num_samples}."
+            )
 
         video = self.parent_imaging_epoch.get_series(start_frame, end_frame)
         num_planes = video.shape[3] if video.ndim == 4 else 1
