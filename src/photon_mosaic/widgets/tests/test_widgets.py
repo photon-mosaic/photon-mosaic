@@ -152,3 +152,28 @@ class TestImagingSeriesWidgetInit:
     def test_frame_rate_from_imaging(self, small_imaging):
         w = self._make_widget(small_imaging)
         assert w.data_plot["frame_rate"] == small_imaging.sampling_frequency
+
+    def test_plot_ipywidgets_clamps_contrast_sample_to_num_frames(self):
+        # Regression: the contrast-sampling step used a hardcoded num_samples=100
+        # call to imaging.get_series(0, 100). NumpyImaging silently truncates, but
+        # strict extractors (e.g. ScanImageImagingExtractor) raise IndexError when
+        # end > num_samples. The widget must clamp the request to dp.num_frames.
+        tiny = generate_random_imaging(num_frames=10, height=16, width=16, seed=0)
+        captured = []
+        sentinel = RuntimeError("stop after recording")
+
+        def recording_get_series(*args, **kwargs):
+            end_frame = args[1] if len(args) >= 2 else kwargs.get("end_frame")
+            captured.append(end_frame)
+            raise sentinel  # short-circuit before matplotlib/ipywidgets setup
+
+        tiny.get_series = recording_get_series
+
+        with (
+            patch.object(ImagingSeriesWidget, "check_backend", return_value="ipywidgets"),
+            patch("spikeinterface.widgets.utils_ipywidgets.check_ipywidget_backend"),
+        ):
+            with pytest.raises(RuntimeError, match="stop after recording"):
+                ImagingSeriesWidget(tiny, immediate_plot=True)
+
+        assert captured == [10], f"expected widget to clamp end_frame to num_frames=10; calls were {captured}"
