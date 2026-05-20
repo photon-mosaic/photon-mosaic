@@ -290,6 +290,27 @@ class TestRegisterSuite2PImagingEpoch:
         np.testing.assert_allclose(result[..., 0], result[0:1, ..., 0].repeat(5, axis=0), atol=1e-3)
         np.testing.assert_allclose(result[..., 1], result[0:1, ..., 1].repeat(5, axis=0), atol=1e-3)
 
+    def test_get_series_end_frame_past_end_warns_and_clamps(self, imaging, motion, caplog):
+        # Over-requested range is clamped to the recording length, with a warning.
+        parent_epoch = imaging.epochs[0]
+        epoch = RegisterSuite2PImagingEpoch(parent_epoch, motion, 0)
+        n = epoch.get_num_samples()
+
+        with caplog.at_level("WARNING"):
+            result = epoch.get_series(0, n + 50)
+
+        assert result.shape == (n, 12, 12, 1)
+        assert any("exceeds recording length" in rec.message for rec in caplog.records)
+
+    def test_get_series_start_past_end_raises(self, imaging, motion):
+        # start_frame past the recording is a caller bug; raise instead of papering over.
+        parent_epoch = imaging.epochs[0]
+        epoch = RegisterSuite2PImagingEpoch(parent_epoch, motion, 0)
+        n = epoch.get_num_samples()
+
+        with pytest.raises(ValueError, match="past end_frame"):
+            epoch.get_series(n + 10, n + 20)
+
 
 def test_register_suite2p_is_alias():
     assert register_suite2p is RegisterSuite2PImaging

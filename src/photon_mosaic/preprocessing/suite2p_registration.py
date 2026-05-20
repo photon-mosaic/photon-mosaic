@@ -507,6 +507,20 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
         import torch
         from suite2p.registration import register
 
+        num_samples = self.parent_imaging_epoch.get_num_samples()
+        if end_frame > num_samples:
+            logging.warning(
+                "end_frame %d exceeds recording length %d; clamping. "
+                "This usually indicates a miscalculation upstream.",
+                end_frame,
+                num_samples,
+            )
+            end_frame = num_samples
+        if start_frame > end_frame:
+            raise ValueError(
+                f"start_frame ({start_frame}) is past end_frame ({end_frame}); " f"recording length is {num_samples}."
+            )
+
         video = self.parent_imaging_epoch.get_series(start_frame, end_frame)
         num_planes = video.shape[3] if video.ndim == 4 else 1
 
@@ -523,6 +537,8 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
         n_frames = end_frame - start_frame
         H, W = video.shape[1], video.shape[2]
         output = np.empty((n_frames, H, W, len(planes_to_process)), dtype=np.float32)
+        if n_frames == 0:
+            return output
 
         for i, p in enumerate(planes_to_process):
             plane_video = video[:, :, :, p] if video.ndim == 4 else video
