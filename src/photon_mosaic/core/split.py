@@ -58,7 +58,7 @@ class _FrameRangeEpoch(BaseImagingEpoch):
     def __init__(self, parent_epoch: BaseImagingEpoch, start_frame: int, end_frame: int):
         t_start = parent_epoch.t_start if getattr(parent_epoch, "t_start", None) is not None else 0.0
         sampling_frequency = parent_epoch.sampling_frequency
-        BaseImagingEpoch.__init__(
+        BaseImagingEpoch.__init__(  # type: ignore[call-arg]
             self,
             sampling_frequency=sampling_frequency,
             t_start=t_start + start_frame / sampling_frequency,
@@ -99,9 +99,7 @@ class SplitEpochAtFramesImaging(BaseImaging):
 
         boundaries = list(map(int, frame_boundaries))
         if any(b <= 0 or b >= n_samples for b in boundaries):
-            raise ValueError(
-                f"frame_boundaries must be strictly between 0 and {n_samples}; got {boundaries}"
-            )
+            raise ValueError(f"frame_boundaries must be strictly between 0 and {n_samples}; got {boundaries}")
         if any(boundaries[i] >= boundaries[i + 1] for i in range(len(boundaries) - 1)):
             raise ValueError(f"frame_boundaries must be strictly increasing; got {boundaries}")
 
@@ -132,6 +130,4 @@ def split_epoch_at_frames(
     suite2p's per-plane ``data.bin`` plus ``ops['frames_per_file']``) and you
     want each underlying file as its own epoch.
     """
-    return SplitEpochAtFramesImaging(
-        imaging=imaging, epoch_index=epoch_index, frame_boundaries=frame_boundaries
-    )
+    return SplitEpochAtFramesImaging(imaging=imaging, epoch_index=epoch_index, frame_boundaries=frame_boundaries)

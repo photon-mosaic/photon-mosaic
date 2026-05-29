@@ -30,7 +30,7 @@ def _list_plane_dirs(root: Path) -> list[Path]:
 
     def _plane_index(p: Path) -> int:
         try:
-            return int(p.name[len(SUITE2P_PLANE_DIR_PREFIX):])
+            return int(p.name[len(SUITE2P_PLANE_DIR_PREFIX) :])
         except ValueError:
             return -1
 
@@ -67,8 +67,7 @@ def _collect_run_metadata(root: Path, chan: int) -> dict[str, Any]:
     declared_nplanes = int(per_plane_ops[0]["nplanes"])
     if declared_nplanes != len(plane_dirs):
         raise ValueError(
-            f"ops['nplanes']={declared_nplanes} disagrees with on-disk plane count "
-            f"{len(plane_dirs)} for {root}"
+            f"ops['nplanes']={declared_nplanes} disagrees with on-disk plane count " f"{len(plane_dirs)} for {root}"
         )
 
     Ly = int(per_plane_ops[0]["Ly"])
@@ -164,8 +163,7 @@ class Suite2pImaging(BinaryImaging):
         for i, meta in enumerate(per_run[1:], start=1):
             if (meta["Ly"], meta["Lx"]) != (Ly, Lx):
                 raise ValueError(
-                    f"Run {i} ({folder_paths[i]}) has shape ({meta['Ly']}, {meta['Lx']}) "
-                    f"but run 0 has ({Ly}, {Lx})"
+                    f"Run {i} ({folder_paths[i]}) has shape ({meta['Ly']}, {meta['Lx']}) " f"but run 0 has ({Ly}, {Lx})"
                 )
             if meta["fs"] != fs:
                 raise ValueError(f"Run {i} sampling frequency {meta['fs']} disagrees with run 0 ({fs})")
