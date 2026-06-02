@@ -43,9 +43,7 @@ def _make_suite2p_folder(
     np.save(tmp_path / "stat.npy", np.array(stats, dtype=object))
 
     if include_iscell:
-        iscell = np.column_stack(
-            [rng.integers(0, 2, size=num_rois).astype(float), rng.random(num_rois)]
-        )
+        iscell = np.column_stack([rng.integers(0, 2, size=num_rois).astype(float), rng.random(num_rois)])
         np.save(tmp_path / "iscell.npy", iscell)
 
     return ops, stats
@@ -155,9 +153,7 @@ class TestFolderConstructor:
         rois = Suite2pRois(folder)
         selected = rois.select_rois([1, 3])
         assert selected.get_num_rois() == 2
-        np.testing.assert_array_equal(
-            selected.get_roi_image_masks(), rois.get_roi_image_masks(roi_ids=[1, 3])
-        )
+        np.testing.assert_array_equal(selected.get_roi_image_masks(), rois.get_roi_image_masks(roi_ids=[1, 3]))
 
     def test_no_imaging_registered_by_default(self, suite2p_folder):
         folder, _, _ = suite2p_folder

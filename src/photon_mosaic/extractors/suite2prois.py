@@ -95,19 +95,20 @@ class Suite2pRois(BaseRois):
             Integer plane index for each ROI. Required when ``n_planes > 1``.
         """
         instance = cls.__new__(cls)
-        stats = list(stats)
+        stat_list = list(stats)
         instance._init_from_stats(
-            stats=stats,
-            shape=tuple(shape),
+            stats=stat_list,
+            shape=shape,
             sampling_frequency=float(sampling_frequency),
             plane_assignments=plane_assignments,
         )
-        instance._kwargs = dict(
-            stats=stats,
-            shape=tuple(shape),
-            sampling_frequency=float(sampling_frequency),
-            plane_assignments=plane_assignments,
-        )
+        kwargs: dict[str, Any] = {
+            "stats": stat_list,
+            "shape": shape,
+            "sampling_frequency": float(sampling_frequency),
+            "plane_assignments": plane_assignments,
+        }
+        instance._kwargs = kwargs
         return instance
 
     def _init_from_stats(
