@@ -386,6 +386,3 @@ def test_kde_returns_valid_percentile():
     """KDE should return a value in [0, 100) for well-behaved data."""
     prct = _kde_mode_percentile(np.random.default_rng(0).standard_normal(1000))
     assert 0.0 <= prct < 100.0
-
-
-

@@ -1,3 +1,5 @@
+from typing import Any
+
 import numpy as np
 from spikeinterface.core.job_tools import fix_job_kwargs
 from spikeinterface.core.node_pipeline import PipelineNode, run_node_pipeline
@@ -165,7 +167,8 @@ class DfOverFExtension(AnalyzerExtension):
         win_baseline: float = 60.0,
         sig_baseline: float = 10.0,
         prctile_baseline: float | None = None,
-    ) -> dict:
+        **params: Any,
+    ) -> dict[str, Any]:
         """Set parameters for dF/F computation.
 
         Parameters
@@ -189,6 +192,10 @@ class DfOverFExtension(AnalyzerExtension):
             percentile if estimation fails. If a float, that value is used
             directly for all ROIs. Default is ``None``.
         """
+        if params:
+            unexpected = ", ".join(sorted(params))
+            raise TypeError(f"Unexpected parameter(s) for {self.__class__.__name__}: {unexpected}")
+
         return dict(
             method=method,
             win_baseline=win_baseline,
