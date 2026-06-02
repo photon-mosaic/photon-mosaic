@@ -137,3 +137,64 @@ class FluorescenceNode(PipelineNode):
 
 
 register_result_extension(FluorescenceExtension)
+
+
+class DfOverFExtension(AnalyzerExtension):
+    """Extension to compute DfOverF from fluorescence traces."""
+
+    extension_name = "df_over_f"
+    depend_on: list[str] = ["fluorescence"]
+    need_imaging = False
+    need_job_kwargs = True  # potentially, to parallelize over chunks
+
+    def _set_params(
+        self,
+        method="maximin",
+        win_baseline=60.0,
+        sig_baseline=10.0,
+    ):
+        return dict(
+            method=method,
+            win_baseline=win_baseline,
+            sig_baseline=sig_baseline,
+        )
+
+    def _run(self, verbose=False, **job_kwargs):
+        F = self.roi_analyzer.get_extension("fluorescence").get_data()
+        # compute
+        method = self.params["method"]
+        if method == "maximin":  # maximin baseline estimation as in Suite2p
+            from scipy.ndimage import gaussian_filter1d, maximum_filter1d, minimum_filter1d
+            fs = self.roi_analyzer.imaging.sampling_frequency
+            win = int(self.params["win_baseline"] * fs)
+            win += 1 if win % 2 == 0 else 0  # ensure odd window
+            F0 = gaussian_filter1d(F, sigma=self.params["sig_baseline"], axis=0)
+            F0 = minimum_filter1d(F0, size=win, axis=0)
+            F0 = maximum_filter1d(F0, size=win, axis=0)
+        else:
+            raise ValueError(f"Unknown baseline_method: '{method}'. Supported: 'maximin'.")
+
+        self.data["df_over_f"] = ((F - F0) / (F0 + np.finfo(np.float32).eps)).astype(np.float32)
+
+
+    def _get_data(self, outputs="numpy"):
+        df_over_f_traces = self.data["df_over_f"]
+        if outputs == "numpy":
+            return df_over_f_traces
+        elif outputs == "recording":
+            from spikeinterface.core import NumpyRecording
+
+            return NumpyRecording(
+                df_over_f_traces,
+                sampling_frequency=self.roi_analyzer.imaging.sampling_frequency,
+                channel_ids=self.roi_analyzer.rois.roi_ids,
+            )
+        else:
+            raise ValueError(f"Unsupported output type: {outputs}. Supported types are 'numpy' and 'recording'.")
+
+    def _select_extension_data(self, roi_ids):
+        roi_indices = self.roi_analyzer.rois.ids_to_indices(roi_ids)
+        return {"df_over_f": self.data["df_over_f"][:, roi_indices]}
+
+
+register_result_extension(DfOverFExtension)
