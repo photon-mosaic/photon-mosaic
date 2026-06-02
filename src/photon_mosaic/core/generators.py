@@ -15,7 +15,8 @@ class FluorescenceTraces(NamedTuple):
     ----------
     traces : np.ndarray
         Final fluorescence traces ``(num_frames, num_rois)``, float32.
-        Includes bleaching and noise if requested.
+        Without bleaching equals ``clean_traces`` (dF/F). With bleaching equals
+        ``(1 + clean_traces) * bleach``, i.e. absolute fluorescence normalised by F0.
     spikes : np.ndarray
         Binary spike trains ``(num_frames, num_rois)``, float32.
     clean_traces : np.ndarray
@@ -276,34 +277,28 @@ def generate_fluorescence(
         Named tuple with fields ``traces``, ``spikes``, and ``clean_traces``,
         each of shape ``(num_frames, num_rois)`` as float32.
     """
-    from scipy.signal import fftconvolve
+    from scipy.signal import lfilter
 
     rng = np.random.default_rng(seed)
 
-    decay_length = int(sampling_frequency * decay_seconds * 3)  # kernel long enough to decay fully
-    t_kernel = np.arange(decay_length) / sampling_frequency
-    kernel = np.exp(-t_kernel / decay_seconds)
-
-    bleach = None
-    if bleaching_tau is not None:
-        bleach = np.exp(-np.arange(num_frames) / (bleaching_tau * sampling_frequency))
-
+    # Generate binary spike trains
     spikes = np.zeros((num_frames, num_rois), dtype=np.float32)
-    clean_traces = np.zeros((num_frames, num_rois), dtype=np.float32)
-    traces = np.zeros((num_frames, num_rois), dtype=np.float32)
     for roi_idx in range(num_rois):
         num_events = rng.integers(5, 15)
         event_times = rng.choice(num_frames, size=num_events, replace=False)
         spikes[event_times, roi_idx] = 1.0
 
-        clean = fftconvolve(spikes[:, roi_idx], kernel)[:num_frames].astype(np.float32)
-        clean_traces[:, roi_idx] = clean
+    # Convolve spikes with exponential kernel via exact IIR recurrence: traces[t] = spikes[t] + g * traces[t-1]
+    g = np.exp(-1.0 / (decay_seconds * sampling_frequency))
+    clean_traces = lfilter([1.0], [1.0, -g], spikes, axis=0).astype(np.float32)
 
-        trace = clean.copy()
-        if bleach is not None:
-            trace *= bleach
-        if noise_std > 0:
-            trace += rng.normal(0, noise_std, num_frames).astype(np.float32)
-        traces[:, roi_idx] = trace
+    # Apply bleaching and noise
+    traces = clean_traces.copy()
+    if bleaching_tau is not None:
+        # bleach acts as F0(t): F = (1 + dF/F) * F0(t), with F0 normalised to 1 at t=0
+        bleach = np.exp(-np.arange(num_frames) / (bleaching_tau * sampling_frequency), dtype=np.float32)
+        traces = (1.0 + clean_traces) * bleach[:, np.newaxis]
+    if noise_std > 0:
+        traces = traces + rng.normal(0, noise_std, (num_frames, num_rois)).astype(np.float32)
 
     return FluorescenceTraces(traces=traces, spikes=spikes, clean_traces=clean_traces)
