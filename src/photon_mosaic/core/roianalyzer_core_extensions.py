@@ -353,10 +353,7 @@ def _kde_mode_percentile(data: np.ndarray, N: int = 2**12) -> float:
     density = density / np.trapezoid(density, mesh)
     cdf = np.cumsum(density) * (mesh[1] - mesh[0])
 
-    data_prct = float(cdf[np.argmax(density)] * 100)
-    if np.isnan(data_prct) or data_prct < 0 or data_prct >= 100:
-        raise ValueError(f"KDE returned invalid percentile: {data_prct}")
-    return data_prct
+    return float(cdf[np.argmax(density)] * 100)
 
 
 register_result_extension(DfOverFExtension)
