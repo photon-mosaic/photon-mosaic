@@ -1,7 +1,13 @@
 import numpy as np
 import pytest
 
-from photon_mosaic.core.generators import generate_imaging_with_rois, generate_random_imaging, generate_rois
+from photon_mosaic.core.generators import (
+    FluorescenceTraces,
+    generate_fluorescence,
+    generate_imaging_with_rois,
+    generate_random_imaging,
+    generate_rois,
+)
 
 
 def test_generate_random_imaging_int_vs_singleton_tuple_same_output():
@@ -138,6 +144,71 @@ def test_generate_rois_multiplane_binary_vs_weighted_value_properties():
     assert np.any((masks_w > 0.0) & (masks_w < 1.0))
 
 
+def test_generate_rois_invalid_radius_range_raises_assertion():
+    with pytest.raises(AssertionError, match="Invalid radius range"):
+        _ = generate_rois(num_rois=1, height=30, width=30, radius_range=(7, 5))
+
+    # Too large to fit: radius_range[1] must be < width - radius_range[1] and same for height
+    with pytest.raises(AssertionError, match="ROIs may not fit"):
+        _ = generate_rois(num_rois=1, height=20, width=20, radius_range=(5, 15))
+
+
+# ── generate_fluorescence tests ──
+
+
+def test_generate_fluorescence_returns_fluorescence_traces():
+    result = generate_fluorescence(num_frames=200, num_rois=3, seed=0)
+    assert isinstance(result, FluorescenceTraces)
+
+
+def test_generate_fluorescence_output_shapes_and_dtype():
+    result = generate_fluorescence(num_frames=200, num_rois=3, seed=0)
+    assert result.traces.shape == (200, 3)
+    assert result.spikes.shape == (200, 3)
+    assert result.clean_traces.shape == (200, 3)
+    assert result.traces.dtype == np.float32
+    assert result.spikes.dtype == np.float32
+    assert result.clean_traces.dtype == np.float32
+
+
+def test_generate_fluorescence_spikes_are_binary():
+    result = generate_fluorescence(num_frames=500, num_rois=4, seed=1)
+    unique = np.unique(result.spikes)
+    assert set(unique).issubset({0.0, 1.0})
+
+
+def test_generate_fluorescence_clean_traces_equal_traces_without_noise_or_bleaching():
+    result = generate_fluorescence(num_frames=300, num_rois=2, noise_std=0.0, bleaching_tau=None, seed=2)
+    np.testing.assert_array_equal(result.traces, result.clean_traces)
+
+
+def test_generate_fluorescence_noise_changes_traces():
+    r_clean = generate_fluorescence(num_frames=300, num_rois=2, noise_std=0.0, seed=3)
+    r_noisy = generate_fluorescence(num_frames=300, num_rois=2, noise_std=1.0, seed=3)
+    assert not np.array_equal(r_clean.traces, r_noisy.traces)
+    np.testing.assert_array_equal(r_clean.clean_traces, r_noisy.clean_traces)
+
+
+def test_generate_fluorescence_bleaching_attenuates_trace():
+    result = generate_fluorescence(num_frames=500, num_rois=1, bleaching_tau=5.0, seed=4)
+    # Last quarter should be weaker than first quarter on average
+    assert result.traces[:125, 0].mean() > result.traces[375:, 0].mean()
+
+
+def test_generate_fluorescence_is_reproducible():
+    r1 = generate_fluorescence(num_frames=200, num_rois=3, noise_std=0.1, bleaching_tau=30.0, seed=42)
+    r2 = generate_fluorescence(num_frames=200, num_rois=3, noise_std=0.1, bleaching_tau=30.0, seed=42)
+    np.testing.assert_array_equal(r1.traces, r2.traces)
+    np.testing.assert_array_equal(r1.spikes, r2.spikes)
+    np.testing.assert_array_equal(r1.clean_traces, r2.clean_traces)
+
+
+def test_generate_fluorescence_different_seeds_differ():
+    r1 = generate_fluorescence(num_frames=200, num_rois=2, seed=0)
+    r2 = generate_fluorescence(num_frames=200, num_rois=2, seed=1)
+    assert not np.array_equal(r1.traces, r2.traces)
+
+
 # ── generate_imaging_with_rois tests ──
 
 
@@ -270,12 +341,3 @@ def test_generate_imaging_with_rois_decay_affects_trace():
     # Both should have signal added (mean above 0.5 which is the random baseline mean)
     assert im_short.get_series().mean() > 0.5
     assert im_long.get_series().mean() > 0.5
-
-
-def test_generate_rois_invalid_radius_range_raises_assertion():
-    with pytest.raises(AssertionError, match="Invalid radius range"):
-        _ = generate_rois(num_rois=1, height=30, width=30, radius_range=(7, 5))
-
-    # Too large to fit: radius_range[1] must be < width - radius_range[1] and same for height
-    with pytest.raises(AssertionError, match="ROIs may not fit"):
-        _ = generate_rois(num_rois=1, height=20, width=20, radius_range=(5, 15))
