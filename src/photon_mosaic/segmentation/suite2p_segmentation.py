@@ -7,7 +7,8 @@ from numpy.typing import NDArray
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from photon_mosaic.core import BaseImaging, BaseRois
+from photon_mosaic.core import BaseImaging
+from photon_mosaic.extractors.suite2prois import Suite2pRois
 
 
 class Suite2pSegmentationSettings(BaseSettings):
@@ -104,102 +105,26 @@ class Suite2pSegmentationSettings(BaseSettings):
         return base
 
 
-class Suite2pDetectedRois(BaseRois):
-    """ROIs produced by running suite2p detection on a registered imaging object.
-
-    Unlike :class:`~photon_mosaic.extractors.Suite2pRois`, this class stores the
-    ``stat`` array in memory rather than loading it from a saved folder.
-    """
-
-    def __init__(
-        self,
-        stats: list[dict[str, Any]],
-        shape: tuple[int, int, int],
-        sampling_frequency: float,
-        plane_assignments: NDArray[np.intp] | None = None,
-    ) -> None:
-        """Create ROIs from an in-memory suite2p ``stat`` list.
-
-        Parameters
-        ----------
-        stats : list[dict]
-            List of per-ROI stat dicts from suite2p detection. Each dict must
-            contain ``ypix``, ``xpix``, and ``lam``.
-        shape : tuple[int, int, int]
-            Spatial shape ``(height, width, n_planes)``.
-        sampling_frequency : float
-            Imaging sampling rate in Hz.
-        plane_assignments : NDArray | None, optional
-            Integer plane index for each ROI. Required when ``n_planes > 1``.
-        """
-        roi_ids = np.arange(len(stats))
-        BaseRois.__init__(self, sampling_frequency=sampling_frequency, shape=shape, roi_ids=roi_ids)
-
-        self._stats = stats
-        self._plane_assignments = (
-            plane_assignments if plane_assignments is not None else np.zeros(len(stats), dtype=int)
-        )
-
-        # Expose scalar stat fields as properties
-        skip = {"xpix", "ypix", "lam", "soma_crop", "overlap", "neuropil_mask"}
-        if stats:
-            for key in stats[0]:
-                if key in skip:
-                    continue
-                values = [s[key] for s in stats]
-                try:
-                    self.set_property(key, values)
-                except Exception:
-                    logging.debug("Could not set property %r from stat: %s", key, values[:3])
-
-        self._kwargs = dict(
-            stats=stats,
-            shape=shape,
-            sampling_frequency=sampling_frequency,
-            plane_assignments=plane_assignments,
-        )
-
-    def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> NDArray:
-        """Return binary image masks shaped ``(n_rois, H, W)`` or ``(n_rois, H, W, n_planes)``."""
-        if roi_ids is None:
-            roi_ids = self.roi_ids.tolist()
-
-        H, W, n_planes = self.shape
-        masks = []
-        for roi_id in roi_ids:
-            roi_index = int(roi_id)
-            stat = self._stats[roi_index]
-            if n_planes == 1:
-                mask = np.zeros((H, W), dtype=bool)
-                mask[stat["ypix"], stat["xpix"]] = True
-            else:
-                mask = np.zeros((H, W, n_planes), dtype=bool)
-                p = int(self._plane_assignments[roi_index])
-                mask[stat["ypix"], stat["xpix"], p] = True
-            masks.append(mask)
-        return np.array(masks)
-
-
 class Suite2pEpochSegmentations:
-    """Container of per-epoch :class:`Suite2pDetectedRois` results.
+    """Container of per-epoch :class:`Suite2pRois` results.
 
     Returned by :func:`detect_rois_suite2p` when ``scope='per_epoch'`` so that
     each epoch keeps its own ROI set, mirroring the per-epoch structure used by
     motion correction.
     """
 
-    def __init__(self, segmentations: dict[int, Suite2pDetectedRois]) -> None:
+    def __init__(self, segmentations: dict[int, Suite2pRois]) -> None:
         """Wrap an ``{epoch_index: rois}`` mapping.
 
         Parameters
         ----------
-        segmentations : dict[int, Suite2pDetectedRois]
+        segmentations : dict[int, Suite2pRois]
             One entry per processed epoch.
         """
         self._segmentations = dict(segmentations)
         self.epoch_indices: list[int] = sorted(self._segmentations)
 
-    def __getitem__(self, epoch_index: int) -> Suite2pDetectedRois:
+    def __getitem__(self, epoch_index: int) -> Suite2pRois:
         """Return the ROIs detected for ``epoch_index``."""
         return self._segmentations[epoch_index]
 
@@ -494,7 +419,7 @@ def _detect_segmentation(
     xrange: Sequence[int],
     badframes: NDArray[np.bool_] | None,
     cfg: Suite2pSegmentationSettings,
-) -> Suite2pDetectedRois:
+) -> Suite2pRois:
     """Bin and detect ROIs over a single contiguous span of epochs."""
     H, W, n_planes = imaging.shape
 
@@ -537,7 +462,7 @@ def _detect_segmentation(
         all_stats.extend(stat)
         plane_assignments.extend([plane_index] * len(stat))
 
-    rois = Suite2pDetectedRois(
+    rois = Suite2pRois.from_stat(
         stats=all_stats,
         shape=(H, W, n_planes),
         sampling_frequency=imaging.sampling_frequency,
@@ -556,13 +481,13 @@ def detect_rois_suite2p(
     scope: Literal["all_epochs", "per_epoch"] = "all_epochs",
     epoch_indices: Sequence[int] | None = None,
     settings: Suite2pSegmentationSettings | dict[str, Any] | None = None,
-) -> Suite2pDetectedRois | Suite2pEpochSegmentations:
+) -> Suite2pRois | Suite2pEpochSegmentations:
     """Detect ROIs using suite2p detection on a registered imaging object.
 
     Honours the imaging Epoch model: ``scope='per_epoch'`` runs detection
     independently per epoch and returns a :class:`Suite2pEpochSegmentations`,
     while ``scope='all_epochs'`` (default) concatenates the selected epochs and
-    returns a single :class:`Suite2pDetectedRois`. Frames are pulled lazily via
+    returns a single :class:`Suite2pRois`. Frames are pulled lazily via
     :func:`BaseImagingEpoch.get_series` and stream-binned in place, so the full
     raw movie is never materialised.
 
@@ -580,8 +505,8 @@ def detect_rois_suite2p(
         array or a per-epoch sequence (each shaped ``(n_frames_in_epoch,)``).
     scope : {"all_epochs", "per_epoch"}, optional
         ``"all_epochs"`` concatenates the selected epochs and returns one
-        :class:`Suite2pDetectedRois`. ``"per_epoch"`` runs detection per epoch
-        and returns a :class:`Suite2pEpochSegmentations`.
+        :class:`Suite2pRois`. ``"per_epoch"`` runs detection per epoch and
+        returns a :class:`Suite2pEpochSegmentations`.
     epoch_indices : sequence of int | None, optional
         Epochs to include (in order). Defaults to all epochs of ``imaging``.
     settings : Suite2pSegmentationSettings | dict | None, optional
@@ -589,7 +514,7 @@ def detect_rois_suite2p(
 
     Returns
     -------
-    Suite2pDetectedRois | Suite2pEpochSegmentations
+    Suite2pRois | Suite2pEpochSegmentations
         Single ROI set when ``scope='all_epochs'``; one ROI set per epoch
         otherwise.
     """
@@ -632,7 +557,7 @@ def detect_rois_suite2p(
         )
 
     if scope == "per_epoch":
-        results: dict[int, Suite2pDetectedRois] = {}
+        results: dict[int, Suite2pRois] = {}
         for i, ep_idx in enumerate(selected):
             results[ep_idx] = _detect_segmentation(
                 imaging,
