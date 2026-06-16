@@ -20,4 +20,5 @@ from .split import (
     split_epoch_at_frames,
     select_epochs,
 )
+from .concatenate import ConcatenatePlanesImaging, concatenate_planes
 from .motion import Motion
