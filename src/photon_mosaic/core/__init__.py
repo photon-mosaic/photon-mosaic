@@ -18,6 +18,6 @@ from .split import (
     SelectEpochImaging,
     SplitEpochAtFramesImaging,
     split_epoch_at_frames,
-    split_epochs,
+    select_epochs,
 )
 from .motion import Motion
