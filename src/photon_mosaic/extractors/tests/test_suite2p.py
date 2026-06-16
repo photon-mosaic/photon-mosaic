@@ -11,7 +11,11 @@ import numpy as np
 import pytest
 
 from photon_mosaic.core.split import split_epoch_at_frames
-from photon_mosaic.extractors.suite2p import Suite2pImaging, read_suite2p
+from photon_mosaic.extractors.suite2p import (
+    Suite2pImaging,
+    read_suite2p,
+    split_suite2p_into_files,
+)
 
 SUITE2P_DTYPE = np.int16
 
@@ -168,6 +172,48 @@ def test_suite2p_imaging_records_frames_per_file_metadata(tmp_path: Path):
     sub = split_epoch_at_frames(imaging, 0, boundaries)
     assert sub.get_num_epochs() == len(fpf)
     assert [sub.get_num_samples(segment_index=i) for i in range(len(fpf))] == fpf
+
+
+def test_split_suite2p_into_files_flattens_single_run(tmp_path: Path):
+    root = tmp_path / "run0"
+    n_frames, Ly, Lx = 10, 3, 4
+    fpf = [3, 4, 3]
+    written = _write_suite2p_run(root, n_frames=n_frames, Ly=Ly, Lx=Lx, nplanes=1, frames_per_file=fpf)
+
+    imaging = Suite2pImaging(root)
+    split = split_suite2p_into_files(imaging)
+
+    assert split.get_num_epochs() == len(fpf)
+    assert [split.get_num_samples(segment_index=i) for i in range(len(fpf))] == fpf
+    # registered flag carried over from the suite2p parent
+    assert split.is_registered is True
+
+    # Concatenating the per-file epochs back recovers the original movie
+    recovered = np.concatenate([split.get_series(epoch_index=i)[..., 0] for i in range(len(fpf))], axis=0)
+    np.testing.assert_array_equal(recovered, written[0][1])
+
+
+def test_split_suite2p_into_files_flattens_all_epochs(tmp_path: Path):
+    root_a = tmp_path / "run0"
+    root_b = tmp_path / "run1"
+    Ly, Lx = 3, 3
+    _write_suite2p_run(root_a, n_frames=7, Ly=Ly, Lx=Lx, nplanes=1, frames_per_file=[3, 4])
+    _write_suite2p_run(root_b, n_frames=9, Ly=Ly, Lx=Lx, nplanes=1, frames_per_file=[4, 5])
+
+    imaging = Suite2pImaging([root_a, root_b])
+    split = split_suite2p_into_files(imaging)
+
+    # Files across both runs become consecutive epochs
+    assert split.get_num_epochs() == 4
+    assert [split.get_num_samples(segment_index=i) for i in range(4)] == [3, 4, 4, 5]
+
+
+def test_split_suite2p_into_files_requires_frames_per_file(tmp_path: Path):
+    root = tmp_path / "run0"
+    _write_suite2p_run(root, n_frames=6, Ly=3, Lx=3, nplanes=1)  # no frames_per_file
+    imaging = Suite2pImaging(root)
+    with pytest.raises(ValueError, match="frames_per_file"):
+        _ = split_suite2p_into_files(imaging)
 
 
 def test_suite2p_imaging_rejects_inconsistent_geometry_across_planes(tmp_path: Path):

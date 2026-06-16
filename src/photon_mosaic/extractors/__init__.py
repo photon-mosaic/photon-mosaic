@@ -3,14 +3,21 @@ from .roiextractors import (
     BaseROIExtractorImaging,
     BaseROIExtractorImagingEpoch,
 )
-from .suite2p import Suite2pImaging, read_suite2p
+from .suite2p import (
+    SplitSuite2pIntoFilesImaging,
+    Suite2pImaging,
+    read_suite2p,
+    split_suite2p_into_files,
+)
 
 # Build __all__ to include all exports
 __all__ = [
     "BaseROIExtractorImaging",
     "BaseROIExtractorImagingEpoch",
     "Suite2pImaging",
+    "SplitSuite2pIntoFilesImaging",
     "read_suite2p",
+    "split_suite2p_into_files",
 ]
 
 

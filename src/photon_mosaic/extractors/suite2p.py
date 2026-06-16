@@ -18,7 +18,9 @@ from typing import Any
 
 import numpy as np
 
+from photon_mosaic.core.baseimaging import BaseImaging
 from photon_mosaic.core.binaryimaging import BinaryImaging
+from photon_mosaic.core.split import split_epoch_at_frames
 
 SUITE2P_BIN_DTYPE = np.int16  # suite2p writes registered movies as int16
 SUITE2P_PLANE_DIR_PREFIX = "plane"
@@ -207,6 +209,71 @@ class Suite2pImaging(BinaryImaging):
             shape=bk["shape"],
             file_offset=bk["file_offset"],
         )
+
+
+class SplitSuite2pIntoFilesImaging(BaseImaging):
+    """Imaging proxy that subdivides a suite2p object at its source-file boundaries.
+
+    Suite2p concatenates the source acquisition files into one registered movie
+    per run and records the per-file frame counts in ``ops['frames_per_file']``.
+    A :class:`Suite2pImaging` keeps these as ``frames_per_file_per_epoch`` (one
+    list per run/epoch). This proxy flattens **every** epoch of the input into
+    its constituent per-file sub-epochs, in order, so each original acquisition
+    file becomes its own epoch. Pixels are pulled lazily from the parent.
+
+    Parameters
+    ----------
+    imaging : BaseImaging
+        A suite2p-derived imaging object carrying ``frames_per_file_per_epoch``
+        (e.g. :class:`Suite2pImaging`).
+    """
+
+    def __init__(self, imaging: BaseImaging):
+        fpf_per_epoch = getattr(imaging, "frames_per_file_per_epoch", None)
+        if fpf_per_epoch is None:
+            raise TypeError("imaging has no 'frames_per_file_per_epoch'; autosplit needs a suite2p-derived object")
+        if any(fpf is None for fpf in fpf_per_epoch):
+            raise ValueError("ops['frames_per_file'] is missing for at least one epoch; cannot autosplit this object")
+
+        BaseImaging.__init__(self, sampling_frequency=imaging.sampling_frequency, shape=imaging.shape)
+        # Carries is_registered (and other metadata) from the suite2p parent.
+        imaging.copy_metadata(self)
+
+        for epoch_index, frames_per_file in enumerate(fpf_per_epoch):
+            n_samples = imaging.epochs[epoch_index].get_num_samples()
+            if sum(frames_per_file) != n_samples:
+                raise ValueError(
+                    f"frames_per_file for epoch {epoch_index} sum to {sum(frames_per_file)} "
+                    f"but the epoch has {n_samples} frames"
+                )
+            boundaries = np.cumsum(frames_per_file)[:-1].tolist()
+            # Reuse the generic splitter; [] boundaries (single-file epoch) yields the whole epoch.
+            per_file = split_epoch_at_frames(imaging, epoch_index, boundaries)
+            for epoch in per_file.epochs:
+                self.add_epoch(epoch)
+
+        self._parent = imaging
+        self._kwargs = {"imaging": imaging}
+        self.name = f"Suite2p per-file split ({self.get_num_epochs()} files)"
+
+
+def split_suite2p_into_files(imaging: BaseImaging) -> SplitSuite2pIntoFilesImaging:
+    """Split a suite2p imaging object into one epoch per source acquisition file.
+
+    Reads ``frames_per_file_per_epoch`` and flattens every run/epoch of
+    ``imaging`` into its per-file sub-epochs (use case 3 of issue #77).
+
+    Parameters
+    ----------
+    imaging : BaseImaging
+        A suite2p-derived imaging object (see :class:`Suite2pImaging`).
+
+    Returns
+    -------
+    SplitSuite2pIntoFilesImaging
+        A lazy view with one epoch per original acquisition file.
+    """
+    return SplitSuite2pIntoFilesImaging(imaging)
 
 
 def read_suite2p(
