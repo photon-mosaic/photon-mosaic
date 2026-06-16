@@ -477,6 +477,10 @@ class RegisterSuite2PImaging(BasePreprocessor):
             epoch = RegisterSuite2PImagingEpoch(parent_epoch, motion, epoch_idx, **kwargs)
             self.add_epoch(epoch)
 
+        # The output of registration is, by definition, registered (overrides the
+        # parent's flag copied by BasePreprocessor.copy_metadata).
+        self.is_registered = True
+
         self._kwargs = dict(imaging=imaging, motion=motion, **kwargs)
 
 

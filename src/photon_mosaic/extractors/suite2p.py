@@ -185,6 +185,9 @@ class Suite2pImaging(BinaryImaging):
         # Suite2p-level reconstruction args so dump/load reinstantiates by folder.
         self._binary_kwargs = self._kwargs
 
+        # suite2p binaries are the registered (motion-corrected) movie
+        self.is_registered = True
+
         self.frames_per_file_per_epoch: list[list[int] | None] = [meta["frames_per_file"] for meta in per_run]
         self.suite2p_roots: list[str] = [str(p.absolute()) for p in folder_paths]
         self.chan: int = chan

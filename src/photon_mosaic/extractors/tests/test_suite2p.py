@@ -76,6 +76,8 @@ def test_suite2p_imaging_single_plane_single_run(tmp_path: Path):
     assert imaging.sampling_frequency == 30.0
     assert imaging.chan == 1
     assert imaging.nchannels == 1
+    # suite2p binaries are the registered movie
+    assert imaging.is_registered is True
 
     out = imaging.get_series(0, n_frames)
     np.testing.assert_array_equal(out[..., 0], written[0][1])
