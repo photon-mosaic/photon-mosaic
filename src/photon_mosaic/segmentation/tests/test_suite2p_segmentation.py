@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 
 from photon_mosaic.core import NumpyImaging
+from photon_mosaic.extractors import Suite2pRois
 from photon_mosaic.segmentation import (
-    Suite2pDetectedRois,
     Suite2pEpochSegmentations,
     detect_rois_suite2p,
 )
@@ -95,7 +95,7 @@ class TestDetectRoisSuite2p:
         bin_calls, detect_calls = fake_inner
         rois = detect_rois_suite2p(imaging, scope="all_epochs")
 
-        assert isinstance(rois, Suite2pDetectedRois)
+        assert isinstance(rois, Suite2pRois)
         assert len(bin_calls) == 1
         assert bin_calls[0]["epoch_indices"] == [0, 1]
         assert bin_calls[0]["yrange"] == [0, 4]
@@ -115,8 +115,8 @@ class TestDetectRoisSuite2p:
 
         assert isinstance(rois_by_epoch, Suite2pEpochSegmentations)
         assert rois_by_epoch.epoch_indices == [0, 1]
-        assert isinstance(rois_by_epoch[0], Suite2pDetectedRois)
-        assert isinstance(rois_by_epoch[1], Suite2pDetectedRois)
+        assert isinstance(rois_by_epoch[0], Suite2pRois)
+        assert isinstance(rois_by_epoch[1], Suite2pRois)
         assert len(bin_calls) == 2
         assert bin_calls[0]["epoch_indices"] == [0]
         assert bin_calls[1]["epoch_indices"] == [1]

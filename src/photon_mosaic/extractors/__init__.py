@@ -9,6 +9,7 @@ from .suite2p import (
     read_suite2p,
     split_suite2p_into_files,
 )
+from .suite2prois import Suite2pRois, read_suite2p_rois
 
 # Build __all__ to include all exports
 __all__ = [
@@ -18,6 +19,8 @@ __all__ = [
     "SplitSuite2pIntoFilesImaging",
     "read_suite2p",
     "split_suite2p_into_files",
+    "Suite2pRois",
+    "read_suite2p_rois",
 ]
 
 
