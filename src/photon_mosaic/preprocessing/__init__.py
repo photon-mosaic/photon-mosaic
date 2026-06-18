@@ -3,4 +3,10 @@ from .suite2p_registration import RegisterSuite2PImagingEpoch
 from .suite2p_registration import RegisterSuite2PImaging
 from .suite2p_registration import register_suite2p
 from .suite2p_registration import Suite2pRegistrationSettings
+from .jnormcorre_registration import compute_motion_jnormcorre
+from .jnormcorre_registration import RegisterJNormcorreImagingEpoch
+from .jnormcorre_registration import RegisterJNormcorreImaging
+from .jnormcorre_registration import register_jnormcorre
+from .jnormcorre_registration import JNormcorreRegistrationSettings
+from .jnormcorre_registration import JNormcorreMotion
 from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
