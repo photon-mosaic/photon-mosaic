@@ -13,6 +13,15 @@ __all__ = [
     "read_suite2p_rois",
 ]
 
+from typing import Any
+
+def __getattr__(name: str) -> Any:
+    """Helper function to tell `mypy` functions without unforeseen side effect.
+
+    At type-check, `mypy` will still be satisfied thanks to this re-implementation.
+    At runtime, the expected attribute error will still be raised if needed.
+    """
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 # Import dynamically created classes and read functions
 def _setup_dynamic_imports():
