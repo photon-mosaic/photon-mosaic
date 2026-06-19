@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -16,7 +14,8 @@ def suite2p_google_drive(num_files: int = 5) -> list:
     """Download and return \"official\" suite2p sample TIFFs as a list of imaging objects.
 
     Assumes they are sampled at 30 Hz. There are maximum 50 TIFF files available, with 200 frames each.
-    Each TIFF file is read into its own imaging object.
+    Each TIFF file is read into its own imaging object, using a generic tiff imaging reader.
+    Note that this reader loads the whole image into memory.
 
     Parameters
     ----------

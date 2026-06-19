@@ -16,10 +16,11 @@ __all__ = [
 from typing import Any
 
 def __getattr__(name: str) -> Any:
-    """Helper function to tell `mypy` functions without unforeseen side effect.
+    """Helper function to tell `mypy` this module creates dynamic functions.
 
-    At type-check, `mypy` will still be satisfied thanks to this re-implementation.
-    At runtime, the expected attribute error will still be raised if needed.
+    At type-check, `mypy` will still be satisfied thanks to this re-implementation
+    of __getattr__. At runtime, the expected attribute error will still be raised
+    if a non-existent function was called.
     """
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
