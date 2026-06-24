@@ -7,7 +7,7 @@ from photon_mosaic.extractors import read_tiff_imaging
 
 _FOLDER_ID = "0B649boZqpYG1R3ota25jdUthSzQ"
 _RESOURCE_KEY = "0-wSoqFv5rnE6TERPcJHwQtQ"
-_CACHE_DIR = Path(pooch.os_cache("photon-mosaic")) / "suite2p_sample_data"
+_CACHE_DIR = Path.home() / ".photon-mosaic" / "sample_data" / "suite2p"
 
 
 def download_suite2p_google_drive(num_files: int = 5) -> list:
