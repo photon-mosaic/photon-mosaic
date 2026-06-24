@@ -10,7 +10,7 @@ _RESOURCE_KEY = "0-wSoqFv5rnE6TERPcJHwQtQ"
 _CACHE_DIR = Path(pooch.os_cache("photon-mosaic")) / "suite2p_sample_data"
 
 
-def suite2p_google_drive(num_files: int = 5) -> list:
+def download_suite2p_google_drive(num_files: int = 5) -> list:
     """Download and return \"official\" suite2p sample TIFFs as a list of imaging objects.
 
     Assumes they are sampled at 30 Hz. There are maximum 50 TIFF files available, with 200 frames each.
