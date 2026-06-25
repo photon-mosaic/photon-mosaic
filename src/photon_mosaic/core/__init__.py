@@ -5,10 +5,13 @@ from .binaryrois import BinaryFolderRois, BinaryRois
 from .generators import generate_imaging_with_rois, generate_random_imaging, generate_rois
 from .loading import load
 from .motion import Motion
+from .multifield import FieldGeometry, MultiFieldImaging
 from .numpyimaging import NumpyImaging
 from .roianalyzer import (
     AnalyzerExtension,
+    MultiFieldRoiAnalyzer,
     RoiAnalyzer,
+    create_multifield_roi_analyzer,
     create_roi_analyzer,
     load_roi_analyzer,
     register_result_extension,
