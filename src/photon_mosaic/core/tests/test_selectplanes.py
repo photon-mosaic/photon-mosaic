@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from photon_mosaic.core.generators import generate_random_imaging
-from photon_mosaic.core.select_planes import SelectPlanesImaging, select_planes
+from photon_mosaic.core.selectplanes import SelectPlanesImaging, select_planes
 
 
 def test_select_planes_returns_lazy_subset_per_epoch():
