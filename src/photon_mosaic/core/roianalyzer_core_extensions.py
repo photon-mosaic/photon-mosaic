@@ -192,10 +192,6 @@ class DfOverFExtension(AnalyzerExtension):
             percentile if estimation fails. If a float, that value is used
             directly for all ROIs. Default is ``None``.
         """
-        if params:
-            unexpected = ", ".join(sorted(params))
-            raise TypeError(f"Unexpected parameter(s) for {self.__class__.__name__}: {unexpected}")
-
         return dict(
             method=method,
             win_baseline=win_baseline,
