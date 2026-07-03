@@ -17,7 +17,7 @@ def download_aind_multiregion_data(
 
     Downloads and caches local z-stack TIFF files from the AIND open-data S3
     bucket, reads them as imaging objects, selects requested planes, and
-    returns the resulting list.
+    returns the resulting mapping.
 
     Data has 2 channels, 81 planes, 4 regions and 20 time frames.
     Each region file is 1.7GB and downloaded individually, so calling this
@@ -35,12 +35,11 @@ def download_aind_multiregion_data(
 
     Returns
     -------
-    list[BaseImaging]
-        List of plane-selected imaging objects, one per
-        ``(channel, region)`` combination. The region index changes first.
+    dict[tuple[int, int], BaseImaging]
+        Mapping from ``(channel, region)`` to plane-selected imaging objects.
     """
     bucket_name = "aind-open-data"
-    imagings = []
+    imagings = {}
 
     for channel in channels:
         for region in regions:
@@ -64,6 +63,6 @@ def download_aind_multiregion_data(
                 plane_ids=plane_ids,
             )
 
-            imagings.append(imaging)
+            imagings[(channel, region)] = imaging
 
     return imagings
