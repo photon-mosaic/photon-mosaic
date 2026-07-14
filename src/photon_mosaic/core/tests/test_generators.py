@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from photon_mosaic.core.generators import (
-    FluorescenceTraces,
+    FluorescenceData,
     generate_fluorescence,
     generate_imaging_with_rois,
     generate_random_imaging,
@@ -158,7 +158,7 @@ def test_generate_rois_invalid_radius_range_raises_assertion():
 
 def test_generate_fluorescence_returns_fluorescence_traces():
     result = generate_fluorescence(num_frames=200, num_rois=3, seed=0)
-    assert isinstance(result, FluorescenceTraces)
+    assert isinstance(result, FluorescenceData)
 
 
 def test_generate_fluorescence_output_shapes_and_dtype():

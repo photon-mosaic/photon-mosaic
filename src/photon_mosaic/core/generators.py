@@ -8,7 +8,7 @@ from photon_mosaic.core import BaseRois
 from photon_mosaic.core.numpyimaging import NumpyImaging, NumpyRois
 
 
-class FluorescenceTraces(NamedTuple):
+class FluorescenceData(NamedTuple):
     """Return type of :func:`generate_fluorescence`.
 
     Attributes
@@ -250,7 +250,7 @@ def generate_fluorescence(
     noise_std: float = 0.0,
     bleaching_tau: float | None = None,
     seed: int | None = None,
-) -> FluorescenceTraces:
+) -> FluorescenceData:
     """Generate synthetic fluorescence traces by convolving random spike events with an exponential kernel.
 
     Parameters
@@ -273,7 +273,7 @@ def generate_fluorescence(
 
     Returns
     -------
-    FluorescenceTraces
+    FluorescenceData
         Named tuple with fields ``traces``, ``spikes``, and ``clean_traces``,
         each of shape ``(num_frames, num_rois)`` as float32.
     """
@@ -301,4 +301,4 @@ def generate_fluorescence(
     if noise_std > 0:
         traces = traces + rng.normal(0, noise_std, (num_frames, num_rois)).astype(np.float32)
 
-    return FluorescenceTraces(traces=traces, spikes=spikes, clean_traces=clean_traces)
+    return FluorescenceData(traces=traces, spikes=spikes, clean_traces=clean_traces)
