@@ -256,6 +256,22 @@ def test_generate_imaging_with_rois_adds_fluorescence_signal():
     assert with_bumps.get_series().mean() > plain.get_series().mean()
 
 
+def test_generate_imaging_with_rois_noise_std_default_matches_explicit_one():
+    """noise_std=1.0 (the default) should reproduce the un-scaled background exactly."""
+    kwargs = dict(num_frames=60, height=20, width=20, num_rois=3, radius_range=(3, 5), seed=1)
+    _, default = generate_imaging_with_rois(**kwargs)
+    _, explicit = generate_imaging_with_rois(**kwargs, noise_std=1.0)
+    np.testing.assert_array_equal(default.get_series(), explicit.get_series())
+
+
+def test_generate_imaging_with_rois_noise_std_scales_background():
+    """Increasing noise_std should increase the video's overall standard deviation."""
+    kwargs = dict(num_frames=200, height=20, width=20, num_rois=3, radius_range=(3, 5), seed=1)
+    _, quiet = generate_imaging_with_rois(**kwargs, noise_std=0.1)
+    _, loud = generate_imaging_with_rois(**kwargs, noise_std=5.0)
+    assert loud.get_series().std() > quiet.get_series().std()
+
+
 def test_generate_imaging_with_rois_is_reproducible():
     kwargs = dict(
         num_frames=60,

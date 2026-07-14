@@ -164,6 +164,7 @@ def generate_imaging_with_rois(
     sampling_frequency: float = 30.0,
     decay_seconds: float = 2.0,
     weighted_rois: bool = False,
+    noise_std: float = 1.0,
     seed: int | None = None,
 ) -> tuple[BaseRois, NumpyImaging]:
     """Generate a random NumpyImaging object and corresponding ROIs with fluorescence activity.
@@ -191,6 +192,11 @@ def generate_imaging_with_rois(
         Duration of exponential decay for fluorescence events in seconds.
     weighted_rois : bool, default: False
         Whether to create weighted masks.
+    noise_std : float, default: 1.0
+        Scale factor applied to the random background video from
+        `generate_random_imaging` before injecting the clean ROI masks x
+        clean_traces tensor product. 1.0 preserves the default background
+        noise amplitude; use values >1 to increase noise, <1 to decrease it.
     seed : int | None, default: None
         Random seed for reproducibility.
 
@@ -231,11 +237,12 @@ def generate_imaging_with_rois(
         decay_seconds=decay_seconds,
         seed=fluorescence_seed,
     )
-    # Inject traces into video: (T, N) @ (N, H*W*P) -> (T, H*W*P) -> (T, H, W, P)
+    # Inject clean traces into video: (T, N) @ (N, H*W*P) -> (T, H*W*P) -> (T, H, W, P)
     video = imaging.epochs[0]._video
+    video *= noise_std
     masks = rois.get_roi_image_masks()  # (N, H, W) or (N, H, W, P)
     masks_flat = masks.reshape(num_rois, -1).astype(video.dtype)
-    video += (fluorescence.traces @ masks_flat).reshape(video.shape)
+    video += (fluorescence.clean_traces @ masks_flat).reshape(video.shape)
 
     rois.register_imaging(imaging)  # Link the ROIs to the imaging data
 
