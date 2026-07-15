@@ -164,13 +164,16 @@ def generate_imaging_with_rois(
     sampling_frequency: float = 30.0,
     decay_seconds: float = 2.0,
     weighted_rois: bool = False,
-    noise_std: float = 1.0,
+    background: float = 0.2,
+    baseline_range: tuple[float, float] = (0.5, 1.5),
+    noise_std: float = 0.1,
+    bleaching_tau: float | None = None,
     seed: int | None = None,
-) -> tuple[BaseRois, NumpyImaging]:
+) -> tuple[BaseRois, NumpyImaging, FluorescenceData]:
     """Generate a random NumpyImaging object and corresponding ROIs with fluorescence activity.
 
     Creates synthetic imaging data with exponentially decaying fluorescence bumps
-    injected at random times for each ROI.
+    injected at random times for each ROI, on top of a background with Gaussian noise.
 
     Parameters
     ----------
@@ -192,11 +195,22 @@ def generate_imaging_with_rois(
         Duration of exponential decay for fluorescence events in seconds.
     weighted_rois : bool, default: False
         Whether to create weighted masks.
-    noise_std : float, default: 1.0
-        Scale factor applied to the random background video from
-        `generate_random_imaging` before injecting the clean ROI masks x
-        clean_traces tensor product. 1.0 preserves the default background
-        noise amplitude; use values >1 to increase noise, <1 to decrease it.
+    background : float, default: 0.2
+        Mean pixel intensity present everywhere in the frame, including under
+        the ROIs (e.g. out-of-focus light). 0 means a dark background with
+        only noise.
+    baseline_range : tuple[float, float], default: (0.5, 1.5)
+        Range from which each ROI's baseline fluorescence (F0) is drawn
+        uniformly at random, modeling cell-to-cell brightness variability.
+        Recovered dF/F matches `clean_traces` when `background` is 0; a
+        nonzero `background` attenuates it (see `FluorescenceNode`'s
+        `neuropil` argument to correct for this).
+    noise_std : float, default: 0.1
+        Standard deviation of additive Gaussian noise on the video, per pixel
+        and frame. 0 means no noise.
+    bleaching_tau : float | None, default: None
+        Time constant of multiplicative photobleaching in seconds, passed
+        through to :func:`generate_fluorescence`. If None, no bleaching.
     seed : int | None, default: None
         Random seed for reproducibility.
 
@@ -206,11 +220,17 @@ def generate_imaging_with_rois(
         The generated ROIs.
     imaging : NumpyImaging
         The imaging data with injected fluorescence activity.
+    fluorescence : FluorescenceData
+        The ground-truth fluorescence (traces, spikes, clean_traces) injected
+        into the video, e.g. for comparison against values recovered from
+        `imaging` via an :class:`~photon_mosaic.core.roianalyzer.RoiAnalyzer`.
     """
     rng = np.random.default_rng(seed)
     imaging_seed = int(rng.integers(0, 2**31))
     rois_seed = int(rng.integers(0, 2**31))
     fluorescence_seed = int(rng.integers(0, 2**31))
+    noise_seed = int(rng.integers(0, 2**31))
+    roi_baseline = rng.uniform(baseline_range[0], baseline_range[1], size=num_rois)
 
     imaging = generate_random_imaging(
         num_frames=num_frames,
@@ -235,18 +255,25 @@ def generate_imaging_with_rois(
         num_rois=num_rois,
         sampling_frequency=sampling_frequency,
         decay_seconds=decay_seconds,
+        bleaching_tau=bleaching_tau,
         seed=fluorescence_seed,
     )
-    # Inject clean traces into video: (T, N) @ (N, H*W*P) -> (T, H*W*P) -> (T, H, W, P)
+    # Replace the uniform placeholder background with a dark, Gaussian-noise one, then inject
+    # each ROI's fluorescence trace -- already F0-normalised as (1 + clean_traces) * bleach(t) --
+    # scaled by its own F0 (baseline): (T, N) @ (N, H*W*P) -> (T, H*W*P) -> (T, H, W, P). Scaling
+    # by F0 keeps recovered dF/F == clean_traces regardless of noise_std, background, or the
+    # drawn per-ROI F0 values.
     video = imaging.epochs[0]._video
-    video *= noise_std
+    noise_rng = np.random.default_rng(noise_seed)
+    video[:] = background + noise_rng.normal(0, noise_std, video.shape)
     masks = rois.get_roi_image_masks()  # (N, H, W) or (N, H, W, P)
     masks_flat = masks.reshape(num_rois, -1).astype(video.dtype)
-    video += (fluorescence.clean_traces @ masks_flat).reshape(video.shape)
+    signal = roi_baseline[np.newaxis, :] * fluorescence.traces  # (T, N)
+    video += (signal @ masks_flat).reshape(video.shape)
 
     rois.register_imaging(imaging)  # Link the ROIs to the imaging data
 
-    return rois, imaging
+    return rois, imaging, fluorescence
 
 
 def generate_fluorescence(
@@ -282,7 +309,11 @@ def generate_fluorescence(
     -------
     FluorescenceData
         Named tuple with fields ``traces``, ``spikes``, and ``clean_traces``,
-        each of shape ``(num_frames, num_rois)`` as float32.
+        each of shape ``(num_frames, num_rois)`` as float32. ``traces`` is
+        ``(1 + clean_traces) * bleach(t)``, i.e. absolute fluorescence
+        normalised so ``F0(0) == 1``; ``bleach(t) == 1`` for all frames when
+        `bleaching_tau` is None (no photobleaching decay, but the baseline
+        offset of 1 still applies).
     """
     from scipy.signal import lfilter
 
@@ -299,12 +330,13 @@ def generate_fluorescence(
     g = np.exp(-1.0 / (decay_seconds * sampling_frequency))
     clean_traces = lfilter([1.0], [1.0, -g], spikes, axis=0).astype(np.float32)
 
-    # Apply bleaching and noise
-    traces = clean_traces.copy()
+    # traces acts as F = (1 + dF/F) * F0(t), with F0 normalised to 1 at t=0; without bleaching
+    # (bleaching_tau is None) this is just the bleaching_tau -> inf limit, i.e. F0(t) == 1.
     if bleaching_tau is not None:
-        # bleach acts as F0(t): F = (1 + dF/F) * F0(t), with F0 normalised to 1 at t=0
         bleach = np.exp(-np.arange(num_frames) / (bleaching_tau * sampling_frequency), dtype=np.float32)
         traces = (1.0 + clean_traces) * bleach[:, np.newaxis]
+    else:
+        traces = 1.0 + clean_traces
     if noise_std > 0:
         traces = traces + rng.normal(0, noise_std, (num_frames, num_rois)).astype(np.float32)
 

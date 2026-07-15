@@ -177,9 +177,9 @@ def test_generate_fluorescence_spikes_are_binary():
     assert set(unique).issubset({0.0, 1.0})
 
 
-def test_generate_fluorescence_clean_traces_equal_traces_without_noise_or_bleaching():
+def test_generate_fluorescence_traces_equal_clean_traces_plus_one_without_noise_or_bleaching():
     result = generate_fluorescence(num_frames=300, num_rois=2, noise_std=0.0, bleaching_tau=None, seed=2)
-    np.testing.assert_array_equal(result.traces, result.clean_traces)
+    np.testing.assert_array_equal(result.traces, result.clean_traces + 1.0)
 
 
 def test_generate_fluorescence_noise_changes_traces():
@@ -213,7 +213,7 @@ def test_generate_fluorescence_different_seeds_differ():
 
 
 def test_generate_imaging_with_rois_returns_correct_types_and_shapes():
-    rois, imaging = generate_imaging_with_rois(
+    rois, imaging, _ = generate_imaging_with_rois(
         num_frames=50,
         height=30,
         width=40,
@@ -243,7 +243,7 @@ def test_generate_imaging_with_rois_adds_fluorescence_signal():
         sampling_frequency=10.0,
         seed=imaging_seed,
     )
-    _, with_bumps = generate_imaging_with_rois(
+    _, with_bumps, _ = generate_imaging_with_rois(
         num_frames=100,
         height=30,
         width=40,
@@ -256,20 +256,43 @@ def test_generate_imaging_with_rois_adds_fluorescence_signal():
     assert with_bumps.get_series().mean() > plain.get_series().mean()
 
 
-def test_generate_imaging_with_rois_noise_std_default_matches_explicit_one():
-    """noise_std=1.0 (the default) should reproduce the un-scaled background exactly."""
+def test_generate_imaging_with_rois_noise_std_default_matches_explicit_default():
+    """The default noise_std should reproduce the same background as passing it explicitly."""
     kwargs = dict(num_frames=60, height=20, width=20, num_rois=3, radius_range=(3, 5), seed=1)
-    _, default = generate_imaging_with_rois(**kwargs)
-    _, explicit = generate_imaging_with_rois(**kwargs, noise_std=1.0)
+    _, default, _ = generate_imaging_with_rois(**kwargs)
+    _, explicit, _ = generate_imaging_with_rois(**kwargs, noise_std=0.1)
     np.testing.assert_array_equal(default.get_series(), explicit.get_series())
 
 
 def test_generate_imaging_with_rois_noise_std_scales_background():
     """Increasing noise_std should increase the video's overall standard deviation."""
     kwargs = dict(num_frames=200, height=20, width=20, num_rois=3, radius_range=(3, 5), seed=1)
-    _, quiet = generate_imaging_with_rois(**kwargs, noise_std=0.1)
-    _, loud = generate_imaging_with_rois(**kwargs, noise_std=5.0)
+    _, quiet, _ = generate_imaging_with_rois(**kwargs, noise_std=0.01)
+    _, loud, _ = generate_imaging_with_rois(**kwargs, noise_std=5.0)
     assert loud.get_series().std() > quiet.get_series().std()
+
+
+def test_generate_imaging_with_rois_dff_scale_independent_of_noise_std():
+    """Recovered dF/F's scale relative to clean_traces should not depend on noise_std.
+
+    Correlation alone wouldn't catch a regression here (it's scale-invariant), so this
+    compares std(dF/F) / std(clean_traces) at very different noise_std values instead.
+    Without the baseline scaling fix, this ratio scales with ~1/noise_std (a ~40x
+    difference between the two noise levels tested); with the fix, it stays flat.
+    """
+    from photon_mosaic.core import create_roi_analyzer
+
+    kwargs = dict(num_frames=1000, height=20, width=20, num_rois=2, radius_range=(3, 5), seed=1)
+    ratios = {}
+    for noise_std in (0.05, 2.0):
+        rois, imaging, ground_truth = generate_imaging_with_rois(**kwargs, noise_std=noise_std)
+        analyzer = create_roi_analyzer(rois, imaging, format="memory")
+        analyzer.compute("fluorescence")
+        analyzer.compute("df_over_f", method="percentile")
+        dff = analyzer.get_extension("df_over_f").get_data()
+        ratios[noise_std] = dff[:, 0].std() / ground_truth.clean_traces[:, 0].std()
+
+    assert 0.3 < ratios[0.05] / ratios[2.0] < 3.0
 
 
 def test_generate_imaging_with_rois_is_reproducible():
@@ -282,8 +305,8 @@ def test_generate_imaging_with_rois_is_reproducible():
         sampling_frequency=10.0,
         seed=99,
     )
-    rois1, im1 = generate_imaging_with_rois(**kwargs)
-    rois2, im2 = generate_imaging_with_rois(**kwargs)
+    rois1, im1, _ = generate_imaging_with_rois(**kwargs)
+    rois2, im2, _ = generate_imaging_with_rois(**kwargs)
 
     np.testing.assert_array_equal(im1.get_series(), im2.get_series())
     np.testing.assert_array_equal(
@@ -293,7 +316,7 @@ def test_generate_imaging_with_rois_is_reproducible():
 
 
 def test_generate_imaging_with_rois_multiplane():
-    rois, imaging = generate_imaging_with_rois(
+    rois, imaging, _ = generate_imaging_with_rois(
         num_frames=40,
         height=30,
         width=30,
@@ -320,13 +343,13 @@ def test_generate_imaging_with_rois_multiplane_is_reproducible():
         sampling_frequency=10.0,
         seed=7,
     )
-    _, im1 = generate_imaging_with_rois(**kwargs)
-    _, im2 = generate_imaging_with_rois(**kwargs)
+    _, im1, _ = generate_imaging_with_rois(**kwargs)
+    _, im2, _ = generate_imaging_with_rois(**kwargs)
     np.testing.assert_array_equal(im1.get_series(), im2.get_series())
 
 
 def test_generate_imaging_with_rois_weighted():
-    rois, imaging = generate_imaging_with_rois(
+    rois, imaging, _ = generate_imaging_with_rois(
         num_frames=50,
         height=30,
         width=40,
@@ -351,9 +374,9 @@ def test_generate_imaging_with_rois_decay_affects_trace():
         sampling_frequency=10.0,
         seed=55,
     )
-    _, im_short = generate_imaging_with_rois(decay_seconds=0.5, **kwargs)
-    _, im_long = generate_imaging_with_rois(decay_seconds=5.0, **kwargs)
+    _, im_short, _ = generate_imaging_with_rois(decay_seconds=0.5, **kwargs)
+    _, im_long, _ = generate_imaging_with_rois(decay_seconds=5.0, **kwargs)
 
-    # Both should have signal added (mean above 0.5 which is the random baseline mean)
-    assert im_short.get_series().mean() > 0.5
-    assert im_long.get_series().mean() > 0.5
+    # Both should have visible injected signal well above the dark background
+    assert im_short.get_series().max() > 1.0
+    assert im_long.get_series().max() > 1.0
