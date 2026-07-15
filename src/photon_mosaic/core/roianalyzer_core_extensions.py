@@ -205,7 +205,7 @@ class DfOverFExtension(AnalyzerExtension):
         if method == "maximin":  # maximin baseline estimation as in Suite2p
             from scipy.ndimage import gaussian_filter1d, maximum_filter1d, minimum_filter1d
 
-            fs = self.roi_analyzer.imaging.sampling_frequency
+            fs = self.roi_analyzer.sampling_frequency
             win = int(self.params["win_baseline"] * fs)
             win += 1 if win % 2 == 0 else 0  # ensure odd window
             F0 = gaussian_filter1d(F, sigma=self.params["sig_baseline"], axis=0)
@@ -214,7 +214,7 @@ class DfOverFExtension(AnalyzerExtension):
         elif method in ("percentile", "running_percentile"):  # running percentile baseline as in CaImAn
             from concurrent.futures import ProcessPoolExecutor
 
-            win = int(self.params["win_baseline"] * self.roi_analyzer.imaging.sampling_frequency)
+            win = int(self.params["win_baseline"] * self.roi_analyzer.sampling_frequency)
             n_jobs = fix_job_kwargs(job_kwargs).get("n_jobs", 1)
             prctile_baseline = self.params["prctile_baseline"]
             args = [(F[:, i].copy(), win, prctile_baseline) for i in range(F.shape[1])]
@@ -252,7 +252,7 @@ class DfOverFExtension(AnalyzerExtension):
 
             return NumpyRecording(
                 df_over_f_traces,
-                sampling_frequency=self.roi_analyzer.imaging.sampling_frequency,
+                sampling_frequency=self.roi_analyzer.sampling_frequency,
                 channel_ids=self.roi_analyzer.rois.roi_ids,
             )
         else:
@@ -279,7 +279,6 @@ class DeconvolutionExtension(AnalyzerExtension):
 
     def _set_params(
         self,
-        sampling_frequency: float | None = None,
         decay_time: float | None = None,
         rise_time: float | None = 0,
         baseline: float | None = None,
@@ -291,11 +290,6 @@ class DeconvolutionExtension(AnalyzerExtension):
 
         Parameters
         ----------
-        sampling_frequency : float or None, optional
-            Imaging sampling frequency in Hz. Defaults to the
-            :class:`~photon_mosaic.core.roianalyzer.RoiAnalyzer`'s
-            ``sampling_frequency`` if not given. Overriding this does not
-            require the raw imaging data to be loaded.
         decay_time : float or None, optional
             Decay time constant in seconds. If provided, sets the decay kinetics
             directly instead of estimating it per ROI. Default is None.
@@ -323,7 +317,6 @@ class DeconvolutionExtension(AnalyzerExtension):
         low-event-count traces).
         """
         return dict(
-            sampling_frequency=sampling_frequency,
             decay_time=decay_time,
             rise_time=rise_time,
             baseline=baseline,
@@ -337,9 +330,7 @@ class DeconvolutionExtension(AnalyzerExtension):
         from concurrent.futures import ProcessPoolExecutor
 
         dff = self.roi_analyzer.get_extension("df_over_f").get_data()
-        fs = self.params["sampling_frequency"]
-        if fs is None:
-            fs = self.roi_analyzer.sampling_frequency
+        fs = self.roi_analyzer.sampling_frequency
         n_jobs = fix_job_kwargs(job_kwargs).get("n_jobs", 1)
 
         args = [(dff[:, i].copy(), fs, self.params) for i in range(dff.shape[1])]
@@ -375,12 +366,9 @@ class DeconvolutionExtension(AnalyzerExtension):
         elif outputs == "recording":
             from spikeinterface.core import NumpyRecording
 
-            fs = self.params["sampling_frequency"]
-            if fs is None:
-                fs = self.roi_analyzer.sampling_frequency
             return NumpyRecording(
                 deconvolved,
-                sampling_frequency=fs,
+                sampling_frequency=self.roi_analyzer.sampling_frequency,
                 channel_ids=self.roi_analyzer.rois.roi_ids,
             )
         else:
