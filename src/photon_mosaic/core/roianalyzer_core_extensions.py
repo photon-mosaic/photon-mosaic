@@ -375,9 +375,12 @@ class DeconvolutionExtension(AnalyzerExtension):
         elif outputs == "recording":
             from spikeinterface.core import NumpyRecording
 
+            fs = self.params["sampling_frequency"]
+            if fs is None:
+                fs = self.roi_analyzer.sampling_frequency
             return NumpyRecording(
                 deconvolved,
-                sampling_frequency=self.roi_analyzer.sampling_frequency,
+                sampling_frequency=fs,
                 channel_ids=self.roi_analyzer.rois.roi_ids,
             )
         else:

@@ -439,6 +439,15 @@ def test_deconvolution_get_data_recording(analyzer_with_df_over_f):
     assert result.get_num_channels() == NUM_ROIS
 
 
+def test_deconvolution_get_data_recording_uses_sampling_frequency_override(analyzer_with_df_over_f):
+    """The recording's sampling_frequency should reflect an explicit override, not silently
+    fall back to roi_analyzer.sampling_frequency (they must stay consistent with what was
+    actually used to run the deconvolution)."""
+    analyzer_with_df_over_f.compute("deconvolution", sampling_frequency=SF / 2)
+    result = analyzer_with_df_over_f.get_extension("deconvolution").get_data(outputs="recording")
+    assert result.sampling_frequency == SF / 2
+
+
 def test_deconvolution_get_data_invalid_output(analyzer_with_df_over_f):
     """get_data with an unsupported output type should raise ValueError."""
     analyzer_with_df_over_f.compute("deconvolution")
