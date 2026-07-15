@@ -147,7 +147,9 @@ def multifield_from_scanimage(
         imaging = read_field(roi_index=field_index, **loader_kwargs)
         # Reach through the wrapper to the underlying extractor for the physical geometry.
         extractor = imaging.epochs[0].roiextractor_extractor
-        affine = np.asarray(extractor.roi_affine, dtype=float) if extractor.roi_affine is not None else None
+        # The geometry dict is stored as a JSON-serializable annotation (see BaseImaging.geometry), so
+        # the affine is a 3x3 list of lists rather than an ndarray; wrap in np.asarray at use.
+        affine = np.asarray(extractor.roi_affine, dtype=float).tolist() if extractor.roi_affine is not None else None
         # Microns per scanner-angle unit: ScanImage's objective resolution, read from the frame
         # metadata. Lets downstream code express the geometry in micrometers as well as scanner units.
         objective_resolution = extractor._metadata.get("SI.objectiveResolution")
@@ -156,8 +158,8 @@ def multifield_from_scanimage(
         imaging.geometry = dict(
             name=extractor.roi_name,
             uuid=extractor.roi_uuid,
-            center_xy=tuple(extractor.roi_center_xy) if extractor.roi_center_xy is not None else None,
-            size_xy=tuple(extractor.roi_size_xy) if extractor.roi_size_xy is not None else None,
+            center_xy=list(extractor.roi_center_xy) if extractor.roi_center_xy is not None else None,
+            size_xy=list(extractor.roi_size_xy) if extractor.roi_size_xy is not None else None,
             affine=affine,
             microns_per_scanner_unit=microns_per_scanner_unit,
         )

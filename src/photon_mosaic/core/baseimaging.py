@@ -29,7 +29,6 @@ class BaseImaging(BaseExtractor, TimeSeries):
         self._sampling_frequency = float(sampling_frequency)
         self._shape = tuple(shape)  # Image is intended as a volume (H, W, planes)
         self._average_image = None
-        self._geometry: dict | None = None
 
     def _repr_header(self, display_name=True):
         """Generate text representation of the BaseImaging object."""
@@ -74,10 +73,9 @@ class BaseImaging(BaseExtractor, TimeSeries):
             f"{memory_repr}"
         )
         # Show placement only for fields that carry geometry (multi-field acquisitions).
-        if self._geometry is not None:
-            field_name = self._geometry.get("name")
-            center_xy = self._geometry.get("center_xy")
-            header += f"\n  geometry: name={field_name!r} center_xy={center_xy}"
+        geometry = self.geometry
+        if geometry is not None:
+            header += f"\n  geometry: name={geometry.get('name')!r} center_xy={geometry.get('center_xy')}"
         return header
 
     def __repr__(self):
@@ -137,25 +135,30 @@ class BaseImaging(BaseExtractor, TimeSeries):
         independent :class:`BaseImaging` with its own pixel grid and physical position; a plain
         single-field imaging leaves it ``None`` and is unaffected.
 
+        Stored as the SpikeInterface annotation ``"geometry"``, so it travels through save / load with
+        the extractor. Its contents must therefore be JSON-serializable: use lists rather than numpy
+        arrays (e.g. ``affine`` as a 3x3 list of lists). Reads return a copy, so mutating the returned
+        dict in place does not persist; assign a new dict instead.
+
         Conventional keys, all optional: ``name`` (str), ``uuid`` (str), ``center_xy`` and ``size_xy``
         (in-plane center / extent in the source's physical units, e.g. scanner-angle units for
-        ScanImage), ``affine`` (3x3 pixel-to-physical transform) and ``microns_per_scanner_unit``
-        (physical-unit-to-micron scale). Depth is not stored here: it belongs to the field's own plane
-        axis, set as a per-plane ``z`` property.
+        ScanImage), ``affine`` (3x3 pixel-to-physical transform as a list of lists) and
+        ``microns_per_scanner_unit`` (physical-unit-to-micron scale). Depth is not stored here: it
+        belongs to the field's own plane axis, set as a per-plane ``z`` property.
 
         Returns
         -------
         dict | None
             The geometry dictionary, or None if unset.
         """
-        return self._geometry
+        return self.get_annotation("geometry")
 
     @geometry.setter
     def geometry(self, value: dict | None) -> None:
-        """Set the geometry dictionary, accepting a dict or None."""
+        """Set the geometry dictionary (stored as the ``"geometry"`` annotation); accepts a dict or None."""
         if value is not None and not isinstance(value, dict):
             raise TypeError(f"geometry must be a dict or None, got {type(value).__name__}")
-        self._geometry = value
+        self.set_annotation("geometry", value, overwrite=True)
 
     @property
     def plane_ids(self):
