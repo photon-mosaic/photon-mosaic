@@ -14,6 +14,7 @@ dependencies = [
     "spikeinterface @ git+https://github.com/SpikeInterface/spikeinterface.git@409d1f548f1c56829731f93dc61b1bed71f43006",
     "roiextractors[full]>=0.8.0",
     "pydantic-settings>=2",
+    "pooch",
 ]
 
 license = {text = "MIT License"}

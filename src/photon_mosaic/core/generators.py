@@ -1,9 +1,31 @@
 """Module to generate synthetic imaging and ROI objects for testing and example purposes."""
 
+from typing import NamedTuple
+
 import numpy as np
 
 from photon_mosaic.core import BaseRois
 from photon_mosaic.core.numpyimaging import NumpyImaging, NumpyRois
+
+
+class FluorescenceData(NamedTuple):
+    """Return type of :func:`generate_fluorescence`.
+
+    Attributes
+    ----------
+    traces : np.ndarray
+        Final fluorescence traces ``(num_frames, num_rois)``, float32.
+        Without bleaching equals ``clean_traces`` (dF/F). With bleaching equals
+        ``(1 + clean_traces) * bleach``, i.e. absolute fluorescence normalised by F0.
+    spikes : np.ndarray
+        Binary spike trains ``(num_frames, num_rois)``, float32.
+    clean_traces : np.ndarray
+        Convolved traces before bleaching and noise ``(num_frames, num_rois)``, float32.
+    """
+
+    traces: np.ndarray
+    spikes: np.ndarray
+    clean_traces: np.ndarray
 
 
 def generate_random_imaging(
@@ -182,6 +204,7 @@ def generate_imaging_with_rois(
     rng = np.random.default_rng(seed)
     imaging_seed = int(rng.integers(0, 2**31))
     rois_seed = int(rng.integers(0, 2**31))
+    fluorescence_seed = int(rng.integers(0, 2**31))
 
     imaging = generate_random_imaging(
         num_frames=num_frames,
@@ -201,30 +224,81 @@ def generate_imaging_with_rois(
         num_planes=num_planes,
         seed=rois_seed,
     )
-
-    # Access the underlying video array from the single epoch
-    video = imaging.epochs[0]._video  # shape: (num_frames, H, W, P)
-
-    # Create an exponential decay kernel
-    decay_length = int(sampling_frequency * decay_seconds)
-    kernel = np.exp(-np.arange(decay_length) / sampling_frequency)
-
-    # Add exponentially decaying fluorescence bumps to the imaging data
-    masks = rois.get_roi_image_masks()  # (num_rois, H, W) or (num_rois, H, W, P)
-    for roi_idx in range(rois.get_num_rois()):
-        roi_mask = masks[roi_idx]  # (H, W) or (H, W, P)
-        if roi_mask.ndim == 2:
-            roi_mask = roi_mask[:, :, np.newaxis]  # (H, W, 1) to match 4D video
-
-        num_events = rng.integers(5, 15)
-        event_times = rng.choice(num_frames, size=num_events, replace=False)
-
-        for t in event_times:
-            end_t = min(t + decay_length, num_frames)
-            kernel_end = end_t - t
-            # kernel slice (K, 1, 1, 1) * roi_mask (H, W, P) -> (K, H, W, P)
-            video[t:end_t] += roi_mask * kernel[:kernel_end, None, None, None]
+    fluorescence = generate_fluorescence(
+        num_frames=num_frames,
+        num_rois=num_rois,
+        sampling_frequency=sampling_frequency,
+        decay_seconds=decay_seconds,
+        seed=fluorescence_seed,
+    )
+    # Inject traces into video: (T, N) @ (N, H*W*P) -> (T, H*W*P) -> (T, H, W, P)
+    video = imaging.epochs[0]._video
+    masks = rois.get_roi_image_masks()  # (N, H, W) or (N, H, W, P)
+    masks_flat = masks.reshape(num_rois, -1).astype(video.dtype)
+    video += (fluorescence.traces @ masks_flat).reshape(video.shape)
 
     rois.register_imaging(imaging)  # Link the ROIs to the imaging data
 
     return rois, imaging
+
+
+def generate_fluorescence(
+    num_frames: int,
+    num_rois: int = 1,
+    sampling_frequency: float = 30.0,
+    decay_seconds: float = 2.0,
+    noise_std: float = 0.0,
+    bleaching_tau: float | None = None,
+    seed: int | None = None,
+) -> FluorescenceData:
+    """Generate synthetic fluorescence traces by convolving random spike events with an exponential kernel.
+
+    Parameters
+    ----------
+    num_frames : int
+        Number of frames (time points) to generate.
+    num_rois : int, default: 1
+        Number of independent fluorescence traces to generate.
+    sampling_frequency : float, default: 30.0
+        Sampling frequency in Hz.
+    decay_seconds : float, default: 2.0
+        Time constant of the exponential decay kernel in seconds.
+    noise_std : float, default: 0.0
+        Standard deviation of additive Gaussian noise. 0 means no noise.
+    bleaching_tau : float | None, default: None
+        Time constant of multiplicative photobleaching in seconds.
+        If None, no bleaching is applied.
+    seed : int | None, default: None
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    FluorescenceData
+        Named tuple with fields ``traces``, ``spikes``, and ``clean_traces``,
+        each of shape ``(num_frames, num_rois)`` as float32.
+    """
+    from scipy.signal import lfilter
+
+    rng = np.random.default_rng(seed)
+
+    # Generate binary spike trains
+    spikes = np.zeros((num_frames, num_rois), dtype=np.float32)
+    for roi_idx in range(num_rois):
+        num_events = rng.integers(5, 15)
+        event_times = rng.choice(num_frames, size=num_events, replace=False)
+        spikes[event_times, roi_idx] = 1.0
+
+    # Convolve spikes with exponential kernel via exact IIR recurrence: traces[t] = spikes[t] + g * traces[t-1]
+    g = np.exp(-1.0 / (decay_seconds * sampling_frequency))
+    clean_traces = lfilter([1.0], [1.0, -g], spikes, axis=0).astype(np.float32)
+
+    # Apply bleaching and noise
+    traces = clean_traces.copy()
+    if bleaching_tau is not None:
+        # bleach acts as F0(t): F = (1 + dF/F) * F0(t), with F0 normalised to 1 at t=0
+        bleach = np.exp(-np.arange(num_frames) / (bleaching_tau * sampling_frequency), dtype=np.float32)
+        traces = (1.0 + clean_traces) * bleach[:, np.newaxis]
+    if noise_std > 0:
+        traces = traces + rng.normal(0, noise_std, (num_frames, num_rois)).astype(np.float32)
+
+    return FluorescenceData(traces=traces, spikes=spikes, clean_traces=clean_traces)
