@@ -283,7 +283,7 @@ class DeconvolutionExtension(AnalyzerExtension):
         rise_time: float | None = 0,
         baseline: float | None = None,
         baseline_nonneg: bool = False,
-        penalty: int = 1,
+        penalty: int | None = 1,
         **params: Any,
     ) -> dict[str, Any]:
         """Set parameters for OASIS deconvolution.
@@ -300,21 +300,29 @@ class DeconvolutionExtension(AnalyzerExtension):
             `decay_time` and `rise_time` to None to auto-estimate a
             rise-and-decay model instead of a decay-only one.
         baseline : float or None, optional
-            Fixed baseline value. Optimized per ROI if not given. Default is None.
+            Fixed baseline value. Optimized per ROI if not given. Unused
+            when `penalty` is None (treated as a fixed offset, default 0).
+            Default is None.
         baseline_nonneg : bool, optional
             Enforce a strictly non-negative estimated baseline. Default is
             False, since the input is dF/F (already baseline-subtracted and
-            free to fluctuate below zero), unlike raw fluorescence.
-        penalty : int, optional
-            Sparsity penalty: 1 for L1 (convex), 0 for L0. Default is 1.
+            free to fluctuate below zero), unlike raw fluorescence. Unused
+            when `penalty` is None.
+        penalty : int or None, optional
+            Sparsity penalty: 1 for L1 (convex), 0 for L0. If None, skips
+            the noise-constrained optimization entirely and deconvolves
+            without imposing sparsity by default (`noise_std` and
+            `baseline_nonneg` are unused in this mode). Default is 1.
 
         Advanced, undocumented keyword arguments are also accepted and
         passed through to :func:`oasis.functions.deconvolve` for power
         users: ``noise_std`` (overrides the per-ROI noise estimate that
-        otherwise controls the sparsity weight) and ``refine_kinetics``
+        otherwise controls the sparsity weight), ``refine_kinetics``
         (number of large, isolated events used to refine the time
         constant(s) per ROI — can make estimates worse on noisy or
-        low-event-count traces).
+        low-event-count traces), and, only when `penalty` is None,
+        ``lam`` (fixed sparsity weight, default 0) and ``s_min`` (minimal
+        non-zero activity per bin, default 0).
         """
         return dict(
             decay_time=decay_time,
@@ -322,6 +330,8 @@ class DeconvolutionExtension(AnalyzerExtension):
             baseline=baseline,
             baseline_nonneg=baseline_nonneg,
             penalty=penalty,
+            lam=params.pop("lam", 0.0),
+            s_min=params.pop("s_min", 0.0),
             noise_std=params.pop("noise_std", None),
             refine_kinetics=params.pop("refine_kinetics", 0),
         )
@@ -396,8 +406,8 @@ def _deconvolve_roi(args: tuple) -> tuple[np.ndarray, np.ndarray]:
         - ``y`` : dF/F trace for one ROI, shape ``(n_frames,)``.
         - ``framerate`` : imaging sampling frequency in Hz.
         - ``params`` : dict with keys ``decay_time``, ``rise_time``,
-          ``noise_std``, ``baseline``, ``baseline_nonneg``,
-          ``refine_kinetics``, ``penalty``
+          ``noise_std``, ``baseline``, ``baseline_nonneg``, ``penalty``,
+          ``refine_kinetics``, ``lam``, ``s_min``
           (see :meth:`DeconvolutionExtension._set_params`).
 
     Returns
@@ -410,9 +420,7 @@ def _deconvolve_roi(args: tuple) -> tuple[np.ndarray, np.ndarray]:
     from oasis.functions import deconvolve
 
     y, framerate, params = args
-    decay_time = params["decay_time"]
-    rise_time = params["rise_time"]
-    shared_kwargs = dict(
+    kwargs = dict(
         framerate=framerate,
         sn=params["noise_std"],
         b=params["baseline"],
@@ -420,18 +428,13 @@ def _deconvolve_roi(args: tuple) -> tuple[np.ndarray, np.ndarray]:
         optimize_g=params["refine_kinetics"],
         penalty=params["penalty"],
     )
+    if params["penalty"] is None:
+        # lam/s_min are only accepted by oasisAR1/oasisAR2 (via deconvolve's penalty=None
+        # path), not by constrained_oasisAR1/constrained_onnlsAR2 used for the default penalty.
+        kwargs["lam"] = params["lam"]
+        kwargs["s_min"] = params["s_min"]
 
-    if decay_time is None and rise_time is None:
-        # Explicit opt-in: auto-estimate both decay and rise time constants (AR(2)).
-        c, s, _b, _g, _lam = deconvolve(y, g=(None, None), **shared_kwargs)
-    elif decay_time is None and rise_time == 0:
-        # Default: auto-estimate decay only (AR(1)).
-        c, s, _b, _g, _lam = deconvolve(y, g=(None,), **shared_kwargs)
-    else:
-        # decay_time is known; rise_time=0 means no rise (AR(1) with known decay) —
-        # tau_r=0 would raise a ZeroDivisionError inside oasis's tau_to_ar2.
-        tau_r = None if rise_time == 0 else rise_time
-        c, s, _b, _g, _lam = deconvolve(y, tau_d=decay_time, tau_r=tau_r, **shared_kwargs)
+    c, s, _b, _g, _lam = deconvolve(y, tau_d=params["decay_time"], tau_r=params["rise_time"], **kwargs)
     return c, s
 
 

@@ -420,6 +420,22 @@ def test_deconvolution_rise_time_without_decay_time_raises(analyzer_with_df_over
         analyzer_with_df_over_f.compute("deconvolution", rise_time=0.1)
 
 
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"penalty": None},  # plain deconvolution, default lam=0/s_min=0
+        {"penalty": None, "lam": 0.5},  # plain deconvolution, explicit sparsity weight
+        {"penalty": None, "s_min": 0.1},  # plain deconvolution, explicit minimal spike size
+    ],
+)
+def test_deconvolution_penalty_none_runs_and_is_finite(analyzer_with_df_over_f, kwargs):
+    """penalty=None (plain, non-noise-constrained deconvolution) should run without error."""
+    analyzer_with_df_over_f.compute("deconvolution", **kwargs)
+    ext = analyzer_with_df_over_f.get_extension("deconvolution")
+    assert np.isfinite(ext.data["deconvolved"]).all()
+    assert np.isfinite(ext.data["denoised"]).all()
+
+
 def test_deconvolution_parallel_matches_serial(analyzer_with_df_over_f):
     """ProcessPoolExecutor result should match serial computation exactly."""
     analyzer_with_df_over_f.compute("deconvolution", n_jobs=1)
