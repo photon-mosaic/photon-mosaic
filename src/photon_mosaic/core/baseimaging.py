@@ -29,6 +29,7 @@ class BaseImaging(BaseExtractor, TimeSeries):
         self._sampling_frequency = float(sampling_frequency)
         self._shape = tuple(shape)  # Image is intended as a volume (H, W, planes)
         self._average_image = None
+        self._geometry: dict | None = None
 
     def _repr_header(self, display_name=True):
         """Generate text representation of the BaseImaging object."""
@@ -63,7 +64,7 @@ class BaseImaging(BaseExtractor, TimeSeries):
 
         # Format shape string based on whether data is volumetric or not
         shape_repr = f"{shape[0]} rows x {shape[1]} columns "
-        return (
+        header = (
             f"{name}:\n"
             f"{sampling_frequency_repr} - "
             f"{self.get_num_epochs()} epochs - "
@@ -72,6 +73,12 @@ class BaseImaging(BaseExtractor, TimeSeries):
             f"{dtype} dtype - "
             f"{memory_repr}"
         )
+        # Show placement only for fields that carry geometry (multi-field acquisitions).
+        if self._geometry is not None:
+            field_name = self._geometry.get("name")
+            center_xy = self._geometry.get("center_xy")
+            header += f"\n  geometry: name={field_name!r} center_xy={center_xy}"
+        return header
 
     def __repr__(self):
         return self._repr_header()
@@ -120,6 +127,35 @@ class BaseImaging(BaseExtractor, TimeSeries):
             The shape of the images as (height, width).
         """
         return self._shape
+
+    @property
+    def geometry(self) -> dict | None:
+        """Optional spatial-placement metadata for this imaging field.
+
+        A free-form dictionary describing where the field sits in the sample, or ``None`` when
+        unknown. It is populated for multi-field (e.g. mesoscope) acquisitions, where each field is an
+        independent :class:`BaseImaging` with its own pixel grid and physical position; a plain
+        single-field imaging leaves it ``None`` and is unaffected.
+
+        Conventional keys, all optional: ``name`` (str), ``uuid`` (str), ``center_xy`` and ``size_xy``
+        (in-plane center / extent in the source's physical units, e.g. scanner-angle units for
+        ScanImage), ``affine`` (3x3 pixel-to-physical transform) and ``microns_per_scanner_unit``
+        (physical-unit-to-micron scale). Depth is not stored here: it belongs to the field's own plane
+        axis, set as a per-plane ``z`` property.
+
+        Returns
+        -------
+        dict | None
+            The geometry dictionary, or None if unset.
+        """
+        return self._geometry
+
+    @geometry.setter
+    def geometry(self, value: dict | None) -> None:
+        """Set the geometry dictionary, accepting a dict or None."""
+        if value is not None and not isinstance(value, dict):
+            raise TypeError(f"geometry must be a dict or None, got {type(value).__name__}")
+        self._geometry = value
 
     @property
     def plane_ids(self):

@@ -16,7 +16,7 @@ from copy import copy
 from itertools import chain
 from pathlib import Path
 from time import perf_counter
-from typing import Any, Iterator, Literal
+from typing import Any, Literal
 
 import numpy as np
 from spikeinterface.core.core_tools import (
@@ -33,66 +33,12 @@ from .baseimaging import BaseImaging
 from .baserois import BaseRois
 from .binaryrois import BinaryFolderRois
 from .imaging_tools import do_imaging_attributes_match, get_imaging_attributes
-from .multifield import FieldGeometry, MultiFieldImaging, _resolve_field_selector
 from .numpyimaging import NumpyRois
 from .zarrrois import ZarrRois, save_rois_to_zarr
 
 # ---------------------------------------------------------------------------
 # High-level factory functions
 # ---------------------------------------------------------------------------
-
-
-def create_multifield_roi_analyzer(
-    rois: list[BaseRois],
-    multiimaging: MultiFieldImaging,
-    format: str = "memory",
-    folder=None,
-    overwrite: bool = False,
-    backend_options: dict | None = None,
-) -> "MultiFieldRoiAnalyzer":
-    """Create one RoiAnalyzer per field by pairing ROIs with a MultiFieldImaging.
-
-    The multi-field counterpart of :func:`create_roi_analyzer`. ``rois[i]`` is paired with field
-    ``i`` of ``multiimaging``, so the two must have the same length and ordering. The fields do not
-    share a pixel grid, so each pairing is its own independent RoiAnalyzer; the per-field analyzers
-    are returned together in a :class:`MultiFieldRoiAnalyzer` container.
-
-    Parameters
-    ----------
-    rois : list[BaseRois]
-        One ROIs object per field, ordered to match ``multiimaging``.
-    multiimaging : MultiFieldImaging
-        The container of imaging fields.
-    format : "memory" | "binary_folder" | "zarr", default: "memory"
-        The storage backend. For non-memory formats ``folder`` is treated as a parent directory and
-        each field is persisted in its own ``field_<i>`` subfolder so they do not collide.
-    folder : str | Path | None, default: None
-        Parent folder for the per-field analyzers (required for non-memory formats).
-    overwrite : bool, default: False
-        If True, overwrite each field's folder if it already exists.
-    backend_options : dict | None, default: None
-        Backend-specific options, forwarded to each :func:`create_roi_analyzer`.
-
-    Returns
-    -------
-    MultiFieldRoiAnalyzer
-        A container pairing one RoiAnalyzer per field with the geometry of ``multiimaging``,
-        aligned with ``rois``.
-    """
-    if len(rois) != len(multiimaging):
-        raise ValueError(f"number of rois ({len(rois)}) must match the number of fields ({len(multiimaging)})")
-    if format != "memory" and folder is None:
-        raise ValueError(f"folder must be provided for format={format!r}")
-
-    # Arguments forwarded unchanged to every per-field analyzer.
-    shared_kwargs: dict[str, Any] = dict(format=format, overwrite=overwrite, backend_options=backend_options)
-
-    roi_analyzers = []
-    for i, (field_rois, field_imaging) in enumerate(zip(rois, multiimaging)):
-        # Persist each field separately so non-memory backends do not collide on a single folder.
-        field_folder = None if folder is None else f"{str(folder).rstrip('/')}/field_{i:03d}"
-        roi_analyzers.append(create_roi_analyzer(field_rois, field_imaging, folder=field_folder, **shared_kwargs))
-    return MultiFieldRoiAnalyzer(roi_analyzers, list(multiimaging.geometry))
 
 
 def create_roi_analyzer(
@@ -1133,133 +1079,6 @@ class RoiAnalyzer:
     def get_default_extension_params(self, extension_name: str) -> dict:
         """Get default params for an extension."""
         return get_default_analyzer_extension_params(extension_name)
-
-
-# ---------------------------------------------------------------------------
-# MultiFieldRoiAnalyzer
-# ---------------------------------------------------------------------------
-
-
-class MultiFieldRoiAnalyzer:
-    """A collection of per-field RoiAnalyzers sharing one geometry table.
-
-    The analyzer-level counterpart of :class:`MultiFieldImaging`: each field keeps its own
-    independent :class:`RoiAnalyzer` (the fields do not share a pixel grid), while this container adds
-    cohesion — shared identity, selection by index/name/uuid, and the per-field geometry. Build one
-    with :func:`create_multifield_roi_analyzer`.
-    """
-
-    def __init__(self, analyzers: list[RoiAnalyzer], geometry: list[FieldGeometry]) -> None:
-        """Pair a list of per-field analyzers with their geometry records.
-
-        Parameters
-        ----------
-        analyzers : list[RoiAnalyzer]
-            One analyzer per field.
-        geometry : list[FieldGeometry]
-            Placement records, aligned by position with ``analyzers``.
-        """
-        if len(analyzers) != len(geometry):
-            raise ValueError(f"analyzers ({len(analyzers)}) and geometry ({len(geometry)}) length mismatch")
-
-        self._analyzers = list(analyzers)
-        self._geometry = list(geometry)
-
-    def __len__(self) -> int:
-        """Return the number of fields."""
-        return len(self._analyzers)
-
-    def __iter__(self) -> Iterator[RoiAnalyzer]:
-        """Iterate over the per-field analyzers."""
-        return iter(self._analyzers)
-
-    def __getitem__(self, index: int | slice) -> "RoiAnalyzer | list[RoiAnalyzer]":
-        """Index analyzers by position (int or slice)."""
-        return self._analyzers[index]
-
-    @property
-    def analyzers(self) -> list[RoiAnalyzer]:
-        """The per-field analyzers."""
-        return self._analyzers
-
-    @property
-    def geometry(self) -> list[FieldGeometry]:
-        """The per-field geometry records, aligned with :attr:`analyzers`."""
-        return self._geometry
-
-    def iter_fields(self) -> Iterator[tuple[FieldGeometry, RoiAnalyzer]]:
-        """Iterate over ``(geometry, analyzer)`` pairs."""
-        return zip(self._geometry, self._analyzers)
-
-    def get_analyzer(
-        self,
-        *,
-        index: int | None = None,
-        name: str | None = None,
-        uuid: str | None = None,
-    ) -> RoiAnalyzer:
-        """Return a single field's analyzer selected by exactly one of index, name, or uuid.
-
-        Selection semantics match :meth:`MultiFieldImaging.get_field`: uuid is matched
-        case-insensitively, an ambiguous name/uuid raises ``ValueError``, and an unknown one raises
-        ``KeyError``.
-
-        Parameters
-        ----------
-        index : int | None
-            Position of the field.
-        name : str | None
-            Field name (not guaranteed unique; an ambiguous name raises ``ValueError``).
-        uuid : str | None
-            Field uuid, matched case-insensitively (the robust selector).
-
-        Returns
-        -------
-        RoiAnalyzer
-            The selected field's analyzer.
-        """
-        return self._analyzers[_resolve_field_selector(self._geometry, index=index, name=name, uuid=uuid)]
-
-    def compute(
-        self,
-        input: str | dict | list,
-        save: bool = True,
-        extension_params: dict | None = None,
-        verbose: bool = False,
-        **kwargs,
-    ) -> None:
-        """Compute one or several extensions on every field.
-
-        A thin fan-out over the per-field analyzers: each receives the same ``input`` and parameters
-        via :meth:`RoiAnalyzer.compute`. Results stay on their own field's analyzer — reach them
-        through :meth:`get_analyzer` or :meth:`iter_fields`. Combining results across fields is
-        intentionally not done here.
-
-        Parameters
-        ----------
-        input : str | dict | list
-            Extension name, a ``{name: params}`` dict, or a list of names (see
-            :meth:`RoiAnalyzer.compute`).
-        save : bool, default: True
-            Whether each field persists its computed extensions.
-        extension_params : dict | None, default: None
-            Per-extension params when ``input`` is a list.
-        verbose : bool, default: False
-            Print progress.
-        **kwargs
-            Forwarded to each :meth:`RoiAnalyzer.compute` (e.g. job_kwargs for parallelization).
-        """
-        for analyzer in self._analyzers:
-            analyzer.compute(input, save=save, extension_params=extension_params, verbose=verbose, **kwargs)
-
-    def __repr__(self) -> str:
-        lines = [f"MultiFieldRoiAnalyzer: {len(self)} fields"]
-        for geom, analyzer in self.iter_fields():
-            extensions = ", ".join(analyzer.get_loaded_extension_names()) or "no extensions"
-            lines.append(
-                f"  [{geom.index}] {geom.name!r} uuid={geom.uuid} {analyzer.get_num_rois()} ROIs - {extensions}"
-            )
-        return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------

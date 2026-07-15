@@ -220,3 +220,28 @@ def test_generate_random_imaging_multiplane_has_expected_plane_dimension_and_sel
     sel = imaging.get_series(plane_ids=[1])
     assert sel.shape == (n, h, w, 1)
     np.all(sel[..., 0] == full[..., 1])
+
+
+def test_geometry_defaults_to_none():
+    imaging = generate_random_imaging(num_frames=5, height=6, width=7, sampling_frequency=10.0, seed=0)
+    assert imaging.geometry is None
+
+
+def test_geometry_set_and_get():
+    imaging = generate_random_imaging(num_frames=5, height=6, width=7, sampling_frequency=10.0, seed=0)
+    geometry = {"name": "field-A", "uuid": "UUID-A", "center_xy": (1.0, 2.0)}
+    imaging.geometry = geometry
+
+    assert imaging.geometry == geometry
+    # Placement shows up in the repr only when geometry is set.
+    assert "geometry" in repr(imaging)
+
+    imaging.geometry = None
+    assert imaging.geometry is None
+    assert "geometry" not in repr(imaging)
+
+
+def test_geometry_rejects_non_dict():
+    imaging = generate_random_imaging(num_frames=5, height=6, width=7, sampling_frequency=10.0, seed=0)
+    with pytest.raises(TypeError, match="geometry must be a dict or None"):
+        imaging.geometry = ["not", "a", "dict"]

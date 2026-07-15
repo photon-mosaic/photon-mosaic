@@ -7,6 +7,7 @@ extractor. When several files of one recording are passed, each field's imaging 
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Any, Literal
 
@@ -17,7 +18,6 @@ from roiextractors import ScanImageMultiROIImagingExtractor
 # package init; the generated loaders are resolved lazily at call time, once they exist.
 import photon_mosaic.extractors as pm_extractors
 from photon_mosaic.core import BaseImaging
-from photon_mosaic.core.multifield import FieldGeometry, MultiFieldImaging
 
 
 def _attach_field_timestamps(
@@ -73,8 +73,8 @@ def multifield_from_scanimage(
     file_paths: list[str | Path] | None = None,
     timestamps: Literal["per_frame", "per_field"] = "per_frame",
     frame_timestamps: str | Path | np.ndarray | None = None,
-) -> MultiFieldImaging:
-    """Build a :class:`MultiFieldImaging` from one or more ScanImage multi-ROI TIFFs.
+) -> list[BaseImaging]:
+    """Build a list of imaging fields from one or more ScanImage multi-ROI TIFFs.
 
     A ScanImage recording is often split across several files. Passing them all ties their samples
     together, so each field's :class:`BaseImaging` spans the whole recording in time.
@@ -102,9 +102,9 @@ def multifield_from_scanimage(
 
     Returns
     -------
-    MultiFieldImaging
-        One :class:`BaseImaging` per scan field (each spanning all input files) plus the
-        lateral-placement geometry table.
+    list[BaseImaging]
+        One :class:`BaseImaging` per scan field (each spanning all input files), with its lateral
+        placement stored in the field's ``geometry`` dict (see :attr:`BaseImaging.geometry`).
     """
     if timestamps not in ("per_frame", "per_field"):
         raise ValueError(f"timestamps must be 'per_frame' or 'per_field', got {timestamps!r}")
@@ -141,7 +141,6 @@ def multifield_from_scanimage(
     num_fields = ScanImageMultiROIImagingExtractor.get_num_rois(first_file)
 
     fields: list[BaseImaging] = []
-    geometry: list[FieldGeometry] = []
     for field_index in range(num_fields):
         # Each field is wrapped as a standalone BaseImaging via the dynamic loader; passing the
         # file(s) makes the field span the full recording across files.
@@ -150,19 +149,17 @@ def multifield_from_scanimage(
         extractor = imaging.epochs[0].roiextractor_extractor
         affine = np.asarray(extractor.roi_affine, dtype=float) if extractor.roi_affine is not None else None
         # Microns per scanner-angle unit: ScanImage's objective resolution, read from the frame
-        # metadata. Lets FieldGeometry expose the geometry in micrometers as well as scanner units.
+        # metadata. Lets downstream code express the geometry in micrometers as well as scanner units.
         objective_resolution = extractor._metadata.get("SI.objectiveResolution")
         microns_per_scanner_unit = float(objective_resolution) if objective_resolution is not None else None
-        geometry.append(
-            FieldGeometry(
-                index=field_index,
-                name=extractor.roi_name,
-                uuid=extractor.roi_uuid,
-                center_xy=tuple(extractor.roi_center_xy) if extractor.roi_center_xy is not None else None,
-                size_xy=tuple(extractor.roi_size_xy) if extractor.roi_size_xy is not None else None,
-                affine=affine,
-                microns_per_scanner_unit=microns_per_scanner_unit,
-            )
+        # Lateral placement and identity, stored directly on the field (see BaseImaging.geometry).
+        imaging.geometry = dict(
+            name=extractor.roi_name,
+            uuid=extractor.roi_uuid,
+            center_xy=tuple(extractor.roi_center_xy) if extractor.roi_center_xy is not None else None,
+            size_xy=tuple(extractor.roi_size_xy) if extractor.roi_size_xy is not None else None,
+            affine=affine,
+            microns_per_scanner_unit=microns_per_scanner_unit,
         )
         # Attach per-plane physical depth (z) when the extractor exposes it. ScanImage stores the
         # ROI's z-plane(s) as ``zs`` -- a scalar for a planar field, one value per plane for a
@@ -177,4 +174,12 @@ def multifield_from_scanimage(
         _attach_field_timestamps(imaging, extractor, timestamps, full_frame_timestamps)
         fields.append(imaging)
 
-    return MultiFieldImaging(fields=fields, geometry=geometry)
+    # Fields are expected to be co-acquired (one shared timebase); flag a mixed set rather than fail.
+    sampling_frequencies = {round(field.sampling_frequency, 4) for field in fields}
+    if len(sampling_frequencies) > 1:
+        warnings.warn(
+            f"fields have heterogeneous sampling frequencies: {sorted(sampling_frequencies)}",
+            UserWarning,
+        )
+
+    return fields
