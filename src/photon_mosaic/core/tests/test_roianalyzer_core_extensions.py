@@ -505,7 +505,9 @@ def test_deconvolution_recovers_ground_truth_spikes_and_trace(analyzer_with_df_o
         noise_std=0.2,
         seed=SEED,
     )
-    analyzer_with_df_over_f.get_extension("df_over_f").data["df_over_f"] = ground_truth.traces
+    # traces == (1 + clean_traces) * bleach(t) + noise; bleach(t) == 1 since bleaching_time
+    # defaults to inf, so subtracting 1 gives dF/F == clean_traces + noise.
+    analyzer_with_df_over_f.get_extension("df_over_f").data["df_over_f"] = ground_truth.traces - 1.0
     analyzer_with_df_over_f.compute("deconvolution")
     ext = analyzer_with_df_over_f.get_extension("deconvolution")
 

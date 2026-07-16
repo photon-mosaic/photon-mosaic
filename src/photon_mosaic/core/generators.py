@@ -272,8 +272,9 @@ def generate_imaging_with_rois(
     )
     # Compute the mean signal (background everywhere, plus each ROI's fluorescence trace --
     # already F0-normalised as (1 + clean_traces) * bleach(t) -- scaled by its own F0 (baseline)):
-    # (T, N) @ (N, H*W*P) -> (T, H*W*P) -> (T, H, W, P). Scaling by F0 keeps recovered dF/F ==
-    # clean_traces regardless of noise_std, background, or the drawn per-ROI F0 values.
+    # (T, N) @ (N, H*W*P) -> (T, H*W*P) -> (T, H, W, P). Scaling by F0 keeps recovered dF/F
+    # invariant to noise_std and the drawn per-ROI F0 values; a nonzero background still
+    # attenuates it (see the `background` parameter docs above).
     video = imaging.epochs[0]._video
     masks = rois.get_roi_image_masks()  # (N, H, W) or (N, H, W, P)
     masks_flat = masks.reshape(num_rois, -1).astype(video.dtype)
@@ -317,6 +318,7 @@ def generate_fluorescence(
         Mean spike-event rate in Hz. Each ROI's number of events is drawn as
         ``round(uniform(0.5, 1.5) * event_rate * num_frames / sampling_frequency)``, i.e.
         it scales with the recording's duration rather than being fixed regardless of length.
+        Clamped to ``[0, num_frames]``.
     noise_std : float, default: 0.0
         Standard deviation of additive Gaussian noise. 0 means no noise.
     bleaching_time : float, default: inf
@@ -345,6 +347,7 @@ def generate_fluorescence(
     spikes = np.zeros((num_frames, num_rois), dtype=np.float32)
     for roi_idx in range(num_rois):
         num_events = round(rng.uniform(0.5, 1.5) * event_rate * num_frames / sampling_frequency)
+        num_events = min(max(num_events, 0), num_frames)
         event_times = rng.choice(num_frames, size=num_events, replace=False)
         spikes[event_times, roi_idx] = 1.0
 
