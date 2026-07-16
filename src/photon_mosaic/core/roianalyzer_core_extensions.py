@@ -267,9 +267,9 @@ class DeconvolutionExtension(AnalyzerExtension):
     """Extension to deconvolve neural activity from dF/F traces using OASIS.
 
     Solves the noise-constrained sparse non-negative deconvolution problem
-    (Friedrich & Paninski, NIPS 2016) to infer, for each ROI, the most
-    likely deconvolved activity trace and denoised calcium trace underlying
-    its dF/F signal.
+    (Friedrich, Zhou & Paninski, PLOS Comput Biol 2017) to infer, for each
+    ROI, the most likely deconvolved activity trace and denoised calcium
+    trace underlying its dF/F signal.
     """
 
     extension_name = "deconvolution"

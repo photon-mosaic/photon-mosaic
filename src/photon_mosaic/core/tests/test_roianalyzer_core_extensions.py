@@ -501,7 +501,7 @@ def test_deconvolution_recovers_ground_truth_spikes_and_trace(analyzer_with_df_o
         num_frames=ground_truth_frames,
         num_rois=NUM_ROIS,
         sampling_frequency=SF,
-        decay_seconds=2.0,
+        decay_time=2.0,
         noise_std=0.2,
         seed=SEED,
     )

@@ -178,7 +178,7 @@ def test_generate_fluorescence_spikes_are_binary():
 
 
 def test_generate_fluorescence_traces_equal_clean_traces_plus_one_without_noise_or_bleaching():
-    result = generate_fluorescence(num_frames=300, num_rois=2, noise_std=0.0, bleaching_tau=None, seed=2)
+    result = generate_fluorescence(num_frames=300, num_rois=2, noise_std=0.0, seed=2)
     np.testing.assert_array_equal(result.traces, result.clean_traces + 1.0)
 
 
@@ -190,14 +190,14 @@ def test_generate_fluorescence_noise_changes_traces():
 
 
 def test_generate_fluorescence_bleaching_attenuates_trace():
-    result = generate_fluorescence(num_frames=500, num_rois=1, bleaching_tau=5.0, seed=4)
+    result = generate_fluorescence(num_frames=500, num_rois=1, bleaching_time=5.0, seed=4)
     # Last quarter should be weaker than first quarter on average
     assert result.traces[:125, 0].mean() > result.traces[375:, 0].mean()
 
 
 def test_generate_fluorescence_is_reproducible():
-    r1 = generate_fluorescence(num_frames=200, num_rois=3, noise_std=0.1, bleaching_tau=30.0, seed=42)
-    r2 = generate_fluorescence(num_frames=200, num_rois=3, noise_std=0.1, bleaching_tau=30.0, seed=42)
+    r1 = generate_fluorescence(num_frames=200, num_rois=3, noise_std=0.1, bleaching_time=30.0, seed=42)
+    r2 = generate_fluorescence(num_frames=200, num_rois=3, noise_std=0.1, bleaching_time=30.0, seed=42)
     np.testing.assert_array_equal(r1.traces, r2.traces)
     np.testing.assert_array_equal(r1.spikes, r2.spikes)
     np.testing.assert_array_equal(r1.clean_traces, r2.clean_traces)
@@ -260,7 +260,7 @@ def test_generate_imaging_with_rois_noise_std_default_matches_explicit_default()
     """The default noise_std should reproduce the same background as passing it explicitly."""
     kwargs = dict(num_frames=60, height=20, width=20, num_rois=3, radius_range=(3, 5), seed=1)
     _, default, _ = generate_imaging_with_rois(**kwargs)
-    _, explicit, _ = generate_imaging_with_rois(**kwargs, noise_std=0.1)
+    _, explicit, _ = generate_imaging_with_rois(**kwargs, noise_std=2.5)
     np.testing.assert_array_equal(default.get_series(), explicit.get_series())
 
 
@@ -293,6 +293,33 @@ def test_generate_imaging_with_rois_dff_scale_independent_of_noise_std():
         ratios[noise_std] = dff[:, 0].std() / ground_truth.clean_traces[:, 0].std()
 
     assert 0.3 < ratios[0.05] / ratios[2.0] < 3.0
+
+
+def test_generate_imaging_with_rois_poisson_noise_variance_matches_mean():
+    """noise_std='poisson' should give background pixels variance ~= mean (shot noise)."""
+    rois, imaging, _ = generate_imaging_with_rois(
+        num_frames=2000, height=20, width=20, num_rois=2, radius_range=(3, 5), seed=1, noise_std="poisson"
+    )
+    video = imaging.epochs[0]._video
+    outside_any_roi = rois.get_roi_image_masks().sum(axis=0) == 0
+    background_pixels = video[:, outside_any_roi]
+    assert background_pixels.mean() > 0
+    assert 0.5 < background_pixels.var() / background_pixels.mean() < 2.0
+
+
+def test_generate_imaging_with_rois_poisson_noise_default_dff_recovery():
+    """At the default (photon-count-scale) parameters, Poisson noise shouldn't prevent
+    recovering dF/F close to clean_traces, comparable to the Gaussian default."""
+    from photon_mosaic.core import create_roi_analyzer
+
+    rois, imaging, ground_truth = generate_imaging_with_rois(num_frames=2000, num_rois=3, seed=0, noise_std="poisson")
+    analyzer = create_roi_analyzer(rois, imaging, format="memory")
+    analyzer.compute("fluorescence")
+    analyzer.compute("df_over_f")
+    dff = analyzer.get_extension("df_over_f").get_data()
+    for roi_idx in range(3):
+        corr = np.corrcoef(dff[:, roi_idx], ground_truth.clean_traces[:, roi_idx])[0, 1]
+        assert corr > 0.95
 
 
 def test_generate_imaging_with_rois_is_reproducible():
@@ -374,8 +401,8 @@ def test_generate_imaging_with_rois_decay_affects_trace():
         sampling_frequency=10.0,
         seed=55,
     )
-    _, im_short, _ = generate_imaging_with_rois(decay_seconds=0.5, **kwargs)
-    _, im_long, _ = generate_imaging_with_rois(decay_seconds=5.0, **kwargs)
+    _, im_short, _ = generate_imaging_with_rois(decay_time=0.5, **kwargs)
+    _, im_long, _ = generate_imaging_with_rois(decay_time=5.0, **kwargs)
 
     # Both should have visible injected signal well above the dark background
     assert im_short.get_series().max() > 1.0
