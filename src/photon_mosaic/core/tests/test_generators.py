@@ -322,6 +322,22 @@ def test_generate_imaging_with_rois_poisson_noise_default_dff_recovery():
         assert corr > 0.95
 
 
+def test_generate_imaging_with_rois_background_bleaches_with_signal():
+    """Background should decay under `bleaching_time`, just like the ROI signal, since it
+    mostly represents genuine (bleachable) fluorescence (e.g. neuropil) rather than
+    non-bleaching dark counts. Without bleaching, background should stay flat."""
+    kwargs = dict(num_frames=3000, height=20, width=20, num_rois=2, radius_range=(3, 5), noise_std=0.0, seed=1)
+    rois, imaging_bleached, _ = generate_imaging_with_rois(**kwargs, bleaching_time=30.0)
+    _, imaging_flat, _ = generate_imaging_with_rois(**kwargs)  # bleaching_time defaults to inf
+
+    outside_any_roi = rois.get_roi_image_masks().sum(axis=0) == 0
+    bg_bleached = imaging_bleached.epochs[0]._video[:, outside_any_roi]
+    bg_flat = imaging_flat.epochs[0]._video[:, outside_any_roi]
+
+    assert bg_bleached[-100:].mean() < 0.5 * bg_bleached[:100].mean()
+    assert bg_flat[-100:].mean() == pytest.approx(bg_flat[:100].mean())
+
+
 def test_generate_imaging_with_rois_is_reproducible():
     kwargs = dict(
         num_frames=60,

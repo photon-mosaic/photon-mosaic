@@ -204,8 +204,10 @@ def generate_imaging_with_rois(
         Whether to create weighted masks.
     background : float, default: 3.0
         Mean pixel intensity present everywhere in the frame, including under
-        the ROIs (e.g. out-of-focus light). 0 means a dark background with
-        only noise.
+        the ROIs (e.g. neuropil, out-of-focus light). 0 means a dark background
+        with only noise. Subject to the same `bleaching_time` decay as the ROI
+        signal, since it mostly represents genuine fluorescence rather than
+        non-bleaching dark counts.
     baseline_range : tuple[float, float], default: (2.0, 4.0)
         Range from which each ROI's baseline fluorescence (F0) is drawn
         uniformly at random, modeling cell-to-cell brightness variability.
@@ -272,14 +274,14 @@ def generate_imaging_with_rois(
     )
     # Compute the mean signal (background everywhere, plus each ROI's fluorescence trace --
     # already F0-normalised as (1 + clean_traces) * bleach(t) -- scaled by its own F0 (baseline)):
-    # (T, N) @ (N, H*W*P) -> (T, H*W*P) -> (T, H, W, P). Scaling by F0 keeps recovered dF/F
-    # invariant to noise_std and the drawn per-ROI F0 values; a nonzero background still
-    # attenuates it (see the `background` parameter docs above).
+    # (T, N) @ (N, H*W*P) -> (T, H*W*P) -> (T, H, W, P). background bleaches too (see the
+    # `background` docs above), so bleaching cancels out of the dF/F ratio instead of drifting.
     video = imaging.epochs[0]._video
     masks = rois.get_roi_image_masks()  # (N, H, W) or (N, H, W, P)
     masks_flat = masks.reshape(num_rois, -1).astype(video.dtype)
     signal = roi_baseline[np.newaxis, :] * fluorescence.traces  # (T, N)
-    mean_video = background + (signal @ masks_flat).reshape(video.shape)
+    bleach = np.exp(-np.arange(num_frames) / (bleaching_time * sampling_frequency), dtype=np.float32)
+    mean_video = background * bleach[:, np.newaxis, np.newaxis, np.newaxis] + (signal @ masks_flat).reshape(video.shape)
 
     noise_rng = np.random.default_rng(noise_seed)
     if noise_std == "poisson":
