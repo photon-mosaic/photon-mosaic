@@ -8,6 +8,7 @@ from photon_mosaic.core.generators import generate_random_imaging, generate_rois
 from photon_mosaic.core.roianalyzer_core_extensions import (
     FluorescenceNode,
     _kde_mode_percentile,
+    _percentile_filter_roi,
 )
 
 # ---------------------------------------------------------------------------
@@ -369,6 +370,28 @@ def test_df_over_f_parallel_matches_serial(analyzer_with_fluorescence):
     analyzer_with_fluorescence.compute("df_over_f", **kw, n_jobs=2)
     parallel = analyzer_with_fluorescence.get_extension("df_over_f").get_data()
     np.testing.assert_allclose(serial, parallel, rtol=1e-5)
+
+
+def test_percentile_filter_roi_win_ge_frames_uses_global_percentile():
+    """Window >= trace length: every frame gets the global percentile."""
+    rng = np.random.default_rng(0)
+    n_frames = 200
+    col = rng.random(n_frames).astype(np.float32)
+    result = _percentile_filter_roi((col, n_frames, 8.0))
+    expected = np.percentile(col, 8.0)
+    np.testing.assert_array_equal(result, np.full_like(col, expected))
+
+
+def test_percentile_filter_roi_win_lt_frames_uses_rolling_filter():
+    """Window < trace length: rolling scipy.ndimage filter matches exactly."""
+    from scipy.ndimage import percentile_filter
+
+    rng = np.random.default_rng(0)
+    col = rng.random(200).astype(np.float32)
+    size = 20
+    result = _percentile_filter_roi((col, size, 8.0))
+    expected = percentile_filter(col, 8.0, size=size)
+    np.testing.assert_array_equal(result, expected)
 
 
 def test_df_over_f_get_data_recording(analyzer_with_fluorescence):
