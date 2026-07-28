@@ -141,7 +141,7 @@ class NumpyImagingEpoch(BaseImagingEpoch):
 
 
 class NumpyRois(BaseRois):
-    """A ROIs object specified by numpy arrays for masks and traces."""
+    """A ROIs object specified by numpy or sparse pydata arrays for masks and traces."""
 
     def __init__(
         self,
@@ -149,12 +149,12 @@ class NumpyRois(BaseRois):
         sampling_frequency: float,
         roi_ids: ArrayLike | None = None,
     ):
-        """Create a NumpyRois object from numpy arrays.
+        """Create a NumpyRois object from numpy or sparse pydata arrays.
 
         Parameters
         ----------
         roi_image_masks : ArrayLike
-            Numpy array representing the image masks for each ROI
+            Numpy or sparse (e.g. `sparse.GCXS`) array representing the image masks for each ROI.
             Accepted dimensions are: (num_rois x height x width) for single-plane and
             (num_rois x height x width x num_planes) for multi-plane.
         sampling_frequency : float
