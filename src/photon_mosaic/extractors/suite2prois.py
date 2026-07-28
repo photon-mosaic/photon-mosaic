@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 import numpy as np
+import sparse
 from numpy.typing import NDArray
 
 from photon_mosaic.core import BaseRois
@@ -147,8 +148,14 @@ class Suite2pRois(BaseRois):
             except Exception:
                 logging.debug("Could not set property %r from stat", key)
 
-    def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> NDArray:
-        """Return binary image masks shaped ``(n_rois, H, W)`` or ``(n_rois, H, W, n_planes)``."""
+    def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> sparse.GCXS:
+        """Return binary image masks shaped ``(n_rois, H, W)`` or ``(n_rois, H, W, n_planes)``.
+
+        Returned as a sparse :class:`sparse.GCXS` array, built directly from each ROI's
+        ``ypix``/``xpix`` pixel coordinates -- suite2p detections can number in the tens of
+        thousands over large (e.g. volumetric) fields of view, where a dense array would be
+        far larger than the raw movie itself (see photon-mosaic#103).
+        """
         if roi_ids is None:
             roi_ids = self.roi_ids.tolist()
 
@@ -157,15 +164,19 @@ class Suite2pRois(BaseRois):
         for roi_id in roi_ids:
             roi_index = int(roi_id)
             stat = self._stats[roi_index]
+            ypix = np.asarray(stat["ypix"])
+            xpix = np.asarray(stat["xpix"])
+            data = np.ones(len(ypix), dtype=bool)
+            shape: tuple[int, ...]
             if n_planes == 1:
-                mask = np.zeros((H, W), dtype=bool)
-                mask[stat["ypix"], stat["xpix"]] = True
+                coords = np.stack([ypix, xpix])
+                shape = (H, W)
             else:
-                mask = np.zeros((H, W, n_planes), dtype=bool)
                 p = int(self._plane_assignments[roi_index])
-                mask[stat["ypix"], stat["xpix"], p] = True
-            masks.append(mask)
-        return np.array(masks)
+                coords = np.stack([ypix, xpix, np.full(len(ypix), p, dtype=ypix.dtype)])
+                shape = (H, W, n_planes)
+            masks.append(sparse.COO(coords, data, shape=shape))
+        return sparse.GCXS.from_coo(sparse.stack(masks, axis=0))
 
 
 read_suite2p_rois = Suite2pRois

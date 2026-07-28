@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import sparse
 from matplotlib.colors import to_rgba
 from spikeinterface.widgets import get_some_colors
 from spikeinterface.widgets.base import BaseWidget, to_attr
@@ -101,8 +102,11 @@ class RoisWidget(BaseWidget):
         else:
             colors = dp.colors
 
-        # Get all ROI masks at once: shape (num_rois, height, width)
+        # Get all ROI masks at once: shape (num_rois, height, width). Rendering needs actual
+        # pixel values, so densify once here rather than scattering conversions below.
         masks = dp.rois.get_roi_image_masks(dp.roi_ids)
+        if isinstance(masks, sparse.SparseArray):
+            masks = masks.todense()
         # Prepare RGBA overlays for all ROIs
         overlay = np.zeros((*masks.shape[1:], 4), dtype=float)
         for idx, roi_id in enumerate(dp.roi_ids):
@@ -162,8 +166,11 @@ class RoisWidget(BaseWidget):
         else:
             self.roi_colors = dp.colors
 
-        # Get all masks at once for efficiency
+        # Get all masks at once for efficiency. Rendering needs actual pixel values, so
+        # densify once here rather than scattering conversions through the plot helpers.
         self.all_masks = dp.rois.get_roi_image_masks(dp.roi_ids)
+        if isinstance(self.all_masks, sparse.SparseArray):
+            self.all_masks = self.all_masks.todense()
 
         # Create matplotlib figures with proper size
         cm = 1 / 2.54

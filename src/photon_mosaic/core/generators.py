@@ -234,7 +234,7 @@ def generate_imaging_with_rois(
     # Inject traces into video: (T, N) @ (N, H*W*P) -> (T, H*W*P) -> (T, H, W, P)
     video = imaging.epochs[0]._video
     masks = rois.get_roi_image_masks()  # (N, H, W) or (N, H, W, P)
-    masks_flat = masks.reshape(num_rois, -1).astype(video.dtype)
+    masks_flat = masks.reshape((num_rois, -1)).astype(video.dtype)
     video += (fluorescence.traces @ masks_flat).reshape(video.shape)
 
     rois.register_imaging(imaging)  # Link the ROIs to the imaging data

@@ -272,9 +272,11 @@ class RoiAnalyzer:
         else:
             imaging_attributes = imaging_attributes.copy()
 
-        # Make an in-memory copy of rois for fast access
+        # Make an in-memory copy of rois for fast access. Pass image masks through as-is
+        # (dense ndarray or sparse array) -- wrapping in np.array() would raise for a sparse
+        # array (which refuses implicit densification via __array__) instead of copying it.
         rois_copy = NumpyRois(
-            roi_image_masks=np.array(rois.get_roi_image_masks()),
+            roi_image_masks=rois.get_roi_image_masks(),
             sampling_frequency=rois.sampling_frequency,
             roi_ids=np.array(rois.roi_ids),
         )

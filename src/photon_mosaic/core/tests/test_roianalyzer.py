@@ -110,6 +110,23 @@ class TestCreateMemory:
     def test_is_read_only(self, analyzer):
         assert not analyzer.is_read_only()
 
+    def test_create_memory_with_sparse_masks(self, imaging):
+        """create_roi_analyzer should work with sparse-backed ROIs (e.g. Suite2p output)
+        without forcing an implicit (and error-prone) densification -- see photon-mosaic#103."""
+        import sparse
+
+        from photon_mosaic.extractors.suite2prois import Suite2pRois
+
+        rng = np.random.default_rng(0)
+        stats = [{"ypix": rng.integers(0, 64, size=8), "xpix": rng.integers(0, 64, size=8)} for _ in range(5)]
+        sparse_rois = Suite2pRois.from_stat(stats, shape=(64, 64, 1), sampling_frequency=30.0)
+
+        analyzer = create_roi_analyzer(sparse_rois, imaging, format="memory")
+        assert analyzer.get_num_rois() == 5
+        masks = analyzer.rois.get_roi_image_masks()
+        assert isinstance(masks, sparse.SparseArray)
+        np.testing.assert_array_equal(masks.todense(), sparse_rois.get_roi_image_masks().todense())
+
 
 class TestValidation:
     def test_sampling_frequency_mismatch(self, imaging):

@@ -12,6 +12,7 @@ save_rois_to_zarr
 """
 
 import numpy as np
+import sparse
 
 from .baserois import BaseRois
 
@@ -65,11 +66,17 @@ class ZarrRois(BaseRois):
         )
 
     def get_roi_image_masks(self, roi_ids=None):
-        roi_image_masks = self._rois_group["roi_image_masks"]
+        if self._rois_group.attrs.get("roi_image_masks_sparse", False):
+            coords = np.array(self._rois_group["roi_image_masks_coords"])
+            data = np.array(self._rois_group["roi_image_masks_data"])
+            shape = tuple(self._rois_group.attrs["roi_image_masks_shape"])
+            masks = sparse.GCXS.from_coo(sparse.COO(coords, data, shape=shape))
+        else:
+            masks = np.array(self._rois_group["roi_image_masks"])
         if roi_ids is None:
-            return np.array(roi_image_masks)
+            return masks
         roi_indices = self.ids_to_indices(roi_ids)
-        return np.array(roi_image_masks[roi_indices])
+        return masks[roi_indices]
 
 
 def save_rois_to_zarr(rois: BaseRois, zarr_group, saving_options: dict | None = None) -> None:
@@ -86,13 +93,23 @@ def save_rois_to_zarr(rois: BaseRois, zarr_group, saving_options: dict | None = 
     """
     saving_options = saving_options or {}
 
-    image_masks = np.asarray(rois.get_roi_image_masks())
-    # Chunk along the ROI axis (first dimension) for efficient per-ROI access,
-    # unless the caller has already specified a chunk layout.
-    if "chunks" not in saving_options:
-        roi_chunks = (1,) + image_masks.shape[1:]
-        saving_options = {**saving_options, "chunks": roi_chunks}
-    zarr_group.create_dataset("roi_image_masks", data=image_masks, **saving_options)
+    image_masks = rois.get_roi_image_masks()
+    if isinstance(image_masks, sparse.SparseArray):
+        # zarr can't store a sparse array as a dataset value directly; store its COO
+        # components instead, which stay small regardless of the dense shape.
+        coo = image_masks.tocoo()
+        zarr_group.attrs["roi_image_masks_sparse"] = True
+        zarr_group.attrs["roi_image_masks_shape"] = list(coo.shape)
+        zarr_group.create_dataset("roi_image_masks_coords", data=coo.coords, **saving_options)
+        zarr_group.create_dataset("roi_image_masks_data", data=coo.data, **saving_options)
+    else:
+        zarr_group.attrs["roi_image_masks_sparse"] = False
+        # Chunk along the ROI axis (first dimension) for efficient per-ROI access,
+        # unless the caller has already specified a chunk layout.
+        if "chunks" not in saving_options:
+            roi_chunks = (1,) + image_masks.shape[1:]
+            saving_options = {**saving_options, "chunks": roi_chunks}
+        zarr_group.create_dataset("roi_image_masks", data=image_masks, **saving_options)
 
     roi_ids = np.array(rois.roi_ids)
     if roi_ids.dtype.kind == "U":
