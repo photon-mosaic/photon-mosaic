@@ -1,4 +1,4 @@
-# photon-mosaic API Documentation
+# photon-mosaic
 
 ```{toctree}
 :maxdepth: 2
@@ -7,4 +7,4 @@
 api_index
 ```
 
-This site contains developer-facing API documentation for `photon-mosaic`.
+A modular, extensible Python API package for multiphoton imaging data.
