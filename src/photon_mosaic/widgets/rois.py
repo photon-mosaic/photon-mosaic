@@ -68,6 +68,12 @@ class RoisWidget(BaseWidget):
 
         BaseWidget.__init__(self, data_plot, backend=backend, **backend_kwargs)
 
+    @staticmethod
+    def _densify(masks):
+        """Rendering needs actual pixel values, so densify once here rather than
+        scattering conversions through the plot helpers."""
+        return masks.todense() if isinstance(masks, sparse.SparseArray) else masks
+
     def plot_matplotlib(self, data_plot, **backend_kwargs):
         """Matplotlib backend for plotting ROI masks."""
         dp = to_attr(data_plot)
@@ -102,11 +108,8 @@ class RoisWidget(BaseWidget):
         else:
             colors = dp.colors
 
-        # Get all ROI masks at once: shape (num_rois, height, width). Rendering needs actual
-        # pixel values, so densify once here rather than scattering conversions below.
-        masks = dp.rois.get_roi_image_masks(dp.roi_ids)
-        if isinstance(masks, sparse.SparseArray):
-            masks = masks.todense()
+        # Get all ROI masks at once: shape (num_rois, height, width).
+        masks = self._densify(dp.rois.get_roi_image_masks(dp.roi_ids))
         # Prepare RGBA overlays for all ROIs
         overlay = np.zeros((*masks.shape[1:], 4), dtype=float)
         for idx, roi_id in enumerate(dp.roi_ids):
@@ -166,11 +169,8 @@ class RoisWidget(BaseWidget):
         else:
             self.roi_colors = dp.colors
 
-        # Get all masks at once for efficiency. Rendering needs actual pixel values, so
-        # densify once here rather than scattering conversions through the plot helpers.
-        self.all_masks = dp.rois.get_roi_image_masks(dp.roi_ids)
-        if isinstance(self.all_masks, sparse.SparseArray):
-            self.all_masks = self.all_masks.todense()
+        # Get all masks at once for efficiency.
+        self.all_masks = self._densify(dp.rois.get_roi_image_masks(dp.roi_ids))
 
         # Create matplotlib figures with proper size
         cm = 1 / 2.54
