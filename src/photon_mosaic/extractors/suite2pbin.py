@@ -220,7 +220,7 @@ def read_suite2p_full(
         planes = [Suite2pImaging(plane_dir, chan=chan) for plane_dir in plane_dirs]
         # concatenate_planes already propagates is_registered from the planes; the
         # stitched volume stays a plain multi-plane imaging (no suite2p specifics).
-        return planes[0] if len(planes) == 1 else concatenate_planes(planes)
+        return planes[0] if len(planes) == 1 else concatenate_planes(*planes)
 
     chan1 = _volume(1)
     if nchannels == 1:
