@@ -280,16 +280,27 @@ def _percentile_filter_roi(args: tuple) -> np.ndarray:
         - ``prctile_baseline`` : fixed percentile (float) or ``None`` to trigger
           automatic KDE estimation from the first ``size`` frames of ``col``.
     """
-    from scipy.ndimage import percentile_filter
-
     col, size, prctile_baseline = args
     if prctile_baseline is None:
+        window = col if size >= len(col) else col[:size]
         try:
-            prct = _kde_mode_percentile(col[:size].astype(np.float64))
+            prct = _kde_mode_percentile(window.astype(np.float64))
         except Exception:
             prct = 50.0
     else:
         prct = float(prctile_baseline)
+
+    if size >= len(col):
+        # A window spanning (or exceeding) the whole trace is just the trace's global
+        # percentile everywhere -- computing it directly avoids scipy.ndimage's
+        # boundary-reflection padding, whose behavior for a window this large isn't
+        # reliably reproducible across environments (see the parallel/serial mismatch
+        # this was fixing).
+        baseline = np.percentile(col, prct)
+        return np.full_like(col, baseline)
+
+    from scipy.ndimage import percentile_filter
+
     return percentile_filter(col, prct, size=size)
 
 

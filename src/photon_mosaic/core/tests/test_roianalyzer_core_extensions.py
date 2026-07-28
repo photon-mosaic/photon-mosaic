@@ -8,6 +8,7 @@ from photon_mosaic.core.generators import generate_random_imaging, generate_rois
 from photon_mosaic.core.roianalyzer_core_extensions import (
     FluorescenceNode,
     _kde_mode_percentile,
+    _percentile_filter_roi,
 )
 
 # ---------------------------------------------------------------------------
@@ -346,6 +347,27 @@ def test_df_over_f_parallel_matches_serial(analyzer_with_fluorescence):
     analyzer_with_fluorescence.compute("df_over_f", **kw, n_jobs=2)
     parallel = analyzer_with_fluorescence.get_extension("df_over_f").get_data()
     np.testing.assert_allclose(serial, parallel, rtol=1e-5)
+
+
+def test_percentile_filter_roi_win_ge_frames_uses_global_percentile():
+    """When the window covers (or exceeds) the whole trace, every frame should get the
+    trace's global percentile rather than scipy.ndimage's boundary-reflected filter."""
+    rng = np.random.default_rng(0)
+    col = rng.random(NUM_FRAMES).astype(np.float32)
+    result = _percentile_filter_roi((col, NUM_FRAMES, 8.0))
+    expected = np.percentile(col, 8.0)
+    np.testing.assert_array_equal(result, np.full_like(col, expected))
+
+
+def test_df_over_f_win_ge_frames_parallel_matches_serial(analyzer_with_fluorescence):
+    """Same as test_df_over_f_parallel_matches_serial, but with win_baseline spanning the
+    entire trace -- the scenario that used to disagree between n_jobs=1 and n_jobs=2."""
+    kw = dict(method="percentile", prctile_baseline=8.0, win_baseline=1000.0)
+    analyzer_with_fluorescence.compute("df_over_f", **kw, n_jobs=1)
+    serial = analyzer_with_fluorescence.get_extension("df_over_f").get_data().copy()
+    analyzer_with_fluorescence.compute("df_over_f", **kw, n_jobs=2)
+    parallel = analyzer_with_fluorescence.get_extension("df_over_f").get_data()
+    np.testing.assert_array_equal(serial, parallel)
 
 
 def test_df_over_f_get_data_recording(analyzer_with_fluorescence):
