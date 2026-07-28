@@ -227,6 +227,22 @@ class BaseRois(BaseExtractor):
         ), "The imaging has a different sampling frequency than the ROIs!"
         self._imaging = imaging
 
+    def save(self, **kwargs) -> "BaseExtractor":
+        """Save a BaseRois object to disk.
+
+        Overrides ``BaseExtractor.save()`` for ``format="zarr"``: the base
+        implementation's ``save_to_zarr()`` reloads the saved data with
+        spikeinterface's ``read_zarr()``, which expects a recording/sorting zarr
+        layout (``channel_ids``/``unit_ids`` at the root) and doesn't understand
+        the ROI zarr layout written by ``_save_zarr()``. Dispatching straight to
+        ``_save_zarr()`` here mirrors how ``format="binary"`` already reaches
+        ``_save_binary()``.
+        """
+        if kwargs.get("format") == "zarr":
+            save_kwargs = {k: v for k, v in kwargs.items() if k != "format"}
+            return self._save_zarr(**save_kwargs)
+        return super().save(**kwargs)
+
     def _save(self, format="binary", **save_kwargs):
         """Save ROIs to disk. Called internally by ``BaseExtractor.save()``.
 

@@ -57,11 +57,8 @@ def test_save_binary_roundtrip_sparse(sparse_rois, tmp_path):
 
 
 def test_save_zarr_roundtrip_dense(dense_rois, tmp_path):
-    # Calling BaseRois._save directly, not the public .save(), since the public entry point
-    # currently gets intercepted by spikeinterface's own BaseExtractor zarr handling before
-    # reaching our _save_zarr override -- a pre-existing routing issue, tracked separately.
     original_masks = dense_rois.get_roi_image_masks()
-    saved = dense_rois._save(format="zarr", zarr_path=tmp_path / "rois.zarr")
+    saved = dense_rois.save(format="zarr", zarr_path=tmp_path / "rois.zarr")
 
     assert isinstance(saved, ZarrRois)
     np.testing.assert_array_equal(saved.get_roi_image_masks(), original_masks)
@@ -70,7 +67,7 @@ def test_save_zarr_roundtrip_dense(dense_rois, tmp_path):
 
 def test_save_zarr_roundtrip_sparse(sparse_rois, tmp_path):
     original_masks = sparse_rois.get_roi_image_masks()
-    saved = sparse_rois._save(format="zarr", zarr_path=tmp_path / "rois.zarr")
+    saved = sparse_rois.save(format="zarr", zarr_path=tmp_path / "rois.zarr")
 
     assert isinstance(saved, ZarrRois)
     reloaded_masks = saved.get_roi_image_masks()
