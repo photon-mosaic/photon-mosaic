@@ -3,6 +3,10 @@
 These tests build synthetic suite2p output trees on disk (per-plane ``data.bin``
 plus ``ops.npy``) so the extractor can be exercised end-to-end without a real
 suite2p run. The on-disk layout matches what suite2p produces in v0.14+.
+
+Following issue #77, ``Suite2pImaging`` loads a single plane; multi-plane
+volumes are assembled with ``concatenate_planes`` (used internally by
+``read_suite2p``).
 """
 
 from pathlib import Path
@@ -10,6 +14,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from photon_mosaic.core.concatenate import concatenate_planes
 from photon_mosaic.core.split import split_epoch_at_frames
 from photon_mosaic.extractors.suite2p import (
     Suite2pImaging,
@@ -86,32 +91,60 @@ def test_suite2p_imaging_single_plane_single_run(tmp_path: Path):
     out = imaging.get_series(0, n_frames)
     np.testing.assert_array_equal(out[..., 0], written[0][1])
 
+    # A single plane still maps to a unique binary on disk.
     assert imaging.is_binary_compatible()
     desc = imaging.get_binary_description()
     assert desc is not None
 
 
-def test_suite2p_imaging_multi_plane_stitches_planes(tmp_path: Path):
+def test_suite2p_imaging_accepts_plane_directory_directly(tmp_path: Path):
+    root = tmp_path / "run0"
+    _write_suite2p_run(root, n_frames=6, Ly=3, Lx=4, nplanes=2, seed=5)
+
+    # A plane directory (contains ops.npy) is accepted directly...
+    plane1 = Suite2pImaging(root / "plane1")
+    assert tuple(plane1.shape) == (3, 4, 1)
+    # ...while a multi-plane root is rejected with a pointer to read_suite2p.
+    with pytest.raises(ValueError, match="single plane"):
+        _ = Suite2pImaging(root)
+
+
+def test_concatenate_planes_of_single_plane_suite2p_objects(tmp_path: Path):
+    """Use case 1 of issue #77: load each plane, then stitch with concatenate_planes."""
+    root = tmp_path / "run0"
+    n_frames, Ly, Lx = 6, 4, 5
+    written = _write_suite2p_run(root, n_frames=n_frames, Ly=Ly, Lx=Lx, nplanes=2, seed=3)
+
+    plane0 = Suite2pImaging(root / "plane0")
+    plane1 = Suite2pImaging(root / "plane1")
+    assert tuple(plane0.shape) == (Ly, Lx, 1)
+
+    volume = concatenate_planes(plane0, plane1)
+    assert tuple(volume.shape) == (Ly, Lx, 2)
+    assert volume.is_registered is True
+
+    out = volume.get_series(0, n_frames)
+    assert out.shape == (n_frames, Ly, Lx, 2)
+    np.testing.assert_array_equal(out[..., 0], written[0][1])
+    np.testing.assert_array_equal(out[..., 1], written[1][1])
+
+
+def test_read_suite2p_stitches_planes(tmp_path: Path):
     root = tmp_path / "run0"
     n_frames, Ly, Lx, nplanes = 8, 4, 6, 3
     written = _write_suite2p_run(root, n_frames=n_frames, Ly=Ly, Lx=Lx, nplanes=nplanes, seed=7)
 
-    imaging = Suite2pImaging(root)
+    imaging = read_suite2p(root)  # single channel -> one stitched volume
     assert tuple(imaging.shape) == (Ly, Lx, nplanes)
+    assert imaging.is_registered is True
 
     out = imaging.get_series(0, n_frames)
     assert out.shape == (n_frames, Ly, Lx, nplanes)
     for p in range(nplanes):
         np.testing.assert_array_equal(out[..., p], written[p][1])
 
-    # Plane selection should pull only the requested planes
-    out_sel = imaging.get_series(2, 6, plane_ids=[2, 0])
-    assert out_sel.shape == (4, Ly, Lx, 2)
-    np.testing.assert_array_equal(out_sel[..., 0], written[2][1][2:6])
-    np.testing.assert_array_equal(out_sel[..., 1], written[0][1][2:6])
 
-
-def test_suite2p_imaging_two_channels_returns_pair(tmp_path: Path):
+def test_read_suite2p_two_channels_returns_pair(tmp_path: Path):
     root = tmp_path / "run0"
     n_frames, Ly, Lx, nplanes = 5, 3, 4, 2
     written = _write_suite2p_run(root, n_frames=n_frames, Ly=Ly, Lx=Lx, nplanes=nplanes, nchannels=2, seed=1)
@@ -119,8 +152,6 @@ def test_suite2p_imaging_two_channels_returns_pair(tmp_path: Path):
     result = read_suite2p(root)
     assert isinstance(result, tuple)
     chan1, chan2 = result
-    assert isinstance(chan1, Suite2pImaging)
-    assert isinstance(chan2, Suite2pImaging)
     assert chan1.chan == 1 and chan2.chan == 2
     assert tuple(chan1.shape) == (Ly, Lx, nplanes)
     assert tuple(chan2.shape) == (Ly, Lx, nplanes)
@@ -132,30 +163,11 @@ def test_suite2p_imaging_two_channels_returns_pair(tmp_path: Path):
         np.testing.assert_array_equal(out2[..., p], written[p][2])
 
 
-def test_read_suite2p_single_channel_returns_one_object(tmp_path: Path):
+def test_read_suite2p_single_plane_single_channel_returns_one_object(tmp_path: Path):
     root = tmp_path / "run0"
     _write_suite2p_run(root, n_frames=6, Ly=3, Lx=3, nplanes=1, nchannels=1)
     obj = read_suite2p(root)
     assert isinstance(obj, Suite2pImaging)
-
-
-def test_suite2p_imaging_multiple_runs_become_epochs(tmp_path: Path):
-    root_a = tmp_path / "session_a"
-    root_b = tmp_path / "session_b"
-    Ly, Lx, nplanes = 4, 5, 2
-    wa = _write_suite2p_run(root_a, n_frames=7, Ly=Ly, Lx=Lx, nplanes=nplanes, seed=10)
-    wb = _write_suite2p_run(root_b, n_frames=11, Ly=Ly, Lx=Lx, nplanes=nplanes, seed=11)
-
-    imaging = Suite2pImaging([root_a, root_b])
-    assert imaging.get_num_epochs() == 2
-    assert imaging.get_num_frames(epoch_index=0) == 7
-    assert imaging.get_num_frames(epoch_index=1) == 11
-
-    out0 = imaging.get_series(0, 7, epoch_index=0)
-    out1 = imaging.get_series(0, 11, epoch_index=1)
-    for p in range(nplanes):
-        np.testing.assert_array_equal(out0[..., p], wa[p][1])
-        np.testing.assert_array_equal(out1[..., p], wb[p][1])
 
 
 def test_suite2p_imaging_records_frames_per_file_metadata(tmp_path: Path):
@@ -193,21 +205,6 @@ def test_split_suite2p_into_files_flattens_single_run(tmp_path: Path):
     np.testing.assert_array_equal(recovered, written[0][1])
 
 
-def test_split_suite2p_into_files_flattens_all_epochs(tmp_path: Path):
-    root_a = tmp_path / "run0"
-    root_b = tmp_path / "run1"
-    Ly, Lx = 3, 3
-    _write_suite2p_run(root_a, n_frames=7, Ly=Ly, Lx=Lx, nplanes=1, frames_per_file=[3, 4])
-    _write_suite2p_run(root_b, n_frames=9, Ly=Ly, Lx=Lx, nplanes=1, frames_per_file=[4, 5])
-
-    imaging = Suite2pImaging([root_a, root_b])
-    split = split_suite2p_into_files(imaging)
-
-    # Files across both runs become consecutive epochs
-    assert split.get_num_epochs() == 4
-    assert [split.get_num_samples(segment_index=i) for i in range(4)] == [3, 4, 4, 5]
-
-
 def test_split_suite2p_into_files_requires_frames_per_file(tmp_path: Path):
     root = tmp_path / "run0"
     _write_suite2p_run(root, n_frames=6, Ly=3, Lx=3, nplanes=1)  # no frames_per_file
@@ -216,7 +213,7 @@ def test_split_suite2p_into_files_requires_frames_per_file(tmp_path: Path):
         _ = split_suite2p_into_files(imaging)
 
 
-def test_suite2p_imaging_rejects_inconsistent_geometry_across_planes(tmp_path: Path):
+def test_read_suite2p_rejects_inconsistent_geometry_across_planes(tmp_path: Path):
     root = tmp_path / "run0"
     _write_suite2p_run(root, n_frames=5, Ly=3, Lx=3, nplanes=2)
     # Corrupt plane 1's ops.npy to claim a different Lx
@@ -224,8 +221,9 @@ def test_suite2p_imaging_rejects_inconsistent_geometry_across_planes(tmp_path: P
     ops1["Lx"] = 99
     np.save(root / "plane1" / "ops.npy", ops1, allow_pickle=True)
 
-    with pytest.raises(ValueError, match="disagrees"):
-        _ = Suite2pImaging(root)
+    # concatenate_planes (via read_suite2p) refuses to stitch mismatched planes.
+    with pytest.raises(ValueError, match="frame shape"):
+        _ = read_suite2p(root)
 
 
 def test_suite2p_imaging_rejects_missing_channel(tmp_path: Path):

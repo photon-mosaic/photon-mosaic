@@ -18,7 +18,7 @@ from .roianalyzer_core_extensions import FluorescenceExtension
 from .split import (
     SelectEpochImaging,
     SplitEpochAtFramesImaging,
-    select_epochs,
     split_epoch_at_frames,
+    split_epochs,
 )
 from .zarrrois import ZarrRois

@@ -47,7 +47,7 @@ class SelectEpochImaging(BaseImaging):
         }
 
 
-def select_epochs(imaging: BaseImaging, epoch_indices: int | list[int]) -> SelectEpochImaging:
+def split_epochs(imaging: BaseImaging, epoch_indices: int | list[int]) -> SelectEpochImaging:
     """Return a proxy imaging object with only the requested epochs."""
     return SelectEpochImaging(imaging=imaging, epoch_indices=epoch_indices)
 
