@@ -3,7 +3,7 @@ from .baserois import BaseRois
 from .binaryimaging import BinaryImaging, read_binary
 from .binaryrois import BinaryFolderRois, BinaryRois
 from .concatenate import ConcatenatePlanesImaging, concatenate_planes
-from .generators import generate_imaging_with_rois, generate_random_imaging, generate_rois
+from .generators import generate_fluorescence, generate_imaging_with_rois, generate_random_imaging, generate_rois
 from .loading import load
 from .motion import Motion
 from .numpyimaging import NumpyImaging

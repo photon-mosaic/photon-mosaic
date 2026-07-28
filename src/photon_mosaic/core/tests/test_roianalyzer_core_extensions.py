@@ -1,11 +1,14 @@
-"""Tests for FluorescenceNode.compute() and FluorescenceExtension._get_data()."""
+"""Tests for FluorescenceNode, FluorescenceExtension, and DfOverFExtension."""
 
 import numpy as np
 import pytest
 
 from photon_mosaic.core import create_roi_analyzer
 from photon_mosaic.core.generators import generate_random_imaging, generate_rois
-from photon_mosaic.core.roianalyzer_core_extensions import FluorescenceNode
+from photon_mosaic.core.roianalyzer_core_extensions import (
+    FluorescenceNode,
+    _kde_mode_percentile,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -297,3 +300,89 @@ def test_get_data_invalid_output(analyzer):
     ext = analyzer.get_extension("fluorescence")
     with pytest.raises(ValueError, match="Unsupported output type"):
         ext.get_data(outputs="pandas")
+
+
+# ---------------------------------------------------------------------------
+# DfOverFExtension
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def analyzer_with_fluorescence(imaging, rois):
+    analyzer = create_roi_analyzer(rois, imaging, format="memory")
+    analyzer.compute("fluorescence")
+    return analyzer
+
+
+@pytest.mark.parametrize(
+    "method,kwargs",
+    [
+        ("maximin", {}),
+        ("percentile", {"prctile_baseline": 8.0}),
+        ("percentile", {"prctile_baseline": None}),
+        ("running_percentile", {"prctile_baseline": 8.0}),
+    ],
+)
+def test_df_over_f_shape_dtype_finite(analyzer_with_fluorescence, method, kwargs):
+    """dF/F output should have correct shape, float32 dtype, and finite values."""
+    analyzer_with_fluorescence.compute("df_over_f", method=method, **kwargs)
+    result = analyzer_with_fluorescence.get_extension("df_over_f").get_data()
+    assert result.shape == (NUM_FRAMES, NUM_ROIS)
+    assert result.dtype == np.float32
+    assert np.isfinite(result).all()
+
+
+def test_df_over_f_invalid_method(analyzer_with_fluorescence):
+    """An unknown method name should raise ValueError."""
+    with pytest.raises(ValueError, match="Unknown method"):
+        analyzer_with_fluorescence.compute("df_over_f", method="bogus")
+
+
+def test_df_over_f_parallel_matches_serial(analyzer_with_fluorescence):
+    """ProcessPoolExecutor result should match serial computation exactly."""
+    kw = dict(method="percentile", prctile_baseline=8.0)
+    analyzer_with_fluorescence.compute("df_over_f", **kw, n_jobs=1)
+    serial = analyzer_with_fluorescence.get_extension("df_over_f").get_data().copy()
+    analyzer_with_fluorescence.compute("df_over_f", **kw, n_jobs=2)
+    parallel = analyzer_with_fluorescence.get_extension("df_over_f").get_data()
+    np.testing.assert_allclose(serial, parallel, rtol=1e-5)
+
+
+def test_df_over_f_get_data_recording(analyzer_with_fluorescence):
+    """get_data(outputs='recording') should return a NumpyRecording."""
+    from spikeinterface.core import NumpyRecording
+
+    analyzer_with_fluorescence.compute("df_over_f")
+    result = analyzer_with_fluorescence.get_extension("df_over_f").get_data(outputs="recording")
+    assert isinstance(result, NumpyRecording)
+    assert result.get_num_channels() == NUM_ROIS
+
+
+def test_df_over_f_get_data_invalid_output(analyzer_with_fluorescence):
+    """get_data with an unsupported output type should raise ValueError."""
+    analyzer_with_fluorescence.compute("df_over_f")
+    with pytest.raises(ValueError, match="Unsupported output type"):
+        analyzer_with_fluorescence.get_extension("df_over_f").get_data(outputs="pandas")
+
+
+def test_df_over_f_select_extension_data(analyzer_with_fluorescence, rois):
+    """_select_extension_data should return only the requested ROI columns."""
+    analyzer_with_fluorescence.compute("df_over_f")
+    sub = analyzer_with_fluorescence.get_extension("df_over_f")._select_extension_data(rois.roi_ids[:2])
+    assert sub["df_over_f"].shape == (NUM_FRAMES, 2)
+
+
+# ---------------------------------------------------------------------------
+# _kde_mode_percentile unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_kde_constant_signal_returns_50():
+    """A constant signal (R==0) should short-circuit to 50.0."""
+    assert _kde_mode_percentile(np.ones(500)) == 50.0
+
+
+def test_kde_returns_valid_percentile():
+    """KDE should return a value in [0, 100) for well-behaved data."""
+    prct = _kde_mode_percentile(np.random.default_rng(0).standard_normal(1000))
+    assert 0.0 <= prct < 100.0
