@@ -198,6 +198,15 @@ class TestFromStat:
         for i, stat in enumerate(stats):
             assert np.all(masks[i].todense()[stat["ypix"], stat["xpix"]])
 
+    def test_image_masks_empty_roi_ids(self):
+        """get_roi_image_masks([]) should return an empty array, not raise."""
+        rng = np.random.default_rng(1)
+        stats = _make_stats(rng, num_rois=3, height=20, width=24)
+        rois = Suite2pRois.from_stat(stats, shape=(20, 24, 1), sampling_frequency=15.0)
+
+        assert rois.get_roi_image_masks([]).shape == (0, 20, 24)
+        assert rois.select_rois([]).get_roi_image_masks().shape == (0, 20, 24)
+
     def test_multiplane_with_assignments(self):
         rng = np.random.default_rng(2)
         stats = _make_stats(rng, num_rois=4, height=10, width=12)

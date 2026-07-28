@@ -160,6 +160,12 @@ class Suite2pRois(BaseRois):
             roi_ids = self.roi_ids.tolist()
 
         H, W, n_planes = self.shape
+        mask_shape = (0, H, W) if n_planes == 1 else (0, H, W, n_planes)
+        if len(roi_ids) == 0:
+            # sparse.stack() requires at least one array; build an empty result directly
+            # instead, matching the dense case's (0, H, W[, P]) shape.
+            return sparse.GCXS.from_numpy(np.zeros(mask_shape, dtype=bool), compressed_axes=(0,))
+
         masks = []
         for roi_id in roi_ids:
             roi_index = int(roi_id)
