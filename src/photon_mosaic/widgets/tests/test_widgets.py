@@ -28,6 +28,13 @@ def small_rois(small_imaging):
 
 
 @pytest.fixture
+def small_rois_sparse(small_imaging):
+    rois = generate_rois(num_rois=3, height=32, width=32, sampling_frequency=30.0, seed=42, sparse=True)
+    rois.register_imaging(small_imaging)
+    return rois
+
+
+@pytest.fixture
 def small_rois_no_imaging():
     return generate_rois(num_rois=3, height=32, width=32, sampling_frequency=30.0, seed=42)
 
@@ -55,6 +62,13 @@ class TestRoisWidgetMatplotlib:
         assert w.figure is not None
         assert w.ax is not None
         assert "n=3" in w.ax.get_title()
+
+    def test_with_sparse_masks(self, small_rois_sparse, small_imaging):
+        """Sparse-backed ROIs should densify internally and plot the same as dense ones."""
+        w = RoisWidget(small_rois_sparse, imaging=small_imaging, backend="matplotlib")
+        assert w.figure is not None
+        images = w.ax.get_images()
+        assert len(images) >= 2
 
     def test_with_background(self, small_rois, small_imaging):
         w = RoisWidget(small_rois, imaging=small_imaging, backend="matplotlib")

@@ -244,28 +244,29 @@ class BaseRois(BaseExtractor):
         return super().save(**kwargs)
 
     def _save(self, format="binary", **save_kwargs):
-        """Save ROIs to disk. Called internally by ``BaseExtractor.save()``.
+        """Save ROIs to disk as the binary format.
+
+        Called internally by ``BaseExtractor.save_to_folder()``. Zarr saving is
+        dispatched directly to ``_save_zarr()`` by ``BaseRois.save()`` instead of
+        going through here (see its docstring).
 
         Parameters
         ----------
         format : str, default: "binary"
-            ``"binary"`` or ``"zarr"``.
+            Must be ``"binary"``.
         **save_kwargs
-            For ``"binary"``: must include ``folder`` (str or Path).
-            For ``"zarr"``: must include ``zarr_path`` (str or Path).
-                Optional: ``saving_options`` (dict), ``storage_options`` (dict).
+            Must include ``folder`` (str or Path).
 
         Returns
         -------
-        BinaryFolderRois or ZarrRois
+        BinaryFolderRois
             The on-disk representation.
         """
-        if format == "binary":
-            return self._save_binary(**save_kwargs)
-        elif format == "zarr":
-            return self._save_zarr(**save_kwargs)
-        else:
-            raise ValueError(f"format {format!r} not supported for BaseRois, use 'binary' or 'zarr'")
+        if format != "binary":
+            raise ValueError(
+                f"format {format!r} not supported by _save(); use 'binary' ('zarr' goes through _save_zarr())"
+            )
+        return self._save_binary(**save_kwargs)
 
     def _save_binary(self, **save_kwargs):
         from .binaryrois import BinaryFolderRois, BinaryRois
