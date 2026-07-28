@@ -359,15 +359,17 @@ def test_percentile_filter_roi_win_ge_frames_uses_global_percentile():
     np.testing.assert_array_equal(result, np.full_like(col, expected))
 
 
-def test_df_over_f_win_ge_frames_parallel_matches_serial(analyzer_with_fluorescence):
-    """Same as test_df_over_f_parallel_matches_serial, but with win_baseline spanning the
-    entire trace -- the scenario that used to disagree between n_jobs=1 and n_jobs=2."""
-    kw = dict(method="percentile", prctile_baseline=8.0, win_baseline=1000.0)
-    analyzer_with_fluorescence.compute("df_over_f", **kw, n_jobs=1)
-    serial = analyzer_with_fluorescence.get_extension("df_over_f").get_data().copy()
-    analyzer_with_fluorescence.compute("df_over_f", **kw, n_jobs=2)
-    parallel = analyzer_with_fluorescence.get_extension("df_over_f").get_data()
-    np.testing.assert_array_equal(serial, parallel)
+def test_percentile_filter_roi_win_lt_frames_uses_rolling_filter():
+    """When the window is smaller than the trace, the rolling scipy.ndimage filter
+    should still be used, matching it exactly."""
+    from scipy.ndimage import percentile_filter
+
+    rng = np.random.default_rng(0)
+    col = rng.random(NUM_FRAMES).astype(np.float32)
+    size = NUM_FRAMES // 2
+    result = _percentile_filter_roi((col, size, 8.0))
+    expected = percentile_filter(col, 8.0, size=size)
+    np.testing.assert_array_equal(result, expected)
 
 
 def test_df_over_f_get_data_recording(analyzer_with_fluorescence):
