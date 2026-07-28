@@ -157,7 +157,9 @@ def generate_rois(
     if sparse:
         import sparse as sparse_module
 
-        roi_masks = sparse_module.GCXS.from_numpy(roi_masks)
+        # Compress along the ROI axis so per-ROI indexing (e.g. select_rois) stays fast --
+        # the default heuristic often picks a different axis, making it ~40x slower.
+        roi_masks = sparse_module.GCXS.from_numpy(roi_masks, compressed_axes=(0,))
     return NumpyRois(roi_image_masks=roi_masks, roi_ids=roi_ids, sampling_frequency=sampling_frequency)
 
 

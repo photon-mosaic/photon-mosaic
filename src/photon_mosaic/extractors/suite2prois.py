@@ -176,7 +176,9 @@ class Suite2pRois(BaseRois):
                 coords = np.stack([ypix, xpix, np.full(len(ypix), p, dtype=ypix.dtype)])
                 shape = (H, W, n_planes)
             masks.append(sparse.COO(coords, data, shape=shape))
-        return sparse.GCXS.from_coo(sparse.stack(masks, axis=0))
+        # Compress along the ROI axis so per-ROI indexing (e.g. select_rois) stays fast --
+        # the default heuristic often picks a different axis, making it ~40x slower.
+        return sparse.GCXS.from_coo(sparse.stack(masks, axis=0), compressed_axes=(0,))
 
 
 read_suite2p_rois = Suite2pRois

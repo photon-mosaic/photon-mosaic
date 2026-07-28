@@ -70,7 +70,10 @@ class ZarrRois(BaseRois):
             coords = np.array(self._rois_group["roi_image_masks_coords"])
             data = np.array(self._rois_group["roi_image_masks_data"])
             shape = tuple(self._rois_group.attrs["roi_image_masks_shape"])
-            masks = sparse.GCXS.from_coo(sparse.COO(coords, data, shape=shape))
+            # Compress along the ROI axis so per-ROI indexing (below, and e.g. select_rois)
+            # stays fast -- the default heuristic often picks a different axis, making it
+            # ~40x slower.
+            masks = sparse.GCXS.from_coo(sparse.COO(coords, data, shape=shape), compressed_axes=(0,))
         else:
             masks = np.array(self._rois_group["roi_image_masks"])
         if roi_ids is None:
