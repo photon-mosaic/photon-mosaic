@@ -45,7 +45,34 @@ def test_save_zarr_roundtrip(rois, tmp_path):
     np.testing.assert_array_equal(saved.roi_ids, rois.roi_ids)
 
 
-def test_save_zarr_missing_zarr_path_raises(rois, tmp_path):
-    """Passing folder= (the binary kwarg) instead of zarr_path= should raise a clear error."""
-    with pytest.raises(ValueError, match="requires a 'zarr_path'"):
-        rois.save(format="zarr", folder=tmp_path / "rois.zarr")
+def test_save_zarr_missing_path_raises(rois):
+    """Passing neither zarr_path= nor folder= should raise a clear error."""
+    with pytest.raises(ValueError, match="requires a 'zarr_path' or 'folder'"):
+        rois.save(format="zarr")
+
+
+def test_save_zarr_folder_alias(rois, tmp_path):
+    """folder= should work as an alias for zarr_path=, resolved with a .zarr suffix."""
+    original_masks = rois.get_roi_image_masks()
+    saved = rois.save(format="zarr", folder=tmp_path / "myrois")
+
+    assert isinstance(saved, ZarrRois)
+    assert (tmp_path / "myrois.zarr").is_dir()
+    _assert_masks_equal(saved.get_roi_image_masks(), original_masks)
+
+
+def test_save_zarr_existing_path_raises(rois, tmp_path):
+    zarr_path = tmp_path / "rois.zarr"
+    rois.save(format="zarr", zarr_path=zarr_path)
+
+    with pytest.raises(FileExistsError, match="already exists"):
+        rois.save(format="zarr", zarr_path=zarr_path)
+
+
+def test_save_zarr_overwrite(rois, tmp_path):
+    zarr_path = tmp_path / "rois.zarr"
+    rois.save(format="zarr", zarr_path=zarr_path)
+
+    original_masks = rois.get_roi_image_masks()
+    saved = rois.save(format="zarr", zarr_path=zarr_path, overwrite=True)
+    _assert_masks_equal(saved.get_roi_image_masks(), original_masks)

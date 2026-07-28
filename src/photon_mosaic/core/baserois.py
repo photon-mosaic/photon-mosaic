@@ -305,18 +305,36 @@ class BaseRois(BaseExtractor):
         return cached
 
     def _save_zarr(self, **save_kwargs):
+        import shutil
+
         import zarr
+        from spikeinterface.core.core_tools import clean_zarr_folder_name
 
         from .zarrrois import ZarrRois, save_rois_to_zarr
 
-        if "zarr_path" not in save_kwargs:
+        storage_options = save_kwargs.get("storage_options", None)
+        if "zarr_path" in save_kwargs:
+            zarr_path = save_kwargs["zarr_path"]
+        elif "folder" in save_kwargs:
+            # Friendlier alias for zarr_path, resolved the same way RoiAnalyzer's own
+            # format="zarr" save paths already do (spikeinterface's clean_zarr_folder_name
+            # just ensures a .zarr suffix).
+            zarr_path = save_kwargs["folder"]
+            if storage_options is None:
+                zarr_path = clean_zarr_folder_name(zarr_path)
+        else:
             raise ValueError(
-                "save(format='zarr', ...) requires a 'zarr_path' keyword argument (not 'folder'), "
+                "save(format='zarr', ...) requires a 'zarr_path' or 'folder' keyword argument, "
                 "e.g. rois.save(format='zarr', zarr_path='path/to/output.zarr')."
             )
-        zarr_path = save_kwargs["zarr_path"]
+
+        if storage_options is None and Path(zarr_path).exists():
+            if save_kwargs.get("overwrite", False):
+                shutil.rmtree(zarr_path)
+            else:
+                raise FileExistsError(f"{zarr_path} already exists; pass overwrite=True to replace it.")
+
         saving_options = save_kwargs.get("saving_options", None)
-        storage_options = save_kwargs.get("storage_options", None)
 
         zarr_root = zarr.open(str(zarr_path), mode="w", storage_options=storage_options)
         rois_group = zarr_root.create_group("rois")
