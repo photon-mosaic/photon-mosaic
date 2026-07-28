@@ -353,20 +353,23 @@ def test_percentile_filter_roi_win_ge_frames_uses_global_percentile():
     """When the window covers (or exceeds) the whole trace, every frame should get the
     trace's global percentile rather than scipy.ndimage's boundary-reflected filter."""
     rng = np.random.default_rng(0)
-    col = rng.random(NUM_FRAMES).astype(np.float32)
-    result = _percentile_filter_roi((col, NUM_FRAMES, 8.0))
+    n_frames = 200
+    col = rng.random(n_frames).astype(np.float32)
+    result = _percentile_filter_roi((col, n_frames, 8.0))
     expected = np.percentile(col, 8.0)
     np.testing.assert_array_equal(result, np.full_like(col, expected))
 
 
 def test_percentile_filter_roi_win_lt_frames_uses_rolling_filter():
     """When the window is smaller than the trace, the rolling scipy.ndimage filter
-    should still be used, matching it exactly."""
+    should still be used, matching it exactly. Uses a trace much longer than the
+    window so most output frames come from the filter's interior, not its
+    boundary-reflection padding."""
     from scipy.ndimage import percentile_filter
 
     rng = np.random.default_rng(0)
-    col = rng.random(NUM_FRAMES).astype(np.float32)
-    size = NUM_FRAMES // 2
+    col = rng.random(200).astype(np.float32)
+    size = 20
     result = _percentile_filter_roi((col, size, 8.0))
     expected = percentile_filter(col, 8.0, size=size)
     np.testing.assert_array_equal(result, expected)
