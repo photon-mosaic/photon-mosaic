@@ -57,6 +57,29 @@ def _data_bin_name(chan: int) -> str:
     raise ValueError(f"chan must be 1 or 2, got {chan}")
 
 
+def _require_consistent(
+    items: list[dict[str, Any]],
+    fields: list[tuple[str, Any]],
+    *,
+    noun: str,
+    labels: list[str],
+) -> dict[str, Any]:
+    """Require every mapping in ``items`` to agree with ``items[0]`` on each ``(key, cast)``
+    field; return ``items[0]``'s cast values, or raise ValueError naming the first item that
+    disagrees. ``cast`` (int/float) normalises values first; ``noun``/``labels`` label the
+    item kind and each item in that message.
+    """
+    reference = {key: cast(items[0][key]) for key, cast in fields}
+    for i, item in enumerate(items):
+        for key, cast in fields:
+            value = cast(item[key])
+            if value != reference[key]:
+                raise ValueError(
+                    f"{noun} {i} ({labels[i]}) {key}={value} disagrees with {noun} 0 ({reference[key]})"
+                )
+    return reference
+
+
 def _collect_run_metadata(root: Path, chan: int) -> dict[str, Any]:
     """Read every plane's ops.npy and return the consistent geometry for one suite2p run.
 
@@ -72,24 +95,17 @@ def _collect_run_metadata(root: Path, chan: int) -> dict[str, Any]:
             f"ops['nplanes']={declared_nplanes} disagrees with on-disk plane count " f"{len(plane_dirs)} for {root}"
         )
 
-    Ly = int(per_plane_ops[0]["Ly"])
-    Lx = int(per_plane_ops[0]["Lx"])
-    fs = float(per_plane_ops[0]["fs"])
-    nframes = int(per_plane_ops[0]["nframes"])
-    nchannels = int(per_plane_ops[0]["nchannels"])
-
-    for i, (pd, ops) in enumerate(zip(plane_dirs, per_plane_ops)):
-        for key, expected in (("Ly", Ly), ("Lx", Lx), ("nframes", nframes)):
-            if int(ops[key]) != expected:
-                raise ValueError(
-                    f"Plane {i} ({pd.name}) ops['{key}']={int(ops[key])} disagrees with plane 0 ({expected})"
-                )
-        if float(ops["fs"]) != fs:
-            raise ValueError(f"Plane {i} ({pd.name}) ops['fs']={float(ops['fs'])} disagrees with plane 0 ({fs})")
-        if int(ops["nchannels"]) != nchannels:
-            raise ValueError(
-                f"Plane {i} ({pd.name}) ops['nchannels']={int(ops['nchannels'])} disagrees with plane 0 ({nchannels})"
-            )
+    geometry = _require_consistent(
+        per_plane_ops,
+        [("Ly", int), ("Lx", int), ("nframes", int), ("fs", float), ("nchannels", int)],
+        noun="Plane",
+        labels=[pd.name for pd in plane_dirs],
+    )
+    Ly = geometry["Ly"]
+    Lx = geometry["Lx"]
+    fs = geometry["fs"]
+    nframes = geometry["nframes"]
+    nchannels = geometry["nchannels"]
 
     if chan > nchannels:
         raise FileNotFoundError(
@@ -156,21 +172,19 @@ class Suite2pImaging(BinaryImaging):
 
         per_run = [_collect_run_metadata(root, chan) for root in folder_paths]
 
-        # Cross-run consistency: same shape, sampling frequency, plane count
-        Ly = per_run[0]["Ly"]
-        Lx = per_run[0]["Lx"]
-        fs = per_run[0]["fs"]
-        nplanes = per_run[0]["nplanes"]
+        # Cross-run consistency: same shape, sampling frequency, plane count.
+        # (nframes legitimately differs between runs; nchannels is taken from run 0.)
+        geometry = _require_consistent(
+            per_run,
+            [("Ly", int), ("Lx", int), ("fs", float), ("nplanes", int)],
+            noun="Run",
+            labels=[str(p) for p in folder_paths],
+        )
+        Ly = geometry["Ly"]
+        Lx = geometry["Lx"]
+        fs = geometry["fs"]
+        nplanes = geometry["nplanes"]
         nchannels = per_run[0]["nchannels"]
-        for i, meta in enumerate(per_run[1:], start=1):
-            if (meta["Ly"], meta["Lx"]) != (Ly, Lx):
-                raise ValueError(
-                    f"Run {i} ({folder_paths[i]}) has shape ({meta['Ly']}, {meta['Lx']}) " f"but run 0 has ({Ly}, {Lx})"
-                )
-            if meta["fs"] != fs:
-                raise ValueError(f"Run {i} sampling frequency {meta['fs']} disagrees with run 0 ({fs})")
-            if meta["nplanes"] != nplanes:
-                raise ValueError(f"Run {i} nplanes {meta['nplanes']} disagrees with run 0 ({nplanes})")
 
         per_epoch_files: list[list[str]] = [[str(p) for p in meta["plane_files"]] for meta in per_run]
 
