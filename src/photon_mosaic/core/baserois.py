@@ -227,46 +227,29 @@ class BaseRois(BaseExtractor):
         ), "The imaging has a different sampling frequency than the ROIs!"
         self._imaging = imaging
 
-    def save(self, **kwargs) -> "BaseExtractor":
-        """Save a BaseRois object to disk.
-
-        Overrides ``BaseExtractor.save()`` for ``format="zarr"``: the base
-        implementation's ``save_to_zarr()`` reloads the saved data with
-        spikeinterface's ``read_zarr()``, which expects a recording/sorting zarr
-        layout (``channel_ids``/``unit_ids`` at the root) and doesn't understand
-        the ROI zarr layout written by ``_save_zarr()``. Dispatching straight to
-        ``_save_zarr()`` here mirrors how ``format="binary"`` already reaches
-        ``_save_binary()``.
-        """
-        if kwargs.get("format") == "zarr":
-            save_kwargs = {k: v for k, v in kwargs.items() if k != "format"}
-            return self._save_zarr(**save_kwargs)
-        return super().save(**kwargs)
-
     def _save(self, format="binary", **save_kwargs):
-        """Save ROIs to disk as the binary format.
-
-        Called internally by ``BaseExtractor.save_to_folder()``. Zarr saving is
-        dispatched directly to ``_save_zarr()`` by ``BaseRois.save()`` instead of
-        going through here (see its docstring).
+        """Save ROIs to disk. Called internally by ``BaseExtractor.save()``.
 
         Parameters
         ----------
         format : str, default: "binary"
-            Must be ``"binary"``.
+            ``"binary"`` or ``"zarr"``.
         **save_kwargs
-            Must include ``folder`` (str or Path).
+            For ``"binary"``: must include ``folder`` (str or Path).
+            For ``"zarr"``: must include ``zarr_path`` (str or Path), pre-resolved by
+            ``BaseExtractor.save_to_zarr()`` from the public ``folder``/``name`` kwargs.
 
         Returns
         -------
-        BinaryFolderRois
+        BinaryFolderRois or ZarrRois
             The on-disk representation.
         """
-        if format != "binary":
-            raise ValueError(
-                f"format {format!r} not supported by _save(); use 'binary' ('zarr' goes through _save_zarr())"
-            )
-        return self._save_binary(**save_kwargs)
+        if format == "binary":
+            return self._save_binary(**save_kwargs)
+        elif format == "zarr":
+            return self._save_zarr(**save_kwargs)
+        else:
+            raise ValueError(f"format {format!r} not supported for BaseRois, use 'binary' or 'zarr'")
 
     def _save_binary(self, **save_kwargs):
         from .binaryrois import BinaryFolderRois, BinaryRois
@@ -305,34 +288,20 @@ class BaseRois(BaseExtractor):
         return cached
 
     def _save_zarr(self, **save_kwargs):
-        import shutil
-
         import zarr
-        from spikeinterface.core.core_tools import clean_zarr_folder_name
+        from spikeinterface.core.core_tools import retrieve_importing_provenance
 
         from .zarrrois import ZarrRois, save_rois_to_zarr
 
-        if "folder" not in save_kwargs:
-            raise ValueError(
-                "save(format='zarr', ...) requires a 'folder' keyword argument, "
-                "e.g. rois.save(format='zarr', folder='path/to/output.zarr')."
-            )
-        storage_options = save_kwargs.get("storage_options", None)
-        zarr_path = save_kwargs["folder"]
-        if storage_options is None:
-            # Resolved the same way RoiAnalyzer's own format="zarr" save paths already do
-            # (spikeinterface's clean_zarr_folder_name just ensures a .zarr suffix).
-            zarr_path = clean_zarr_folder_name(zarr_path)
-
-        if storage_options is None and Path(zarr_path).exists():
-            if save_kwargs.get("overwrite", False):
-                shutil.rmtree(zarr_path)
-            else:
-                raise FileExistsError(f"{zarr_path} already exists; pass overwrite=True to replace it.")
-
+        zarr_path = save_kwargs["zarr_path"]
         saving_options = save_kwargs.get("saving_options", None)
+        storage_options = save_kwargs.get("storage_options", None)
 
         zarr_root = zarr.open(str(zarr_path), mode="w", storage_options=storage_options)
+        # Lets spikeinterface's own read_zarr() (called by BaseExtractor.save_to_zarr()
+        # right after this) reconstruct a ZarrRois directly, instead of falling back to its
+        # channel_ids/unit_ids recording/sorting check, which ROI data doesn't match.
+        zarr_root.attrs["zarr_class_info"] = retrieve_importing_provenance(ZarrRois)
         rois_group = zarr_root.create_group("rois")
         save_rois_to_zarr(self, rois_group, saving_options=saving_options)
         zarr.consolidate_metadata(zarr_root.store)
