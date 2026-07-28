@@ -78,21 +78,36 @@ def _resolve_plane_dir(path: Path) -> Path:
 
 
 class Suite2pImaging(BinaryImaging):
-    """One plane of a suite2p registered movie, as a :class:`BinaryImaging`.
+    """A single plane of a suite2p registered movie, exposed as a :class:`BinaryImaging`.
+
+    suite2p writes one registered ``data.bin`` per plane; this class memory-maps
+    that binary lazily (no pixels are copied) and marks the movie as registered
+    (:attr:`~photon_mosaic.core.baseimaging.BaseImaging.is_registered` is ``True``).
+    One object holds exactly one plane: following issue #77, a multi-plane volume is
+    assembled from several single-plane objects with
+    :func:`~photon_mosaic.core.concatenate.concatenate_planes`, or in one step for a
+    whole suite2p folder via :func:`read_suite2p`.
 
     Parameters
     ----------
     folder_path : str | Path
-        A suite2p plane directory (contains ``data.bin`` and ``ops.npy``), or a
-        suite2p run root holding a single ``plane0/``.
+        A suite2p plane directory (one that contains ``data.bin`` and ``ops.npy``),
+        or a suite2p run root holding a single ``plane0/``. A multi-plane root is
+        rejected with a pointer to :func:`read_suite2p` / ``concatenate_planes``.
     chan : int, default: 1
-        Functional channel to load (1 -> ``data.bin``, 2 -> ``data_chan2.bin``).
+        Functional channel to load (``1`` -> ``data.bin``, ``2`` -> ``data_chan2.bin``).
 
-    Notes
-    -----
-    The per-source-file frame counts (``ops['frames_per_file']``) are kept on the
-    object as :attr:`frames_per_file_per_epoch`, so the single epoch can be
-    subdivided into per-file sub-epochs with :func:`split_suite2p_into_files`.
+    Attributes
+    ----------
+    frames_per_file_per_epoch : list
+        The suite2p per-source-file frame counts (``ops['frames_per_file']``) as a
+        one-element list, so the single epoch can be subdivided into per-file
+        sub-epochs with :func:`split_suite2p_into_files`. ``[None]`` when the run
+        did not record ``frames_per_file``.
+    chan, nchannels : int
+        The functional channel loaded, and the number of channels in the run.
+    suite2p_root : str
+        Absolute path to the plane directory this object was loaded from.
     """
 
     def __init__(self, folder_path, chan: int = 1):
