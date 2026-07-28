@@ -1,8 +1,10 @@
 """Concatenate imaging objects along the plane axis.
 
-Use case 1 of issue #77: each single-plane registered run is loaded as its own
-imaging object, then joined into one multi-plane volume without copying the
-underlying pixels. Planes are pulled lazily from the parent objects on read.
+Several imaging objects covering the same field of view at the same timestamps
+(each providing one or more planes) are joined into a single multi-plane volume
+without copying the underlying pixels — planes are pulled lazily from the parent
+objects on read. A general core primitive; see the suite2p extractor for one
+caller.
 """
 
 from typing import Sequence

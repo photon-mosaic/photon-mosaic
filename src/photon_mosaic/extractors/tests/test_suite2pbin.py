@@ -6,7 +6,7 @@ suite2p run. The on-disk layout matches what suite2p produces in v0.14+.
 
 Following issue #77, ``Suite2pImaging`` loads a single plane; multi-plane
 volumes are assembled with ``concatenate_planes`` (used internally by
-``read_suite2p``).
+``read_suite2p_full``).
 """
 
 from pathlib import Path
@@ -16,9 +16,10 @@ import pytest
 
 from photon_mosaic.core.concatenate import concatenate_planes
 from photon_mosaic.core.split import split_epoch_at_frames
-from photon_mosaic.extractors.suite2p import (
+from photon_mosaic.extractors.suite2pbin import (
     Suite2pImaging,
-    read_suite2p,
+    read_suite2p_binary,
+    read_suite2p_full,
 )
 
 SUITE2P_DTYPE = np.int16
@@ -103,7 +104,7 @@ def test_suite2p_imaging_accepts_plane_directory_directly(tmp_path: Path):
     # A plane directory (contains ops.npy) is accepted directly...
     plane1 = Suite2pImaging(root / "plane1")
     assert tuple(plane1.shape) == (3, 4, 1)
-    # ...while a multi-plane root is rejected with a pointer to read_suite2p.
+    # ...while a multi-plane root is rejected with a pointer to read_suite2p_full.
     with pytest.raises(ValueError, match="single plane"):
         _ = Suite2pImaging(root)
 
@@ -133,7 +134,7 @@ def test_read_suite2p_stitches_planes(tmp_path: Path):
     n_frames, Ly, Lx, nplanes = 8, 4, 6, 3
     written = _write_suite2p_run(root, n_frames=n_frames, Ly=Ly, Lx=Lx, nplanes=nplanes, seed=7)
 
-    imaging = read_suite2p(root)  # single channel -> one stitched volume
+    imaging = read_suite2p_full(root)  # single channel -> one stitched volume
     assert tuple(imaging.shape) == (Ly, Lx, nplanes)
     assert imaging.is_registered is True
 
@@ -148,7 +149,7 @@ def test_read_suite2p_two_channels_returns_pair(tmp_path: Path):
     n_frames, Ly, Lx = 5, 3, 4
     written = _write_suite2p_run(root, n_frames=n_frames, Ly=Ly, Lx=Lx, nplanes=1, nchannels=2, seed=1)
 
-    result = read_suite2p(root)
+    result = read_suite2p_full(root)
     assert isinstance(result, tuple)
     chan1, chan2 = result
     assert isinstance(chan1, Suite2pImaging) and isinstance(chan2, Suite2pImaging)
@@ -163,8 +164,16 @@ def test_read_suite2p_two_channels_returns_pair(tmp_path: Path):
 def test_read_suite2p_single_plane_single_channel_returns_one_object(tmp_path: Path):
     root = tmp_path / "run0"
     _write_suite2p_run(root, n_frames=6, Ly=3, Lx=3, nplanes=1, nchannels=1)
-    obj = read_suite2p(root)
+    obj = read_suite2p_full(root)
     assert isinstance(obj, Suite2pImaging)
+
+
+def test_read_suite2p_binary_alias_is_the_class(tmp_path: Path):
+    # Mirrors read_suite2p_rois = Suite2pRois: read_suite2p_binary IS the class.
+    assert read_suite2p_binary is Suite2pImaging
+    root = tmp_path / "run0"
+    _write_suite2p_run(root, n_frames=4, Ly=3, Lx=3, nplanes=1)
+    assert isinstance(read_suite2p_binary(root), Suite2pImaging)
 
 
 def test_suite2p_imaging_records_frames_per_file_metadata(tmp_path: Path):
@@ -227,9 +236,9 @@ def test_read_suite2p_rejects_inconsistent_geometry_across_planes(tmp_path: Path
     ops1["Lx"] = 99
     np.save(root / "plane1" / "ops.npy", ops1, allow_pickle=True)
 
-    # concatenate_planes (via read_suite2p) refuses to stitch mismatched planes.
+    # concatenate_planes (via read_suite2p_full) refuses to stitch mismatched planes.
     with pytest.raises(ValueError, match="frame shape"):
-        _ = read_suite2p(root)
+        _ = read_suite2p_full(root)
 
 
 def test_suite2p_imaging_rejects_missing_channel(tmp_path: Path):

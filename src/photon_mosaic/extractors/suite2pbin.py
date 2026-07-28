@@ -10,8 +10,12 @@ Following issue #77, each :class:`Suite2pImaging` loads **one plane** as a
 :class:`~photon_mosaic.core.binaryimaging.BinaryImaging` (use cases 1-2).
 Multi-plane volumes are built by stitching single-plane objects with
 :func:`~photon_mosaic.core.concatenate.concatenate_planes`; the convenience
-:func:`read_suite2p` does this for a whole suite2p folder. Per-source-file
+:func:`read_suite2p_full` does this for a whole suite2p folder. Per-source-file
 epochs are recovered with :meth:`Suite2pImaging.into_epochs` (use case 3).
+
+The module-level aliases mirror the ROI extractor's convention:
+``read_suite2p_binary`` is :class:`Suite2pImaging` (one plane) and
+``read_suite2p_full`` loads and stitches a whole folder.
 """
 
 from pathlib import Path
@@ -72,7 +76,7 @@ def _resolve_plane_dir(path: Path) -> Path:
     if len(plane_dirs) != 1:
         raise ValueError(
             f"{path} contains {len(plane_dirs)} planes; Suite2pImaging loads a single plane. "
-            f"Use read_suite2p({str(path)!r}) or concatenate_planes(...) to build a multi-plane volume."
+            f"Use read_suite2p_full({str(path)!r}) or concatenate_planes(...) to build a multi-plane volume."
         )
     return plane_dirs[0]
 
@@ -86,14 +90,14 @@ class Suite2pImaging(BinaryImaging):
     One object holds exactly one plane: following issue #77, a multi-plane volume is
     assembled from several single-plane objects with
     :func:`~photon_mosaic.core.concatenate.concatenate_planes`, or in one step for a
-    whole suite2p folder via :func:`read_suite2p`.
+    whole suite2p folder via :func:`read_suite2p_full`.
 
     Parameters
     ----------
     folder_path : str | Path
         A suite2p plane directory (one that contains ``data.bin`` and ``ops.npy``),
         or a suite2p run root holding a single ``plane0/``. A multi-plane root is
-        rejected with a pointer to :func:`read_suite2p` / ``concatenate_planes``.
+        rejected with a pointer to :func:`read_suite2p_full` / ``concatenate_planes``.
     chan : int, default: 1
         Functional channel to load (``1`` -> ``data.bin``, ``2`` -> ``data_chan2.bin``).
 
@@ -185,7 +189,7 @@ class Suite2pImaging(BinaryImaging):
         return split_epoch_at_frames(self, 0, boundaries)
 
 
-def read_suite2p(
+def read_suite2p_full(
     folder_path,
 ) -> "BaseImaging | tuple[BaseImaging, BaseImaging]":
     """Load a suite2p output folder, one imaging object per functional channel.
@@ -222,3 +226,8 @@ def read_suite2p(
     if nchannels == 1:
         return chan1
     return chan1, _volume(2)
+
+
+# Aliases mirroring the ROI extractor's read_* convention (cf. read_suite2p_rois).
+# read_suite2p_binary loads one plane's binary; read_suite2p_full loads a folder.
+read_suite2p_binary = Suite2pImaging

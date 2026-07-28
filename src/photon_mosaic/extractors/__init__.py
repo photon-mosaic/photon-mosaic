@@ -3,9 +3,10 @@ from .roiextractors import (
     BaseROIExtractorImaging,
     BaseROIExtractorImagingEpoch,
 )
-from .suite2p import (
+from .suite2pbin import (
     Suite2pImaging,
-    read_suite2p,
+    read_suite2p_binary,
+    read_suite2p_full,
 )
 from .suite2prois import Suite2pRois, read_suite2p_rois
 
@@ -14,7 +15,8 @@ __all__ = [
     "BaseROIExtractorImaging",
     "BaseROIExtractorImagingEpoch",
     "Suite2pImaging",
-    "read_suite2p",
+    "read_suite2p_binary",
+    "read_suite2p_full",
     "Suite2pRois",
     "read_suite2p_rois",
 ]
