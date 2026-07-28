@@ -350,8 +350,7 @@ def test_df_over_f_parallel_matches_serial(analyzer_with_fluorescence):
 
 
 def test_percentile_filter_roi_win_ge_frames_uses_global_percentile():
-    """When the window covers (or exceeds) the whole trace, every frame should get the
-    trace's global percentile rather than scipy.ndimage's boundary-reflected filter."""
+    """Window >= trace length: every frame gets the global percentile."""
     rng = np.random.default_rng(0)
     n_frames = 200
     col = rng.random(n_frames).astype(np.float32)
@@ -361,10 +360,7 @@ def test_percentile_filter_roi_win_ge_frames_uses_global_percentile():
 
 
 def test_percentile_filter_roi_win_lt_frames_uses_rolling_filter():
-    """When the window is smaller than the trace, the rolling scipy.ndimage filter
-    should still be used, matching it exactly. Uses a trace much longer than the
-    window so most output frames come from the filter's interior, not its
-    boundary-reflection padding."""
+    """Window < trace length: rolling scipy.ndimage filter matches exactly."""
     from scipy.ndimage import percentile_filter
 
     rng = np.random.default_rng(0)
