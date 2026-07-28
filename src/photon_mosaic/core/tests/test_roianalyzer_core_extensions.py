@@ -94,19 +94,8 @@ def test_compute_matches_dense_result_with_sparse_masks(imaging, chunk):
     """FluorescenceNode should give the same result for sparse (e.g. Suite2p-backed) ROIs
     as for dense ones, since it operates polymorphically on whatever get_roi_image_masks
     returns (see photon-mosaic#103)."""
-    from photon_mosaic.extractors.suite2prois import Suite2pRois
-
-    rng = np.random.default_rng(SEED)
-    stats = []
-    for _ in range(NUM_ROIS):
-        num_pixels = rng.integers(5, 15)
-        stats.append({"ypix": rng.integers(0, H, size=num_pixels), "xpix": rng.integers(0, W, size=num_pixels)})
-    sparse_rois = Suite2pRois.from_stat(stats, shape=(H, W, 1), sampling_frequency=SF)
-
-    dense_masks = sparse_rois.get_roi_image_masks().todense()
-    from photon_mosaic.core.numpyimaging import NumpyRois
-
-    dense_rois = NumpyRois(roi_image_masks=dense_masks, sampling_frequency=SF)
+    sparse_rois = generate_rois(num_rois=NUM_ROIS, height=H, width=W, sampling_frequency=SF, seed=SEED, sparse=True)
+    dense_rois = generate_rois(num_rois=NUM_ROIS, height=H, width=W, sampling_frequency=SF, seed=SEED)
 
     (fluorescence_sparse,) = FluorescenceNode(imaging, sparse_rois).compute(chunk, 0, NUM_FRAMES, 0, 0)
     (fluorescence_dense,) = FluorescenceNode(imaging, dense_rois).compute(chunk, 0, NUM_FRAMES, 0, 0)

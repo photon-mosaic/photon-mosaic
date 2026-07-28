@@ -115,11 +115,7 @@ class TestCreateMemory:
         without forcing an implicit (and error-prone) densification -- see photon-mosaic#103."""
         import sparse
 
-        from photon_mosaic.extractors.suite2prois import Suite2pRois
-
-        rng = np.random.default_rng(0)
-        stats = [{"ypix": rng.integers(0, 64, size=8), "xpix": rng.integers(0, 64, size=8)} for _ in range(5)]
-        sparse_rois = Suite2pRois.from_stat(stats, shape=(64, 64, 1), sampling_frequency=30.0)
+        sparse_rois = generate_rois(num_rois=5, height=64, width=64, sampling_frequency=30.0, seed=0, sparse=True)
 
         analyzer = create_roi_analyzer(sparse_rois, imaging, format="memory")
         assert analyzer.get_num_rois() == 5
