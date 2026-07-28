@@ -187,7 +187,7 @@ class NumpyRois(BaseRois):
             # sparse arrays aren't handled by spikeinterface's JSON encoder; fall back to pickle.
             self._serializability["json"] = False
 
-    def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> list[np.ndarray]:
+    def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> np.ndarray | sparse.SparseArray:
         """Get the image masks for specific ROIs.
 
         Parameters
@@ -197,7 +197,7 @@ class NumpyRois(BaseRois):
 
         Returns
         -------
-        list[np.ndarray]
+        np.ndarray | sparse.SparseArray
             The image masks for the specified ROIs.
         """
         if roi_ids is None:
