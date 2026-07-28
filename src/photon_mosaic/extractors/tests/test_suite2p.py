@@ -19,7 +19,6 @@ from photon_mosaic.core.split import split_epoch_at_frames
 from photon_mosaic.extractors.suite2p import (
     Suite2pImaging,
     read_suite2p,
-    split_suite2p_into_files,
 )
 
 SUITE2P_DTYPE = np.int16
@@ -146,21 +145,19 @@ def test_read_suite2p_stitches_planes(tmp_path: Path):
 
 def test_read_suite2p_two_channels_returns_pair(tmp_path: Path):
     root = tmp_path / "run0"
-    n_frames, Ly, Lx, nplanes = 5, 3, 4, 2
-    written = _write_suite2p_run(root, n_frames=n_frames, Ly=Ly, Lx=Lx, nplanes=nplanes, nchannels=2, seed=1)
+    n_frames, Ly, Lx = 5, 3, 4
+    written = _write_suite2p_run(root, n_frames=n_frames, Ly=Ly, Lx=Lx, nplanes=1, nchannels=2, seed=1)
 
     result = read_suite2p(root)
     assert isinstance(result, tuple)
     chan1, chan2 = result
+    assert isinstance(chan1, Suite2pImaging) and isinstance(chan2, Suite2pImaging)
     assert chan1.chan == 1 and chan2.chan == 2
-    assert tuple(chan1.shape) == (Ly, Lx, nplanes)
-    assert tuple(chan2.shape) == (Ly, Lx, nplanes)
+    assert tuple(chan1.shape) == (Ly, Lx, 1)
+    assert tuple(chan2.shape) == (Ly, Lx, 1)
 
-    out1 = chan1.get_series(0, n_frames)
-    out2 = chan2.get_series(0, n_frames)
-    for p in range(nplanes):
-        np.testing.assert_array_equal(out1[..., p], written[p][1])
-        np.testing.assert_array_equal(out2[..., p], written[p][2])
+    np.testing.assert_array_equal(chan1.get_series(0, n_frames)[..., 0], written[0][1])
+    np.testing.assert_array_equal(chan2.get_series(0, n_frames)[..., 0], written[0][2])
 
 
 def test_read_suite2p_single_plane_single_channel_returns_one_object(tmp_path: Path):
@@ -186,14 +183,14 @@ def test_suite2p_imaging_records_frames_per_file_metadata(tmp_path: Path):
     assert [sub.get_num_samples(segment_index=i) for i in range(len(fpf))] == fpf
 
 
-def test_split_suite2p_into_files_flattens_single_run(tmp_path: Path):
+def test_into_epochs_splits_at_file_boundaries(tmp_path: Path):
     root = tmp_path / "run0"
     n_frames, Ly, Lx = 10, 3, 4
     fpf = [3, 4, 3]
     written = _write_suite2p_run(root, n_frames=n_frames, Ly=Ly, Lx=Lx, nplanes=1, frames_per_file=fpf)
 
     imaging = Suite2pImaging(root)
-    split = split_suite2p_into_files(imaging)
+    split = imaging.into_epochs()
 
     assert split.get_num_epochs() == len(fpf)
     assert [split.get_num_samples(segment_index=i) for i in range(len(fpf))] == fpf
@@ -205,12 +202,21 @@ def test_split_suite2p_into_files_flattens_single_run(tmp_path: Path):
     np.testing.assert_array_equal(recovered, written[0][1])
 
 
-def test_split_suite2p_into_files_requires_frames_per_file(tmp_path: Path):
+def test_into_epochs_requires_frames_per_file(tmp_path: Path):
     root = tmp_path / "run0"
     _write_suite2p_run(root, n_frames=6, Ly=3, Lx=3, nplanes=1)  # no frames_per_file
     imaging = Suite2pImaging(root)
     with pytest.raises(ValueError, match="frames_per_file"):
-        _ = split_suite2p_into_files(imaging)
+        _ = imaging.into_epochs()
+
+
+def test_into_epochs_rejects_frames_per_file_mismatch(tmp_path: Path):
+    root = tmp_path / "run0"
+    # ops declares per-file counts that do not sum to the actual frame count
+    _write_suite2p_run(root, n_frames=10, Ly=3, Lx=3, nplanes=1, frames_per_file=[3, 4])
+    imaging = Suite2pImaging(root)
+    with pytest.raises(ValueError, match="frames_per_file"):
+        _ = imaging.into_epochs()
 
 
 def test_read_suite2p_rejects_inconsistent_geometry_across_planes(tmp_path: Path):

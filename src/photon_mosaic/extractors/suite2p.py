@@ -11,7 +11,7 @@ Following issue #77, each :class:`Suite2pImaging` loads **one plane** as a
 Multi-plane volumes are built by stitching single-plane objects with
 :func:`~photon_mosaic.core.concatenate.concatenate_planes`; the convenience
 :func:`read_suite2p` does this for a whole suite2p folder. Per-source-file
-epochs are recovered with :func:`split_suite2p_into_files` (use case 3).
+epochs are recovered with :meth:`Suite2pImaging.into_epochs` (use case 3).
 """
 
 from pathlib import Path
@@ -22,7 +22,7 @@ import numpy as np
 from photon_mosaic.core.baseimaging import BaseImaging
 from photon_mosaic.core.binaryimaging import BinaryImaging
 from photon_mosaic.core.concatenate import concatenate_planes
-from photon_mosaic.core.split import split_epoch_at_frames
+from photon_mosaic.core.split import SplitEpochAtFramesImaging, split_epoch_at_frames
 
 SUITE2P_BIN_DTYPE = np.int16  # suite2p writes registered movies as int16
 SUITE2P_PLANE_DIR_PREFIX = "plane"
@@ -102,8 +102,8 @@ class Suite2pImaging(BinaryImaging):
     frames_per_file_per_epoch : list
         The suite2p per-source-file frame counts (``ops['frames_per_file']``) as a
         one-element list, so the single epoch can be subdivided into per-file
-        sub-epochs with :func:`split_suite2p_into_files`. ``[None]`` when the run
-        did not record ``frames_per_file``.
+        sub-epochs with :meth:`into_epochs`. ``[None]`` when the run did not
+        record ``frames_per_file``.
     chan, nchannels : int
         The functional channel loaded, and the number of channels in the run.
     suite2p_root : str
@@ -144,7 +144,7 @@ class Suite2pImaging(BinaryImaging):
 
         fpf_raw = ops.get("frames_per_file")
         frames_per_file = None if fpf_raw is None else np.asarray(fpf_raw, dtype=int).tolist()
-        # Stored as a one-epoch list so split_suite2p_into_files can subdivide it.
+        # Stored as a one-epoch list so into_epochs can subdivide it.
         self.frames_per_file_per_epoch: list[list[int] | None] = [frames_per_file]
 
         self.chan: int = chan
@@ -152,71 +152,37 @@ class Suite2pImaging(BinaryImaging):
         self.suite2p_root: str = str(plane_dir.absolute())
         self.name = f"Suite2p plane chan{chan}"
 
+    def into_epochs(self) -> SplitEpochAtFramesImaging:
+        """Split this movie into one epoch per source acquisition file.
 
-class SplitSuite2pIntoFilesImaging(BaseImaging):
-    """Imaging proxy that subdivides a suite2p object at its source-file boundaries.
+        suite2p concatenates the source acquisition files into a single registered
+        movie and records the per-file frame counts in ``ops['frames_per_file']``.
+        This recovers one epoch per original file (use case 3 of issue #77) by
+        recycling :func:`~photon_mosaic.core.split.split_epoch_at_frames` at those
+        boundaries — pixels stay lazy, nothing is re-read.
 
-    Suite2p concatenates the source acquisition files into one registered movie
-    and records the per-file frame counts in ``ops['frames_per_file']``. A
-    suite2p-derived object keeps these as ``frames_per_file_per_epoch`` (one list
-    per epoch). This proxy flattens every epoch into its constituent per-file
-    sub-epochs, in order, so each original acquisition file becomes its own
-    epoch. Pixels are pulled lazily from the parent.
+        Returns
+        -------
+        SplitEpochAtFramesImaging
+            A lazy view with one epoch per source acquisition file.
 
-    Parameters
-    ----------
-    imaging : BaseImaging
-        A suite2p-derived imaging object carrying ``frames_per_file_per_epoch``
-        (e.g. :class:`Suite2pImaging`, or a multi-plane volume from
-        :func:`read_suite2p`).
-    """
-
-    def __init__(self, imaging: BaseImaging):
-        fpf_per_epoch = getattr(imaging, "frames_per_file_per_epoch", None)
-        if fpf_per_epoch is None:
-            raise TypeError("imaging has no 'frames_per_file_per_epoch'; autosplit needs a suite2p-derived object")
-        if any(fpf is None for fpf in fpf_per_epoch):
-            raise ValueError("ops['frames_per_file'] is missing for at least one epoch; cannot autosplit this object")
-
-        BaseImaging.__init__(self, sampling_frequency=imaging.sampling_frequency, shape=imaging.shape)
-        # Carries is_registered (and other metadata) from the suite2p parent.
-        imaging.copy_metadata(self)
-
-        for epoch_index, frames_per_file in enumerate(fpf_per_epoch):
-            n_samples = imaging.epochs[epoch_index].get_num_samples()
-            if sum(frames_per_file) != n_samples:
-                raise ValueError(
-                    f"frames_per_file for epoch {epoch_index} sum to {sum(frames_per_file)} "
-                    f"but the epoch has {n_samples} frames"
-                )
-            boundaries = np.cumsum(frames_per_file)[:-1].tolist()
-            # Reuse the generic splitter; [] boundaries (single-file epoch) yields the whole epoch.
-            per_file = split_epoch_at_frames(imaging, epoch_index, boundaries)
-            for epoch in per_file.epochs:
-                self.add_epoch(epoch)
-
-        self._parent = imaging
-        self._kwargs = {"imaging": imaging}
-        self.name = f"Suite2p per-file split ({self.get_num_epochs()} files)"
-
-
-def split_suite2p_into_files(imaging: BaseImaging) -> SplitSuite2pIntoFilesImaging:
-    """Split a suite2p imaging object into one epoch per source acquisition file.
-
-    Reads ``frames_per_file_per_epoch`` and flattens every epoch of ``imaging``
-    into its per-file sub-epochs (use case 3 of issue #77).
-
-    Parameters
-    ----------
-    imaging : BaseImaging
-        A suite2p-derived imaging object (see :class:`Suite2pImaging`).
-
-    Returns
-    -------
-    SplitSuite2pIntoFilesImaging
-        A lazy view with one epoch per original acquisition file.
-    """
-    return SplitSuite2pIntoFilesImaging(imaging)
+        Raises
+        ------
+        ValueError
+            If the run did not record ``ops['frames_per_file']``, or those counts
+            do not sum to the movie's frame count (a malformed ``ops``).
+        """
+        frames_per_file = self.frames_per_file_per_epoch[0]
+        if frames_per_file is None:
+            raise ValueError("ops['frames_per_file'] was not recorded; cannot split this run into files")
+        n_samples = self.epochs[0].get_num_samples()
+        if sum(frames_per_file) != n_samples:
+            raise ValueError(
+                f"ops['frames_per_file'] sums to {sum(frames_per_file)} but the movie has "
+                f"{n_samples} frames; refusing to split a malformed run"
+            )
+        boundaries = np.cumsum(frames_per_file)[:-1].tolist()
+        return split_epoch_at_frames(self, 0, boundaries)
 
 
 def read_suite2p(
@@ -248,16 +214,9 @@ def read_suite2p(
 
     def _volume(chan: int) -> BaseImaging:
         planes = [Suite2pImaging(plane_dir, chan=chan) for plane_dir in plane_dirs]
-        if len(planes) == 1:
-            return planes[0]
-        volume = concatenate_planes(planes)
-        # Carry suite2p-level metadata onto the stitched view so downstream
-        # helpers (e.g. split_suite2p_into_files) keep working.
-        volume.is_registered = True
-        volume.frames_per_file_per_epoch = planes[0].frames_per_file_per_epoch
-        volume.chan = chan
-        volume.nchannels = nchannels
-        return volume
+        # concatenate_planes already propagates is_registered from the planes; the
+        # stitched volume stays a plain multi-plane imaging (no suite2p specifics).
+        return planes[0] if len(planes) == 1 else concatenate_planes(planes)
 
     chan1 = _volume(1)
     if nchannels == 1:
