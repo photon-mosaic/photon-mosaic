@@ -312,21 +312,17 @@ class BaseRois(BaseExtractor):
 
         from .zarrrois import ZarrRois, save_rois_to_zarr
 
-        storage_options = save_kwargs.get("storage_options", None)
-        if "zarr_path" in save_kwargs:
-            zarr_path = save_kwargs["zarr_path"]
-        elif "folder" in save_kwargs:
-            # Friendlier alias for zarr_path, resolved the same way RoiAnalyzer's own
-            # format="zarr" save paths already do (spikeinterface's clean_zarr_folder_name
-            # just ensures a .zarr suffix).
-            zarr_path = save_kwargs["folder"]
-            if storage_options is None:
-                zarr_path = clean_zarr_folder_name(zarr_path)
-        else:
+        if "folder" not in save_kwargs:
             raise ValueError(
-                "save(format='zarr', ...) requires a 'zarr_path' or 'folder' keyword argument, "
-                "e.g. rois.save(format='zarr', zarr_path='path/to/output.zarr')."
+                "save(format='zarr', ...) requires a 'folder' keyword argument, "
+                "e.g. rois.save(format='zarr', folder='path/to/output.zarr')."
             )
+        storage_options = save_kwargs.get("storage_options", None)
+        zarr_path = save_kwargs["folder"]
+        if storage_options is None:
+            # Resolved the same way RoiAnalyzer's own format="zarr" save paths already do
+            # (spikeinterface's clean_zarr_folder_name just ensures a .zarr suffix).
+            zarr_path = clean_zarr_folder_name(zarr_path)
 
         if storage_options is None and Path(zarr_path).exists():
             if save_kwargs.get("overwrite", False):
