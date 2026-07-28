@@ -291,11 +291,8 @@ def _percentile_filter_roi(args: tuple) -> np.ndarray:
         prct = float(prctile_baseline)
 
     if size >= len(col):
-        # A window spanning (or exceeding) the whole trace is just the trace's global
-        # percentile everywhere -- computing it directly avoids scipy.ndimage's
-        # boundary-reflection padding, whose behavior for a window this large isn't
-        # reliably reproducible across environments (see the parallel/serial mismatch
-        # this was fixing).
+        # Window covers the whole trace: skip scipy.ndimage's boundary-reflection
+        # padding, whose behavior here isn't reliably reproducible across environments.
         baseline = np.percentile(col, prct)
         return np.full_like(col, baseline)
 
