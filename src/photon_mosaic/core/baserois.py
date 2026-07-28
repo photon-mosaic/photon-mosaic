@@ -309,6 +309,11 @@ class BaseRois(BaseExtractor):
 
         from .zarrrois import ZarrRois, save_rois_to_zarr
 
+        if "zarr_path" not in save_kwargs:
+            raise ValueError(
+                "save(format='zarr', ...) requires a 'zarr_path' keyword argument (not 'folder'), "
+                "e.g. rois.save(format='zarr', zarr_path='path/to/output.zarr')."
+            )
         zarr_path = save_kwargs["zarr_path"]
         saving_options = save_kwargs.get("saving_options", None)
         storage_options = save_kwargs.get("storage_options", None)

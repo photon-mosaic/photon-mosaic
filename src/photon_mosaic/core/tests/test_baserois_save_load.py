@@ -43,3 +43,9 @@ def test_save_zarr_roundtrip(rois, tmp_path):
     assert isinstance(saved, ZarrRois)
     _assert_masks_equal(saved.get_roi_image_masks(), original_masks)
     np.testing.assert_array_equal(saved.roi_ids, rois.roi_ids)
+
+
+def test_save_zarr_missing_zarr_path_raises(rois, tmp_path):
+    """Passing folder= (the binary kwarg) instead of zarr_path= should raise a clear error."""
+    with pytest.raises(ValueError, match="requires a 'zarr_path'"):
+        rois.save(format="zarr", folder=tmp_path / "rois.zarr")
