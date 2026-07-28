@@ -7,7 +7,6 @@ import sparse
 from photon_mosaic.core.binaryrois import BinaryFolderRois
 from photon_mosaic.core.generators import generate_rois
 from photon_mosaic.core.zarrrois import ZarrRois
-from photon_mosaic.extractors.suite2prois import Suite2pRois
 
 
 @pytest.fixture
@@ -17,18 +16,9 @@ def dense_rois():
 
 @pytest.fixture
 def sparse_rois():
-    rng = np.random.default_rng(0)
-    stats = []
-    for _ in range(3):
-        num_pixels = rng.integers(5, 15)
-        stats.append(
-            {
-                "ypix": rng.integers(0, 30, size=num_pixels),
-                "xpix": rng.integers(0, 30, size=num_pixels),
-                "lam": rng.random(num_pixels),
-            }
-        )
-    return Suite2pRois.from_stat(stats, shape=(30, 30, 1), sampling_frequency=20.0)
+    return generate_rois(
+        num_rois=3, height=30, width=30, radius_range=(4, 6), sampling_frequency=20.0, seed=0, sparse=True
+    )
 
 
 def test_save_binary_roundtrip_dense(dense_rois, tmp_path):

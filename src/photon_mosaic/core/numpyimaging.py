@@ -9,6 +9,7 @@ NumpyRois
 """
 
 import numpy as np
+import sparse
 from numpy.typing import ArrayLike
 
 from .baseimaging import BaseImaging, BaseImagingEpoch
@@ -182,6 +183,9 @@ class NumpyRois(BaseRois):
             "sampling_frequency": sampling_frequency,
             "roi_ids": roi_ids,
         }
+        if isinstance(roi_image_masks, sparse.SparseArray):
+            # sparse arrays aren't handled by spikeinterface's JSON encoder; fall back to pickle.
+            self._serializability["json"] = False
 
     def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> list[np.ndarray]:
         """Get the image masks for specific ROIs.

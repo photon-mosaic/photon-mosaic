@@ -74,6 +74,7 @@ def generate_rois(
     weighted: bool = False,
     num_planes: int = 1,
     seed: int | None = None,
+    sparse: bool = False,
 ) -> BaseRois:
     """Generate circular ROIs for testing.
 
@@ -97,6 +98,8 @@ def generate_rois(
         Whether to create weighted masks (values between 0 and 1) or binary masks (0 or 1), by default False
     num_planes : int, default: 1
         Number of planes for the ROIs, by default 1 (2D masks). If >1, creates 3D masks.
+    sparse : bool, default: False
+        If True, return the masks as a sparse.GCXS array instead of a dense np.ndarray.
     """
     if num_planes == 1:
         roi_masks = np.zeros((num_rois, height, width))
@@ -151,6 +154,10 @@ def generate_rois(
                 roi_masks[roi_idx] = weighted_mask
 
     roi_ids = np.arange(num_rois) if roi_ids is None else roi_ids
+    if sparse:
+        import sparse as sparse_module
+
+        roi_masks = sparse_module.GCXS.from_numpy(roi_masks)
     return NumpyRois(roi_image_masks=roi_masks, roi_ids=roi_ids, sampling_frequency=sampling_frequency)
 
 
