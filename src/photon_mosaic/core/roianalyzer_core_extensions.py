@@ -343,7 +343,10 @@ class DeconvolutionExtension(AnalyzerExtension):
         fs = self.roi_analyzer.sampling_frequency
         n_jobs = fix_job_kwargs(job_kwargs).get("n_jobs", 1)
 
-        args = [(dff[:, i].copy(), fs, self.params) for i in range(dff.shape[1])]
+        # No .copy() needed: deconvolve() never mutates its input, and pickling a column
+        # slice (for the parallel path below) already serializes just that slice's own data,
+        # not the whole dff matrix.
+        args = [(dff[:, i], fs, self.params) for i in range(dff.shape[1])]
         if n_jobs == 1:
             results = [_deconvolve_roi(a) for a in args]
         else:
