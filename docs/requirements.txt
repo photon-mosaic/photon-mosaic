@@ -1,4 +1,4 @@
--e .
+-e .[widgets]
 ipython
 linkify-it-py
 myst-parser
