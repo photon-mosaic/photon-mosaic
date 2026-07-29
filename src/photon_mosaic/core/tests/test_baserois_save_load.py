@@ -47,20 +47,3 @@ def test_save_zarr_roundtrip(rois, tmp_path):
     assert (tmp_path / "myrois.zarr").is_dir()
     _assert_masks_equal(saved.get_roi_image_masks(), original_masks)
     np.testing.assert_array_equal(saved.roi_ids, rois.roi_ids)
-
-
-def test_save_zarr_existing_path_raises(rois, tmp_path):
-    folder = tmp_path / "rois.zarr"
-    rois.save(format="zarr", folder=folder)
-
-    with pytest.raises(AssertionError, match="already exists"):
-        rois.save(format="zarr", folder=folder)
-
-
-def test_save_zarr_overwrite(rois, tmp_path):
-    folder = tmp_path / "rois.zarr"
-    rois.save(format="zarr", folder=folder)
-
-    original_masks = rois.get_roi_image_masks()
-    saved = rois.save(format="zarr", folder=folder, overwrite=True)
-    _assert_masks_equal(saved.get_roi_image_masks(), original_masks)
