@@ -1,4 +1,5 @@
 import os
+from collections import defaultdict
 from pathlib import Path
 
 # Modules to exclude from the API index
@@ -12,43 +13,75 @@ os.chdir(SCRIPT_DIR)
 def make_api_index():
     """
     Generate a properly formatted `api_index.rst` file for
-    Sphinx documentation."""
+    Sphinx documentation, grouped by submodule and excluding test modules.
+    """
 
     api_path = Path("../src/photon_mosaic")
-    module_entries = []
+
+    # submodule -> list of module names
+    grouped_modules = defaultdict(list)
 
     for path in sorted(api_path.rglob("*.py")):
-        # Convert file path to module name
         rel_path = path.relative_to(api_path.parent)
+
+        if rel_path.stem in EXCLUDE_MODULES:
+            continue
+
+        # Skip test modules/packages anywhere in the path
+        if "tests" in rel_path.parts:
+            continue
+
         module_name = str(rel_path.with_suffix("")).replace(os.sep, ".")
 
-        if rel_path.stem not in EXCLUDE_MODULES:
-            module_entries.append(module_name)
+        # rel_path.parts[0] == "photon_mosaic"; parts[1] is the submodule
+        # (e.g. "core", "extractors"). Modules directly under the package
+        # root fall back to a "misc" group.
+        submodule = rel_path.parts[1] if len(rel_path.parts) > 2 else "misc"
 
-    # Construct the API index content
-    api_index_content = """\
-.. _target-api:
+        grouped_modules[submodule].append(module_name)
 
-API Reference
-=============
+    # Directory that will hold one .rst file per submodule
+    api_dir = Path("source") / "api"
+    api_dir.mkdir(parents=True, exist_ok=True)
 
-This section contains automatically generated documentation for the
-`photon-mosaic` package.
+    # Write one .rst file per submodule
+    for submodule in sorted(grouped_modules):
+        title = submodule.replace("_", " ").title()
+        lines = [
+            title,
+            "=" * len(title),
+            "",
+            ".. autosummary::",
+            "   :toctree: .",
+            "   :nosignatures:",
+            "",
+        ]
+        lines += [f"   {module}" for module in grouped_modules[submodule]]
+        lines.append("")
 
-.. rubric:: Modules
+        submodule_path = api_dir / f"{submodule}.rst"
+        submodule_path.write_text("\n".join(lines), encoding="utf-8")
+        print(f"Generated {submodule_path}")
 
-.. autosummary::
-   :toctree: api
-   :nosignatures:
+    # Write the top-level index that links to each submodule page
+    index_lines = [
+        ".. _target-api:",
+        "",
+        "API Reference",
+        "=============",
+        "",
+        "This section contains automatically generated documentation for the",
+        "`photon-mosaic` package.",
+        "",
+        ".. toctree::",
+        "   :maxdepth: 1",
+        "",
+    ]
+    index_lines += [f"   api/{submodule}" for submodule in sorted(grouped_modules)]
+    index_lines.append("")
 
-"""
-
-    # Add module entries for autosummary
-    api_index_content += "\n".join(f"   {module}" for module in module_entries) + "\n"
-
-    # Write the generated content to `api_index.rst`
     output_path = Path("source") / "api_index.rst"
-    output_path.write_text(api_index_content, encoding="utf-8")
+    output_path.write_text("\n".join(index_lines), encoding="utf-8")
 
     print(f"Generated {output_path}")
 

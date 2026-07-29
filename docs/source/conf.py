@@ -13,7 +13,7 @@ import setuptools_scm
 
 # Used when building API docs, put the dependencies
 # of any class you are documenting here
-autodoc_mock_imports = []
+autodoc_mock_imports: list[str] = []
 
 # Add the module path to sys.path here.
 # If the directory is relative to the documentation root,
@@ -82,6 +82,12 @@ numpydoc_show_inherited_class_members = False
 # toc_object_entries_show_parents = "all"
 html_show_sourcelink = False
 
+suppress_warnings = [
+    "sphinx_autodoc_typehints.forward_reference",
+    "sphinx_autodoc_typehints.guarded_import",
+]
+
+
 autodoc_default_options = {
     "members": True,
     "member-order": "bysource",
@@ -113,6 +119,10 @@ html_sidebars = {
     "user_guide/index": [],
     "contributing": [],
 }
+
+# stop duplication warning for dataclass/NamedTuple with annotated fields + numpydoc Attributes docstring
+# e..g generators.FluorescenceData
+napoleon_use_ivar = True
 
 # Customize the theme
 html_theme_options = {
