@@ -420,6 +420,12 @@ def test_deconvolution_rise_time_without_decay_time_raises(analyzer_with_df_over
         analyzer_with_df_over_f.compute("deconvolution", rise_time=0.1)
 
 
+def test_deconvolution_unknown_kwarg_raises(analyzer_with_df_over_f):
+    """A misspelled/unknown keyword argument should raise instead of being silently ignored."""
+    with pytest.raises(TypeError, match="noisestd"):
+        analyzer_with_df_over_f.compute("deconvolution", noisestd=0.1)
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [

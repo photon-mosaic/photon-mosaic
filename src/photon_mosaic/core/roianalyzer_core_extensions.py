@@ -324,16 +324,22 @@ class DeconvolutionExtension(AnalyzerExtension):
         ``lam`` (fixed sparsity weight, default 0) and ``s_min`` (minimal
         non-zero activity per bin, default 0).
         """
+        lam = params.pop("lam", 0.0)
+        s_min = params.pop("s_min", 0.0)
+        noise_std = params.pop("noise_std", None)
+        refine_kinetics = params.pop("refine_kinetics", 0)
+        if params:
+            raise TypeError(f"_set_params() got unexpected keyword argument(s): {sorted(params)}")
         return dict(
             decay_time=decay_time,
             rise_time=rise_time,
             baseline=baseline,
             baseline_nonneg=baseline_nonneg,
             penalty=penalty,
-            lam=params.pop("lam", 0.0),
-            s_min=params.pop("s_min", 0.0),
-            noise_std=params.pop("noise_std", None),
-            refine_kinetics=params.pop("refine_kinetics", 0),
+            lam=lam,
+            s_min=s_min,
+            noise_std=noise_std,
+            refine_kinetics=refine_kinetics,
         )
 
     def _run(self, verbose: bool = False, **job_kwargs) -> None:
