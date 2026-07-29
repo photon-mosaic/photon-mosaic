@@ -15,7 +15,7 @@ jobs:
     name: Build Sphinx Docs
     runs-on: ubuntu-latest
     steps:
-      - uses: neuroinformatics-unit/actions/build_sphinx_docs@main
+      - uses: neuroinformatics-unit/actions/build_sphinx_docs@34bedfdfd70c6010be02182c9ca37fae8a1fd99d # v3.0.0
         with:
           python-version: 3.12
           use-make: true
@@ -24,10 +24,10 @@ jobs:
     name: Linkcheck Sphinx Docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v7.0.0
         with:
           python-version: "3.12"
 
@@ -49,7 +49,7 @@ jobs:
     if: (github.event_name == 'push' && github.ref_type == 'tag') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: neuroinformatics-unit/actions/deploy_sphinx_docs@main
+      - uses: neuroinformatics-unit/actions/deploy_sphinx_docs@34bedfdfd70c6010be02182c9ca37fae8a1fd99d # v3.0.0
         with:
           secret_input: ${{ secrets.GITHUB_TOKEN }}
           use-make: true
