@@ -38,8 +38,8 @@ def test_save_binary_roundtrip(rois, tmp_path):
 
 def test_save_zarr_roundtrip(rois, tmp_path):
     """folder= is resolved to a proper zarr path (.zarr suffix appended if missing) by
-    spikeinterface's own save_to_zarr(), which now correctly reconstructs a ZarrRois via
-    the zarr_class_info attribute _save_zarr() writes."""
+    spikeinterface's own save_to_zarr(), which reconstructs a ZarrRois via the
+    zarr_class_info attribute _save_zarr() writes."""
     original_masks = rois.get_roi_image_masks()
     saved = rois.save(format="zarr", folder=tmp_path / "myrois")
 
