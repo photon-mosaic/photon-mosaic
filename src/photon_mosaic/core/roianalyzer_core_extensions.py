@@ -114,10 +114,10 @@ class FluorescenceNode(PipelineNode):
         if neuropil is not None:
             if neuropil.ndim == 2:
                 # Global neuropil (H, W) -> (1, spatial)
-                self._neuropil_flat = neuropil.reshape(1, -1).astype(np.float32)
+                self._neuropil_flat = neuropil.reshape((1, -1)).astype(np.float32)
             else:
                 # Per-ROI neuropil (N, H, W) -> (N, spatial)
-                self._neuropil_flat = neuropil.reshape(neuropil.shape[0], -1).astype(np.float32)
+                self._neuropil_flat = neuropil.reshape((neuropil.shape[0], -1)).astype(np.float32)
         else:
             self._neuropil_flat = None
 
@@ -371,3 +371,209 @@ def _kde_mode_percentile(data: np.ndarray, N: int = 2**12) -> float:
 
 
 register_result_extension(DfOverFExtension)
+
+
+class NeuropilExtension(AnalyzerExtension):
+    """Extension to compute neuropil masks for background/contamination subtraction.
+
+    Currently one method is supported:
+
+    - ``'halo'``: Suite2p-style ring/annulus neuropil mask. For each ROI, builds the ring of
+      pixels surrounding it (excluding pixels belonging to any ROI), via
+      :func:`suite2p.extraction.masks.create_cell_pix`/:func:`~suite2p.extraction.masks.create_neuropil_masks`.
+      Ring pixels are weighted ``1 / n_ring_pixels`` so that the weighted-sum matmul in
+      :class:`FluorescenceNode` reproduces suite2p's own unweighted-mean ``Fneu`` convention.
+      Works with *any* :class:`~photon_mosaic.core.baserois.BaseRois` -- per-ROI pixel
+      coordinates are derived from ``rois.get_roi_image_masks()`` (not suite2p-specific stat
+      data), since ``RoiAnalyzer`` always stores its own in-memory/on-disk snapshot of the ROIs
+      rather than the original object passed to ``create_roi_analyzer`` (e.g. ``format="memory"``
+      always copies into a plain ``NumpyRois``, so a `Suite2pRois`-specific accessor would not be
+      reachable via ``roi_analyzer.rois`` in the common case). Multi-plane ROIs are not yet
+      supported.
+
+    Once computed, this extension is picked up automatically by :class:`FluorescenceExtension`
+    (see its ``use_neuropil``/``neuropil_weight`` params) -- just call
+    ``roi_analyzer.compute("neuropil")`` before ``roi_analyzer.compute("fluorescence")``.
+    """
+
+    extension_name = "neuropil"
+    depend_on: list[str] = []
+    need_imaging = False
+    use_nodepipeline = False
+    need_job_kwargs = False
+
+    def _set_params(
+        self,
+        method: str = "halo",
+        inner_neuropil_radius: int = 2,
+        min_neuropil_pixels: int = 350,
+        circular: bool = False,
+        lam_percentile: float = 50.0,
+        **params: Any,
+    ) -> dict[str, Any]:
+        """Set parameters for neuropil mask computation.
+
+        Parameters
+        ----------
+        method : str, optional
+            Neuropil mask construction method. Only ``'halo'`` (Suite2p-style ring/annulus) is
+            currently supported. Default is ``'halo'``.
+        inner_neuropil_radius : int, optional
+            Pixels around each ROI to exclude before the ring starts. Only used with
+            ``method='halo'``. Default is ``2``.
+        min_neuropil_pixels : int, optional
+            Minimum ring pixel count; the ring grows outward until this many pixels are found.
+            Only used with ``method='halo'``. Default is ``350``.
+        circular : bool, optional
+            Restrict the ring to a circular region instead of a rectangular bounding-box grow.
+            Only used with ``method='halo'``. Default is ``False``.
+        lam_percentile : float, optional
+            Percentile threshold used to decide which weighted pixels count as "ROI" pixels,
+            excluded from every ROI's ring. Only used with ``method='halo'``. Default is
+            ``50.0``.
+        """
+        if params:
+            raise TypeError(f"_set_params() got unexpected keyword argument(s): {sorted(params)}")
+        return dict(
+            method=method,
+            inner_neuropil_radius=inner_neuropil_radius,
+            min_neuropil_pixels=min_neuropil_pixels,
+            circular=circular,
+            lam_percentile=lam_percentile,
+        )
+
+    def _run(self, verbose: bool = False, **kwargs: Any) -> None:
+        method = self.params["method"]
+        rois = self.roi_analyzer.rois
+
+        if rois.num_planes > 1:
+            raise NotImplementedError(
+                f"NeuropilExtension currently only supports single-plane ROIs "
+                f"(got num_planes={rois.num_planes}). Multi-plane halo neuropil masks are not "
+                "yet implemented."
+            )
+
+        if method == "halo":
+            masks = rois.get_roi_image_masks()
+            self.data["neuropil_masks"] = _build_halo_neuropil_masks(
+                masks,
+                inner_neuropil_radius=self.params["inner_neuropil_radius"],
+                min_neuropil_pixels=self.params["min_neuropil_pixels"],
+                circular=self.params["circular"],
+                lam_percentile=self.params["lam_percentile"],
+            )
+        else:
+            raise ValueError(f"Unknown method: '{method}'. Supported: 'halo'.")
+
+    def _get_data(self):
+        """Return the computed neuropil masks.
+
+        Returns
+        -------
+        sparse.GCXS
+            Shape ``(n_rois, Ly, Lx)``. Each ROI's ring pixels sum to 1.0 (an unweighted mean
+            over the ring, matching suite2p's own ``Fneu`` convention), except ROIs whose ring
+            ended up empty (e.g. fully surrounded by other ROIs), which get an all-zero row.
+        """
+        return self.data["neuropil_masks"]
+
+    def _select_extension_data(self, roi_ids):
+        roi_indices = self.roi_analyzer.rois.ids_to_indices(roi_ids)
+        return {"neuropil_masks": self.data["neuropil_masks"][roi_indices]}
+
+
+def _build_halo_neuropil_masks(
+    masks,
+    inner_neuropil_radius: int = 2,
+    min_neuropil_pixels: int = 350,
+    circular: bool = False,
+    lam_percentile: float = 50.0,
+):
+    """Build Suite2p-style ring/annulus ("halo") neuropil masks from ROI image masks.
+
+    For each ROI, builds the ring of pixels surrounding it (excluding pixels belonging to any
+    ROI) via :mod:`suite2p.extraction.masks`, then converts the flattened-index ring into a
+    mask where each ring pixel has weight ``1 / n_ring_pixels``. This weighting is required (not
+    optional): :meth:`FluorescenceNode.compute` consumes this mask via
+    ``chunk_flat @ neuropil_flat.T``, a *weighted sum*. A binary ring mask would instead compute
+    a sum scaled by ring pixel count (typically >=350), which does not match suite2p's own
+    ``Fneu = mean(movie[neuropil_ipix], axis=0)`` convention and would make ``neuropil_weight``
+    uninterpretable.
+
+    Per-ROI pixel coordinates and weights are derived directly from ``masks`` (each ROI's own
+    nonzero entries), rather than requiring suite2p's raw stat dicts -- this makes ``'halo'``
+    usable with any :class:`~photon_mosaic.core.baserois.BaseRois`, not only
+    :class:`~photon_mosaic.extractors.Suite2pRois`. Each ROI's ``radius`` (needed by
+    ``create_cell_pix``'s internal smoothing) is estimated from its pixel count assuming a
+    roughly circular shape (``sqrt(n_pixels / pi)``); ``lam`` is taken from the mask's own
+    values, falling back to uniform weights for all-zero/binary masks.
+
+    Parameters
+    ----------
+    masks : np.ndarray | sparse.SparseArray
+        ROI image masks, shape ``(n_rois, Ly, Lx)`` (e.g. from ``BaseRois.get_roi_image_masks()``).
+    inner_neuropil_radius, min_neuropil_pixels, circular, lam_percentile
+        Passed through to suite2p's ``create_cell_pix``/``create_neuropil_masks``.
+
+    Returns
+    -------
+    sparse.GCXS
+        Shape ``(n_rois, Ly, Lx)``, dtype float32. Ring pixels sum to 1.0 per ROI; ROIs whose
+        ring ended up empty get an all-zero row (no neuropil subtraction for that ROI).
+    """
+    import sparse
+
+    try:
+        from suite2p.extraction.masks import create_cell_pix, create_neuropil_masks
+    except ImportError as e:
+        raise ImportError(
+            "NeuropilExtension(method='halo') requires suite2p. Install it with "
+            "'pip install \"photon-mosaic[suite2p-registration]\"'."
+        ) from e
+
+    n_rois, Ly, Lx = masks.shape
+    if n_rois == 0:
+        return sparse.GCXS.from_numpy(np.zeros((0, Ly, Lx), dtype=np.float32), compressed_axes=(0,))
+
+    stats = []
+    for i in range(n_rois):
+        roi_mask = masks[i]
+        if isinstance(roi_mask, sparse.SparseArray):
+            coo = roi_mask.tocoo()
+            ypix, xpix = coo.coords
+            lam = np.asarray(coo.data, dtype=np.float64)
+        else:
+            ypix, xpix = np.nonzero(roi_mask)
+            lam = np.asarray(roi_mask[ypix, xpix], dtype=np.float64)
+        if len(ypix) == 0 or lam.sum() <= 0:
+            lam = np.ones(len(ypix))
+        radius = np.sqrt(len(ypix) / np.pi) if len(ypix) > 0 else 1.0
+        stats.append({"ypix": ypix, "xpix": xpix, "lam": lam, "radius": radius})
+
+    cell_pix = create_cell_pix(stats, Ly, Lx, lam_percentile=lam_percentile)
+    neuropil_ipix = create_neuropil_masks(
+        ypixs=[s["ypix"] for s in stats],
+        xpixs=[s["xpix"] for s in stats],
+        cell_pix=cell_pix,
+        inner_neuropil_radius=inner_neuropil_radius,
+        min_neuropil_pixels=min_neuropil_pixels,
+        circular=circular,
+    )
+
+    ring_masks = []
+    for ipix in neuropil_ipix:
+        ipix = np.asarray(ipix)
+        n_pixels = len(ipix)
+        if n_pixels == 0:
+            ring_masks.append(
+                sparse.COO(np.zeros((2, 0), dtype=np.intp), np.zeros(0, dtype=np.float32), shape=(Ly, Lx))
+            )
+            continue
+        ring_y, ring_x = np.unravel_index(ipix, (Ly, Lx))
+        weights = np.full(n_pixels, 1.0 / n_pixels, dtype=np.float32)
+        ring_masks.append(sparse.COO(np.stack([ring_y, ring_x]), weights, shape=(Ly, Lx)))
+
+    return sparse.GCXS.from_coo(sparse.stack(ring_masks, axis=0), compressed_axes=(0,))
+
+
+register_result_extension(NeuropilExtension)

@@ -125,6 +125,29 @@ class TestFolderConstructor:
         for pm in pixel_masks:
             assert pm.shape[1] == 3  # y, x, weight (single plane)
 
+    def test_get_stats_returns_all_by_default(self, suite2p_folder):
+        folder, _, stats = suite2p_folder
+        rois = Suite2pRois(folder)
+        result = rois.get_stats()
+        assert len(result) == len(stats)
+        for got, expected in zip(result, stats):
+            np.testing.assert_array_equal(got["ypix"], expected["ypix"])
+            np.testing.assert_array_equal(got["xpix"], expected["xpix"])
+            np.testing.assert_array_equal(got["lam"], expected["lam"])
+
+    def test_get_stats_subset_and_order(self, suite2p_folder):
+        folder, _, stats = suite2p_folder
+        rois = Suite2pRois(folder)
+        result = rois.get_stats(roi_ids=[3, 1])
+        assert len(result) == 2
+        np.testing.assert_array_equal(result[0]["ypix"], stats[3]["ypix"])
+        np.testing.assert_array_equal(result[1]["ypix"], stats[1]["ypix"])
+
+    def test_get_stats_empty_roi_ids(self, suite2p_folder):
+        folder, _, _ = suite2p_folder
+        rois = Suite2pRois(folder)
+        assert rois.get_stats(roi_ids=[]) == []
+
     def test_properties_set_excluding_skipped(self, suite2p_folder):
         folder, _, stats = suite2p_folder
         rois = Suite2pRois(folder)
@@ -197,6 +220,17 @@ class TestFromStat:
         assert masks.shape == (3, 20, 24)
         for i, stat in enumerate(stats):
             assert np.all(masks[i].todense()[stat["ypix"], stat["xpix"]])
+
+    def test_get_stats_from_stat_constructor(self):
+        rng = np.random.default_rng(2)
+        stats = _make_stats(rng, num_rois=3, height=20, width=24)
+        rois = Suite2pRois.from_stat(stats, shape=(20, 24, 1), sampling_frequency=15.0)
+
+        result = rois.get_stats()
+        assert len(result) == 3
+        for got, expected in zip(result, stats):
+            np.testing.assert_array_equal(got["lam"], expected["lam"])
+            np.testing.assert_array_equal(got["radius"], expected["radius"])
 
     def test_image_masks_empty_roi_ids(self):
         """get_roi_image_masks([]) should return an empty array, not raise."""
