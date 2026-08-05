@@ -190,6 +190,19 @@ def test_stack_accepts_single_sequence():
     assert joined.get_num_planes() == 2
 
 
+def test_stack_is_registered_only_when_all_inputs_are():
+    a = _imaging(5, 1, seed=8)
+    b = _imaging(5, 1, seed=9)
+
+    assert stack_planes(a, b).is_registered is False
+
+    a.is_registered = True
+    assert stack_planes(a, b).is_registered is False  # b still unregistered
+
+    b.is_registered = True
+    assert stack_planes(a, b).is_registered is True
+
+
 def test_stack_rejects_mismatched_inputs():
     a = _imaging(8, 1, seed=10)
 
