@@ -20,4 +20,5 @@ from .split import (
     split_epoch_at_frames,
     split_epochs,
 )
+from .stack import StackPlanesImaging, stack_planes
 from .zarrrois import ZarrRois
