@@ -41,3 +41,26 @@ to the following conventions:
   allow for discussion.
 - One approval of a PR (by a repo maintainer) is sufficient for it to be merged.
 - If the PR receives approval without additional comments, it will be merged immediately by the approving reviewer.
+
+## Contributing to documentation
+
+### Building documentation locally
+
+The documentation is found in the `docs/source` folder, where the structure mirrors the rendered website.
+
+Dependencies for building the documentation locally can be found at `docs/requirements.txt`.
+To install these, change directory to the `docs` folder in your terminal and type:
+
+```
+pip install -r requirements.txt
+```
+
+The command to build the documentation is:
+
+```
+make clean api_index.rst html
+```
+
+Any existing builds will be removed, and documentation will be built and output
+to the `build` folder. To read the built documentation in a browser, navigate to the `build`
+folder and open the `index.html` file.
