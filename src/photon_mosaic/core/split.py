@@ -34,9 +34,11 @@ class SelectEpochImaging(BaseImaging):
         BaseImaging.__init__(self, sampling_frequency=imaging.sampling_frequency, shape=imaging.shape)
         imaging.copy_metadata(self)
 
-        for epoch_index in normalized_epoch_indices:
+        self._selected_epoch_indices = {}
+        for i, epoch_index in enumerate(normalized_epoch_indices):
             imaging_epoch = imaging.epochs[epoch_index]
             self.add_epoch(imaging_epoch)
+            self._selected_epoch_indices[i] = epoch_index
 
         self._parent = imaging
         self._kwargs = {
@@ -53,11 +55,16 @@ class SelectEpochImaging(BaseImaging):
     ) -> np.ndarray:
         # parent may want to do further operations to the series before returning
         # so we explicitly delegate to them rather than relying on BaseImaging.
+        # We also remap selected epoch indices relative to the parent
+        if epoch_index is None:
+            selected_epoch_index = self._selected_epoch_indices[0]
+        else:
+            selected_epoch_index = self._selected_epoch_indices[epoch_index]
         return self._parent.get_series(
             start_frame=start_frame,
             end_frame=end_frame,
             plane_ids=plane_ids,
-            epoch_index=epoch_index,
+            epoch_index=selected_epoch_index,
         )
 
 
