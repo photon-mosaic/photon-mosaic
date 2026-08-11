@@ -44,6 +44,14 @@ widgets = [
 suite2p-registration = [
   "suite2p==1.0.0.1",
 ]
+jnormcorre-registration = [
+  "jnormcorre",
+  # jnormcorre (last released/updated Jan 2025) still calls jax.numpy.fix,
+  # which JAX removed in v0.10.0 — pin JAX below that until upstream migrates
+  # to jnp.trunc. Verified: backend passes end-to-end on jax/jaxlib 0.9.2.
+  "jax<0.10",
+  "jaxlib<0.10",
+]
 dev = [
   "pytest",
   "pytest-cov",
@@ -54,6 +62,9 @@ dev = [
   "ruff",
   "setuptools-scm",
   "suite2p==1.0.0.1",
+  "jnormcorre",
+  "jax<0.10",
+  "jaxlib<0.10",
 ]
 
 [build-system]
