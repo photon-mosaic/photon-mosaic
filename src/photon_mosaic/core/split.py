@@ -1,3 +1,5 @@
+import numpy as np
+
 from .baseimaging import BaseImaging
 
 
@@ -41,6 +43,22 @@ class SelectEpochImaging(BaseImaging):
             "imaging": imaging,
             "epoch_indices": normalized_epoch_indices,
         }
+
+    def get_series(
+        self,
+        start_frame: int | None = None,
+        end_frame: int | None = None,
+        plane_ids: list | np.ndarray | None = None,
+        epoch_index: int | None = None,
+    ) -> np.ndarray:
+        # parent may want to do further operations to the series before returning
+        # so we explicitly delegate to them rather than relying on BaseImaging.
+        return self._parent.get_series(
+            start_frame=start_frame,
+            end_frame=end_frame,
+            plane_ids=plane_ids,
+            epoch_index=epoch_index,
+        )
 
 
 def split_epochs(imaging: BaseImaging, epoch_indices: int | list[int]) -> SelectEpochImaging:
