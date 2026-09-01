@@ -67,19 +67,49 @@ class ZarrRois(BaseRois):
 
     def get_roi_image_masks(self, roi_ids=None):
         if self._rois_group.attrs.get("roi_image_masks_sparse", False):
-            coords = np.array(self._rois_group["roi_image_masks_coords"])
-            data = np.array(self._rois_group["roi_image_masks_data"])
-            shape = tuple(self._rois_group.attrs["roi_image_masks_shape"])
-            # Compress along the ROI axis so per-ROI indexing (below, and e.g. select_rois)
-            # stays fast -- the default heuristic often picks a different axis, making it
-            # ~40x slower.
-            masks = sparse.GCXS.from_coo(sparse.COO(coords, data, shape=shape), compressed_axes=(0,))
-        else:
-            masks = np.array(self._rois_group["roi_image_masks"])
+            return self._get_sparse_roi_image_masks(roi_ids)
+
+        # Index the still-lazy zarr array *before* materialising, so a request for a few
+        # ROIs only reads their own chunks (each ROI is its own chunk, see save_rois_to_zarr)
+        # instead of loading every ROI's mask just to throw most of them away.
+        roi_image_masks = self._rois_group["roi_image_masks"]
         if roi_ids is None:
-            return masks
+            return np.array(roi_image_masks)
         roi_indices = self.ids_to_indices(roi_ids)
-        return masks[roi_indices]
+        return np.array(roi_image_masks[roi_indices])
+
+    def _get_sparse_roi_image_masks(self, roi_ids):
+        """Reconstruct a GCXS array from its on-disk (indptr, indices, data) components.
+
+        These are exactly the CSR-style arrays `sparse.GCXS(compressed_axes=(0,))` already
+        keeps in memory -- `indptr` marks each ROI's own slice of the flat `indices`/`data`
+        arrays. Reading a subset of ROIs therefore only needs `indptr` (always loaded, tiny:
+        one int per ROI) plus the requested ROIs' own slices of `indices`/`data`, read from
+        the still-lazy zarr arrays -- never the full arrays, unlike reconstructing via COO.
+        """
+        shape = tuple(self._rois_group.attrs["roi_image_masks_shape"])
+        indptr = np.array(self._rois_group["roi_image_masks_indptr"])
+        indices = self._rois_group["roi_image_masks_indices"]
+        data = self._rois_group["roi_image_masks_data"]
+
+        if roi_ids is None:
+            return sparse.GCXS((np.array(data), np.array(indices), indptr), shape=shape, compressed_axes=(0,))
+
+        roi_indices = self.ids_to_indices(roi_ids)
+        indices_parts = []
+        data_parts = []
+        counts = []
+        for i in roi_indices:
+            start, end = int(indptr[i]), int(indptr[i + 1])
+            indices_parts.append(np.array(indices[start:end]))
+            data_parts.append(np.array(data[start:end]))
+            counts.append(end - start)
+
+        new_indptr = np.concatenate([[0], np.cumsum(counts)]).astype(indptr.dtype)
+        new_indices = np.concatenate(indices_parts) if indices_parts else np.array([], dtype=indptr.dtype)
+        new_data = np.concatenate(data_parts) if data_parts else np.array([], dtype=data.dtype)
+        new_shape = (len(roi_indices), *shape[1:])
+        return sparse.GCXS((new_data, new_indices, new_indptr), shape=new_shape, compressed_axes=(0,))
 
 
 def save_rois_to_zarr(rois: BaseRois, zarr_group, saving_options: dict | None = None) -> None:
@@ -98,13 +128,31 @@ def save_rois_to_zarr(rois: BaseRois, zarr_group, saving_options: dict | None = 
 
     image_masks = rois.get_roi_image_masks()
     if isinstance(image_masks, sparse.SparseArray):
-        # zarr can't store a sparse array as a dataset value directly; store its COO
-        # components instead, which stay small regardless of the dense shape.
-        coo = image_masks.tocoo()
+        # zarr can't store a sparse array as a dataset value directly. Persist GCXS's own
+        # (indptr, indices, data) components rather than round-tripping through COO: indptr
+        # already marks each ROI's own boundary in the flat indices/data arrays (the same
+        # CSR-style structure get_roi_image_masks needs to load a handful of ROIs without
+        # reading every ROI's mask -- see ZarrRois._get_sparse_roi_image_masks).
+        if isinstance(image_masks, sparse.GCXS):
+            gcxs = image_masks if image_masks.compressed_axes == (0,) else image_masks.change_compressed_axes((0,))
+        else:
+            gcxs = sparse.GCXS.from_coo(image_masks.tocoo(), compressed_axes=(0,))
         zarr_group.attrs["roi_image_masks_sparse"] = True
-        zarr_group.attrs["roi_image_masks_shape"] = list(coo.shape)
-        zarr_group.create_dataset("roi_image_masks_coords", data=coo.coords, **saving_options)
-        zarr_group.create_dataset("roi_image_masks_data", data=coo.data, **saving_options)
+        zarr_group.attrs["roi_image_masks_shape"] = list(gcxs.shape)
+        zarr_group.create_dataset("roi_image_masks_indptr", data=gcxs.indptr, compressor=None)
+
+        # Chunk indices/data to roughly a handful of ROIs' worth of entries, unless the caller
+        # has already specified a chunk layout. zarr's own auto-chunking picks a chunk size
+        # based on total array size with no notion of our per-ROI access pattern (indptr), so
+        # a single-ROI request can still force decompressing a chunk sized for hundreds of
+        # ROIs -- confirmed empirically to scale peak memory with total ROI count otherwise.
+        sparse_saving_options = saving_options
+        if "chunks" not in saving_options:
+            avg_roi_nnz = max(1, gcxs.nnz // max(gcxs.shape[0], 1))
+            entries_per_chunk = max(8 * avg_roi_nnz, 1024)
+            sparse_saving_options = {**saving_options, "chunks": (entries_per_chunk,)}
+        zarr_group.create_dataset("roi_image_masks_indices", data=gcxs.indices, **sparse_saving_options)
+        zarr_group.create_dataset("roi_image_masks_data", data=gcxs.data, **sparse_saving_options)
     else:
         zarr_group.attrs["roi_image_masks_sparse"] = False
         # Chunk along the ROI axis (first dimension) for efficient per-ROI access,

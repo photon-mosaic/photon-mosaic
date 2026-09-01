@@ -32,6 +32,7 @@ class Suite2pRois(BaseRois):
     def __init__(
         self,
         folder_path: str | Path,
+        sparse: bool = True,
     ) -> None:
         """Load suite2p ROIs from a saved output folder.
 
@@ -40,6 +41,13 @@ class Suite2pRois(BaseRois):
         folder_path : str or Path
             Folder containing at least ``ops.npy`` and ``stat.npy``. May also
             contain ``iscell.npy`` (classifier output).
+        sparse : bool, default: True
+            Return image masks as a sparse :class:`sparse.GCXS` array (see
+            :meth:`get_roi_image_masks`). Suite2p detections can number in the tens of
+            thousands over a large field of view, where a dense array would be far larger
+            than the raw movie itself -- but for a small recording with few ROIs, the dense
+            array may be smaller and faster to work with than the sparse overhead. Pass
+            ``False`` to get a plain ``np.ndarray`` instead.
         """
         folder_path = Path(folder_path)
         ops_file = folder_path / "ops.npy"
@@ -62,6 +70,7 @@ class Suite2pRois(BaseRois):
             shape=(height, width, 1),
             sampling_frequency=sampling_frequency,
             plane_assignments=None,
+            sparse=sparse,
         )
 
         # Optional classifier output.
@@ -71,7 +80,7 @@ class Suite2pRois(BaseRois):
             self.set_property("iscell", iscell[:, 0] == 1)
             self.set_property("iscell_probability", iscell[:, 1])
 
-        self._kwargs = {"folder_path": str(folder_path.absolute())}
+        self._kwargs = {"folder_path": str(folder_path.absolute()), "sparse": sparse}
 
     @classmethod
     def from_stat(
@@ -80,6 +89,7 @@ class Suite2pRois(BaseRois):
         shape: tuple[int, int, int],
         sampling_frequency: float,
         plane_assignments: NDArray[np.intp] | None = None,
+        sparse: bool = True,
     ) -> "Suite2pRois":
         """Build ROIs directly from an in-memory suite2p ``stat`` list.
 
@@ -94,6 +104,9 @@ class Suite2pRois(BaseRois):
             Imaging sampling rate in Hz.
         plane_assignments : NDArray | None, optional
             Integer plane index for each ROI. Required when ``n_planes > 1``.
+        sparse : bool, default: True
+            Return image masks as a sparse :class:`sparse.GCXS` array instead of a dense
+            ``np.ndarray``. See :meth:`__init__`.
         """
         instance = cls.__new__(cls)
         stat_list = list(stats)
@@ -102,12 +115,14 @@ class Suite2pRois(BaseRois):
             shape=shape,
             sampling_frequency=float(sampling_frequency),
             plane_assignments=plane_assignments,
+            sparse=sparse,
         )
         kwargs: dict[str, Any] = {
             "stats": stat_list,
             "shape": shape,
             "sampling_frequency": float(sampling_frequency),
             "plane_assignments": plane_assignments,
+            "sparse": sparse,
         }
         instance._kwargs = kwargs
         return instance
@@ -118,6 +133,7 @@ class Suite2pRois(BaseRois):
         shape: tuple[int, int, int],
         sampling_frequency: float,
         plane_assignments: NDArray[np.intp] | None,
+        sparse: bool = True,
     ) -> None:
         """Shared initialisation for both constructors."""
         roi_ids = np.arange(len(stats))
@@ -128,6 +144,7 @@ class Suite2pRois(BaseRois):
             roi_ids=roi_ids,
         )
         self._stats = stats
+        self._sparse = sparse
         self._plane_assignments = (
             np.asarray(plane_assignments, dtype=int)
             if plane_assignments is not None
@@ -148,13 +165,14 @@ class Suite2pRois(BaseRois):
             except Exception:
                 logging.debug("Could not set property %r from stat", key)
 
-    def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> sparse.GCXS:
+    def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> sparse.GCXS | NDArray:
         """Return binary image masks shaped ``(n_rois, H, W)`` or ``(n_rois, H, W, n_planes)``.
 
-        Returned as a sparse :class:`sparse.GCXS` array, built directly from each ROI's
-        ``ypix``/``xpix`` pixel coordinates -- suite2p detections can number in the tens of
-        thousands over large (e.g. volumetric) fields of view, where a dense array would be
-        far larger than the raw movie itself (see photon-mosaic#103).
+        Returned as a sparse :class:`sparse.GCXS` array by default, built directly from each
+        ROI's ``ypix``/``xpix`` pixel coordinates -- suite2p detections can number in the tens
+        of thousands over large (e.g. volumetric) fields of view, where a dense array would be
+        far larger than the raw movie itself (see photon-mosaic#103). Pass ``sparse=False`` to
+        the constructor for a plain ``np.ndarray`` instead.
         """
         if roi_ids is None:
             roi_ids = self.roi_ids.tolist()
@@ -162,9 +180,26 @@ class Suite2pRois(BaseRois):
         H, W, n_planes = self.shape
         mask_shape = (0, H, W) if n_planes == 1 else (0, H, W, n_planes)
         if len(roi_ids) == 0:
-            # sparse.stack() requires at least one array; build an empty result directly
-            # instead, matching the dense case's (0, H, W[, P]) shape.
-            return sparse.GCXS.from_numpy(np.zeros(mask_shape, dtype=bool), compressed_axes=(0,))
+            if self._sparse:
+                # sparse.stack() requires at least one array; build an empty result directly
+                # instead, matching the dense case's (0, H, W[, P]) shape.
+                return sparse.GCXS.from_numpy(np.zeros(mask_shape, dtype=bool), compressed_axes=(0,))
+            return np.zeros(mask_shape, dtype=bool)
+
+        if not self._sparse:
+            full_shape = (len(roi_ids), H, W) if n_planes == 1 else (len(roi_ids), H, W, n_planes)
+            dense_masks = np.zeros(full_shape, dtype=bool)
+            for i, roi_id in enumerate(roi_ids):
+                roi_index = int(roi_id)
+                stat = self._stats[roi_index]
+                ypix = np.asarray(stat["ypix"])
+                xpix = np.asarray(stat["xpix"])
+                if n_planes == 1:
+                    dense_masks[i, ypix, xpix] = True
+                else:
+                    p = int(self._plane_assignments[roi_index])
+                    dense_masks[i, ypix, xpix, p] = True
+            return dense_masks
 
         masks = []
         for roi_id in roi_ids:
