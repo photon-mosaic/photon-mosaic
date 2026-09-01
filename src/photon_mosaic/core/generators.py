@@ -281,13 +281,26 @@ def generate_imaging_with_rois(
     masks_flat = masks.reshape(num_rois, -1).astype(video.dtype)
     signal = roi_baseline[np.newaxis, :] * fluorescence.traces  # (T, N)
     bleach = np.exp(-np.arange(num_frames) / (bleaching_time * sampling_frequency), dtype=np.float32)
-    mean_video = background * bleach[:, np.newaxis, np.newaxis, np.newaxis] + (signal @ masks_flat).reshape(video.shape)
+
+    # Assemble the mean video directly into video's own buffer instead of building a separate
+    # (T, H, W, P) mean_video array: for a realistic size (e.g. 10000 frames, 256x256), that
+    # temporary plus the noise array (each promoted to float64) peaked at ~3x the movie's own
+    # memory instead of ~1x. `video` is freshly allocated in generate_random_imaging and about
+    # to be fully overwritten below, so writing the matmul straight into it (via a reshaped
+    # view, `out=`) and adding background/noise in place -- one noise slab at a time -- keeps
+    # only one movie-sized array live at once.
+    flat = video.reshape(num_frames, -1)
+    np.matmul(signal, masks_flat, out=flat)
+    flat += (background * bleach)[:, np.newaxis]
 
     noise_rng = np.random.default_rng(noise_seed)
-    if noise_std == "poisson":
-        video[:] = noise_rng.poisson(np.clip(mean_video, 0, None))
-    else:
-        video[:] = mean_video + noise_rng.normal(0, noise_std, video.shape)
+    slab_size = 256
+    for t0 in range(0, num_frames, slab_size):
+        sl = flat[t0 : t0 + slab_size]
+        if noise_std == "poisson":
+            sl[:] = noise_rng.poisson(np.clip(sl, 0, None))
+        else:
+            sl += noise_rng.normal(0, noise_std, sl.shape)
 
     rois.register_imaging(imaging)  # Link the ROIs to the imaging data
 
