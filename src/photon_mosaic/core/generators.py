@@ -170,9 +170,9 @@ def generate_imaging_with_rois(
     decay_time: float = 2.0,
     event_rate: float = 0.3,
     weighted_rois: bool = False,
-    background: float = 3.0,
-    baseline_range: tuple[float, float] = (2.0, 4.0),
-    noise_std: float | Literal["poisson"] = 2.5,
+    background: float = 0.2,
+    baseline_range: tuple[float, float] = (0.5, 1.0),
+    noise_std: float | Literal["poisson"] = 1.3,
     bleaching_time: float = np.inf,
     seed: int | None = None,
 ) -> tuple[BaseRois, NumpyImaging, FluorescenceData]:
@@ -206,24 +206,27 @@ def generate_imaging_with_rois(
         `sampling_frequency`).
     weighted_rois : bool, default: False
         Whether to create weighted masks.
-    background : float, default: 3.0
-        Mean pixel intensity present everywhere in the frame, including under
-        the ROIs (e.g. neuropil, out-of-focus light). 0 means a dark background
-        with only noise. Subject to the same `bleaching_time` decay as the ROI
-        signal, since it mostly represents genuine fluorescence rather than
-        non-bleaching dark counts.
-    baseline_range : tuple[float, float], default: (2.0, 4.0)
-        Range from which each ROI's baseline fluorescence (F0) is drawn
-        uniformly at random, modeling cell-to-cell brightness variability.
-        Recovered dF/F matches `clean_traces` when `background` is 0; a
-        nonzero `background` attenuates it (see `FluorescenceNode`'s
-        `neuropil` argument to correct for this).
-    noise_std : float or "poisson", default: 2.5
+    background : float, default: 0.2
+        Mean photon count per pixel per frame, exact only under
+        ``noise_std="poisson"`` (otherwise just an intensity scale) -- present
+        everywhere in the frame, including under the ROIs (e.g. neuropil, out-of-
+        focus light). 0 means a dark background with only noise. Subject to the same
+        `bleaching_time` decay as the ROI signal, since it mostly represents genuine
+        fluorescence rather than non-bleaching dark counts.
+    baseline_range : tuple[float, float], default: (0.5, 1.0)
+        Range from which each ROI's baseline fluorescence (F0) is drawn uniformly at
+        random, modeling cell-to-cell brightness variability -- same photon-count
+        semantics as `background` (exact only under ``noise_std="poisson"``).
+        Recovered dF/F matches `clean_traces` when `background` is 0; a nonzero
+        `background` attenuates it (see `FluorescenceNode`'s `neuropil` argument to
+        correct for this).
+    noise_std : float or "poisson", default: 1.3
         Standard deviation of additive Gaussian noise on the video, per pixel
         and frame. 0 means no noise. Pass ``"poisson"`` instead to draw
         physically realistic shot noise (variance equals the local mean
         signal) rather than fixed-variance Gaussian noise. The default of
-        2.5 gives roughly the same recovered dF/F quality (SNR) as
+        1.3 gives roughly the same recovered dF/F noise level (measured via
+        ``aind_ophys_utils.signal_utils.noise_std(method="welch")``) as
         ``noise_std="poisson"`` at the default `background`/`baseline_range`.
     bleaching_time : float, default: inf
         Time constant of multiplicative photobleaching in seconds, passed through to
