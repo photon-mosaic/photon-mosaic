@@ -203,7 +203,7 @@ def generate_imaging_with_rois(
     event_rate : float, default: 0.3
         Mean spike-event rate in Hz, passed through to :func:`generate_fluorescence`. Each
         ROI's number of events scales with the recording's duration (`num_frames` /
-        `sampling_frequency`) rather than being fixed regardless of length.
+        `sampling_frequency`).
     weighted_rois : bool, default: False
         Whether to create weighted masks.
     background : float, default: 3.0
@@ -276,10 +276,8 @@ def generate_imaging_with_rois(
         bleaching_time=bleaching_time,
         seed=fluorescence_seed,
     )
-    # Compute the mean signal (background everywhere, plus each ROI's fluorescence trace --
-    # already F0-normalised as (1 + clean_traces) * bleach(t) -- scaled by its own F0 (baseline)):
-    # (T, N) @ (N, H*W*P) -> (T, H*W*P) -> (T, H, W, P). background bleaches too (see the
-    # `background` docs above), so bleaching cancels out of the dF/F ratio instead of drifting.
+    # background bleaches too, so bleaching cancels out of the dF/F ratio instead of drifting.
+    # (T, N) @ (N, H*W*P) -> (T, H*W*P) -> (T, H, W, P).
     video = imaging.epochs[0]._video
     masks = rois.get_roi_image_masks()  # (N, H, W) or (N, H, W, P)
     masks_flat = masks.reshape(num_rois, -1).astype(video.dtype)
@@ -288,9 +286,7 @@ def generate_imaging_with_rois(
     signal = (roi_baseline[np.newaxis, :] * fluorescence.traces).astype(video.dtype)  # (T, N)
     bleach = np.exp(-np.arange(num_frames) / (bleaching_time * sampling_frequency), dtype=np.float32)
 
-    # Assemble the mean video directly into video's own buffer via a reshaped view (`video` is
-    # freshly allocated and about to be fully overwritten, so it doubles as scratch space);
-    # noise is applied one slab at a time so only one movie-sized array is ever live.
+    # `video` is reused as scratch (about to be overwritten); noise is added slab by slab to avoid a full array.
     flat = video.reshape(num_frames, -1)
     np.matmul(signal, masks_flat, out=flat)
     flat += (background * bleach)[:, np.newaxis]
@@ -333,9 +329,8 @@ def generate_fluorescence(
         Time constant of the exponential decay kernel in seconds.
     event_rate : float, default: 0.3
         Mean spike-event rate in Hz. Each ROI's number of events is drawn as
-        ``round(uniform(0.5, 1.5) * event_rate * num_frames / sampling_frequency)``, i.e.
-        it scales with the recording's duration rather than being fixed regardless of length.
-        Clamped to ``[0, num_frames]``.
+        ``round(uniform(0.5, 1.5) * event_rate * num_frames / sampling_frequency)``, scaling
+        with the recording's duration. Clamped to ``[0, num_frames]``.
     noise_std : float, default: 0.0
         Standard deviation of additive Gaussian noise. 0 means no noise.
     bleaching_time : float, default: inf
@@ -347,12 +342,7 @@ def generate_fluorescence(
     Returns
     -------
     FluorescenceData
-        Named tuple with fields ``traces``, ``spikes``, and ``clean_traces``,
-        each of shape ``(num_frames, num_rois)`` as float32. ``traces`` is
-        ``(1 + clean_traces) * bleach(t)``, i.e. absolute fluorescence
-        normalised so ``F0(0) == 1``; ``bleach(t) == 1`` for all frames when
-        `bleaching_time` is ``inf`` (no photobleaching decay, but the baseline
-        offset of 1 still applies).
+        See :class:`FluorescenceData` for field descriptions.
     """
     from scipy.signal import lfilter
 
