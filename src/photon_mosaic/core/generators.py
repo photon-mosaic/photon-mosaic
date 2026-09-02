@@ -35,6 +35,7 @@ def generate_random_imaging(
     width: int = 256,
     num_planes: int = 1,
     sampling_frequency: float = 30.0,
+    dtype: type = np.float32,
     seed: int | None = None,
 ) -> NumpyImaging:
     """Generate a random NumpyImaging object for testing.
@@ -49,6 +50,9 @@ def generate_random_imaging(
         Width of each frame in pixels.
     sampling_frequency : float, default: 30.0
         Sampling frequency in Hz.
+    dtype : type, default: np.float32
+        Dtype of the generated video (``np.float32``/``np.float64``). Float32 halves memory
+        with no precision cost -- nothing downstream reads above float32 precision anyway.
 
     Returns
     -------
@@ -60,7 +64,7 @@ def generate_random_imaging(
     rng = np.random.default_rng(seed)
     videos = []
     for n_frames in num_frames:
-        video = rng.random((n_frames, height, width, num_planes))
+        video = rng.random((n_frames, height, width, num_planes), dtype=dtype)
         videos.append(video)
     return NumpyImaging(imaging_series=videos, sampling_frequency=sampling_frequency)
 
@@ -279,11 +283,14 @@ def generate_imaging_with_rois(
     video = imaging.epochs[0]._video
     masks = rois.get_roi_image_masks()  # (N, H, W) or (N, H, W, P)
     masks_flat = masks.reshape(num_rois, -1).astype(video.dtype)
-    signal = roi_baseline[np.newaxis, :] * fluorescence.traces  # (T, N)
+    # roi_baseline is float64 by default; cast to video.dtype, or the matmul below (out=flat)
+    # silently allocates a full movie-sized float64 temporary for the mixed-precision multiply.
+    signal = (roi_baseline[np.newaxis, :] * fluorescence.traces).astype(video.dtype)  # (T, N)
     bleach = np.exp(-np.arange(num_frames) / (bleaching_time * sampling_frequency), dtype=np.float32)
 
-    # `video` is about to be fully overwritten, so it doubles as scratch space for the matmul
-    # and background/noise below; noise is added one slab at a time to avoid a full-size array.
+    # Assemble the mean video directly into video's own buffer via a reshaped view (`video` is
+    # freshly allocated and about to be fully overwritten, so it doubles as scratch space);
+    # noise is applied one slab at a time so only one movie-sized array is ever live.
     flat = video.reshape(num_frames, -1)
     np.matmul(signal, masks_flat, out=flat)
     flat += (background * bleach)[:, np.newaxis]
