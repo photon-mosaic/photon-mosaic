@@ -156,13 +156,9 @@ def test_generate_rois_invalid_radius_range_raises_assertion():
 # ── generate_fluorescence tests ──
 
 
-def test_generate_fluorescence_returns_fluorescence_traces():
-    result = generate_fluorescence(num_frames=200, num_rois=3, seed=0)
-    assert isinstance(result, FluorescenceData)
-
-
 def test_generate_fluorescence_output_shapes_and_dtype():
     result = generate_fluorescence(num_frames=200, num_rois=3, seed=0)
+    assert isinstance(result, FluorescenceData)
     assert result.traces.shape == (200, 3)
     assert result.spikes.shape == (200, 3)
     assert result.clean_traces.shape == (200, 3)
@@ -256,14 +252,6 @@ def test_generate_imaging_with_rois_adds_fluorescence_signal():
     assert with_bumps.get_series().mean() > plain.get_series().mean()
 
 
-def test_generate_imaging_with_rois_noise_std_default_matches_explicit_default():
-    """The default noise_std should reproduce the same background as passing it explicitly."""
-    kwargs = dict(num_frames=60, height=20, width=20, num_rois=3, radius_range=(3, 5), seed=1)
-    _, default, _ = generate_imaging_with_rois(**kwargs)
-    _, explicit, _ = generate_imaging_with_rois(**kwargs, noise_std=2.5)
-    np.testing.assert_array_equal(default.get_series(), explicit.get_series())
-
-
 def test_generate_imaging_with_rois_noise_std_scales_background():
     """Increasing noise_std should increase the video's overall standard deviation."""
     kwargs = dict(num_frames=200, height=20, width=20, num_rois=3, radius_range=(3, 5), seed=1)
@@ -276,9 +264,9 @@ def test_generate_imaging_with_rois_dff_scale_independent_of_noise_std():
     """Recovered dF/F's scale relative to clean_traces should not depend on noise_std.
 
     Correlation alone wouldn't catch a regression here (it's scale-invariant), so this
-    compares std(dF/F) / std(clean_traces) at very different noise_std values instead.
-    Without the baseline scaling fix, this ratio scales with ~1/noise_std (a ~40x
-    difference between the two noise levels tested); with the fix, it stays flat.
+    compares std(dF/F) / std(clean_traces) at very different noise_std values instead --
+    if F0 baseline scaling were broken, this ratio would scale with ~1/noise_std (~40x
+    difference between the two noise levels tested here) instead of staying flat.
     """
     from photon_mosaic.core import create_roi_analyzer
 

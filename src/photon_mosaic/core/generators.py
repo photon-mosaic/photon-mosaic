@@ -282,13 +282,8 @@ def generate_imaging_with_rois(
     signal = roi_baseline[np.newaxis, :] * fluorescence.traces  # (T, N)
     bleach = np.exp(-np.arange(num_frames) / (bleaching_time * sampling_frequency), dtype=np.float32)
 
-    # Assemble the mean video directly into video's own buffer instead of building a separate
-    # (T, H, W, P) mean_video array: for a realistic size (e.g. 10000 frames, 256x256), that
-    # temporary plus the noise array (each promoted to float64) peaked at ~3x the movie's own
-    # memory instead of ~1x. `video` is freshly allocated in generate_random_imaging and about
-    # to be fully overwritten below, so writing the matmul straight into it (via a reshaped
-    # view, `out=`) and adding background/noise in place -- one noise slab at a time -- keeps
-    # only one movie-sized array live at once.
+    # `video` is about to be fully overwritten, so it doubles as scratch space for the matmul
+    # and background/noise below; noise is added one slab at a time to avoid a full-size array.
     flat = video.reshape(num_frames, -1)
     np.matmul(signal, masks_flat, out=flat)
     flat += (background * bleach)[:, np.newaxis]
