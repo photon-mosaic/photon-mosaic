@@ -1,6 +1,6 @@
 """Module to generate synthetic imaging and ROI objects for testing and example purposes."""
 
-from typing import NamedTuple
+from typing import Literal, NamedTuple
 
 import numpy as np
 
@@ -14,9 +14,10 @@ class FluorescenceData(NamedTuple):
     Attributes
     ----------
     traces : np.ndarray
-        Final fluorescence traces ``(num_frames, num_rois)``, float32.
-        Without bleaching equals ``clean_traces`` (dF/F). With bleaching equals
-        ``(1 + clean_traces) * bleach``, i.e. absolute fluorescence normalised by F0.
+        Final fluorescence traces ``(num_frames, num_rois)``, float32. Always
+        ``(1 + clean_traces) * bleach(t)`` (plus additive noise if `noise_std` > 0), i.e.
+        absolute fluorescence normalised so ``F0(0) == 1``; ``bleach(t) == 1`` for all
+        frames when there is no photobleaching (`bleaching_time` is ``inf``).
     spikes : np.ndarray
         Binary spike trains ``(num_frames, num_rois)``, float32.
     clean_traces : np.ndarray
@@ -34,6 +35,7 @@ def generate_random_imaging(
     width: int = 256,
     num_planes: int = 1,
     sampling_frequency: float = 30.0,
+    dtype: type = np.float32,
     seed: int | None = None,
 ) -> NumpyImaging:
     """Generate a random NumpyImaging object for testing.
@@ -48,6 +50,9 @@ def generate_random_imaging(
         Width of each frame in pixels.
     sampling_frequency : float, default: 30.0
         Sampling frequency in Hz.
+    dtype : type, default: np.float32
+        Dtype of the generated video (``np.float32``/``np.float64``). Float32 halves memory
+        with no precision cost -- nothing downstream reads above float32 precision anyway.
 
     Returns
     -------
@@ -59,7 +64,7 @@ def generate_random_imaging(
     rng = np.random.default_rng(seed)
     videos = []
     for n_frames in num_frames:
-        video = rng.random((n_frames, height, width, num_planes))
+        video = rng.random((n_frames, height, width, num_planes), dtype=dtype)
         videos.append(video)
     return NumpyImaging(imaging_series=videos, sampling_frequency=sampling_frequency)
 
@@ -162,14 +167,20 @@ def generate_imaging_with_rois(
     num_rois: int = 20,
     radius_range: tuple[int, int] | tuple[int, int, int] = (5, 15),
     sampling_frequency: float = 30.0,
-    decay_seconds: float = 2.0,
+    decay_time: float = 2.0,
+    event_rate: float = 0.3,
     weighted_rois: bool = False,
+    background: float = 0.2,
+    baseline_range: tuple[float, float] = (0.5, 1.0),
+    noise_std: float | Literal["poisson"] = 1.3,
+    bleaching_time: float = np.inf,
     seed: int | None = None,
-) -> tuple[BaseRois, NumpyImaging]:
+) -> tuple[BaseRois, NumpyImaging, FluorescenceData]:
     """Generate a random NumpyImaging object and corresponding ROIs with fluorescence activity.
 
     Creates synthetic imaging data with exponentially decaying fluorescence bumps
-    injected at random times for each ROI.
+    injected at random times for each ROI, on top of a background with Gaussian or
+    Poisson (shot) noise.
 
     Parameters
     ----------
@@ -187,10 +198,39 @@ def generate_imaging_with_rois(
         Range of radii for circular ROIs.
     sampling_frequency : float, default: 30.0
         Sampling frequency in Hz.
-    decay_seconds : float, default: 2.0
+    decay_time : float, default: 2.0
         Duration of exponential decay for fluorescence events in seconds.
+    event_rate : float, default: 0.3
+        Mean spike-event rate in Hz, passed through to :func:`generate_fluorescence`. Each
+        ROI's number of events scales with the recording's duration (`num_frames` /
+        `sampling_frequency`).
     weighted_rois : bool, default: False
         Whether to create weighted masks.
+    background : float, default: 0.2
+        Mean photon count per pixel per frame, exact only under
+        ``noise_std="poisson"`` (otherwise just an intensity scale) -- present
+        everywhere in the frame, including under the ROIs (e.g. neuropil, out-of-
+        focus light). 0 means a dark background with only noise. Subject to the same
+        `bleaching_time` decay as the ROI signal, since it mostly represents genuine
+        fluorescence rather than non-bleaching dark counts.
+    baseline_range : tuple[float, float], default: (0.5, 1.0)
+        Range from which each ROI's baseline fluorescence (F0) is drawn uniformly at
+        random, modeling cell-to-cell brightness variability -- same photon-count
+        semantics as `background` (exact only under ``noise_std="poisson"``).
+        Recovered dF/F matches `clean_traces` when `background` is 0; a nonzero
+        `background` attenuates it (see `FluorescenceNode`'s `neuropil` argument to
+        correct for this).
+    noise_std : float or "poisson", default: 1.3
+        Standard deviation of additive Gaussian noise on the video, per pixel
+        and frame. 0 means no noise. Pass ``"poisson"`` instead to draw
+        physically realistic shot noise (variance equals the local mean
+        signal) rather than fixed-variance Gaussian noise. The default of
+        1.3 gives roughly the same recovered dF/F noise level (measured via
+        ``aind_ophys_utils.signal_utils.noise_std(method="welch")``) as
+        ``noise_std="poisson"`` at the default `background`/`baseline_range`.
+    bleaching_time : float, default: inf
+        Time constant of multiplicative photobleaching in seconds, passed through to
+        :func:`generate_fluorescence`. The default of ``inf`` means no photobleaching.
     seed : int | None, default: None
         Random seed for reproducibility.
 
@@ -200,11 +240,17 @@ def generate_imaging_with_rois(
         The generated ROIs.
     imaging : NumpyImaging
         The imaging data with injected fluorescence activity.
+    fluorescence : FluorescenceData
+        The ground-truth fluorescence (traces, spikes, clean_traces) injected
+        into the video, e.g. for comparison against values recovered from
+        `imaging` via an :class:`~photon_mosaic.core.roianalyzer.RoiAnalyzer`.
     """
     rng = np.random.default_rng(seed)
     imaging_seed = int(rng.integers(0, 2**31))
     rois_seed = int(rng.integers(0, 2**31))
     fluorescence_seed = int(rng.integers(0, 2**31))
+    noise_seed = int(rng.integers(0, 2**31))
+    roi_baseline = rng.uniform(baseline_range[0], baseline_range[1], size=num_rois)
 
     imaging = generate_random_imaging(
         num_frames=num_frames,
@@ -228,27 +274,48 @@ def generate_imaging_with_rois(
         num_frames=num_frames,
         num_rois=num_rois,
         sampling_frequency=sampling_frequency,
-        decay_seconds=decay_seconds,
+        decay_time=decay_time,
+        event_rate=event_rate,
+        bleaching_time=bleaching_time,
         seed=fluorescence_seed,
     )
-    # Inject traces into video: (T, N) @ (N, H*W*P) -> (T, H*W*P) -> (T, H, W, P)
+    # background bleaches too, so bleaching cancels out of the dF/F ratio instead of drifting.
+    # (T, N) @ (N, H*W*P) -> (T, H*W*P) -> (T, H, W, P).
     video = imaging.epochs[0]._video
     masks = rois.get_roi_image_masks()  # (N, H, W) or (N, H, W, P)
     masks_flat = masks.reshape(num_rois, -1).astype(video.dtype)
-    video += (fluorescence.traces @ masks_flat).reshape(video.shape)
+    # roi_baseline is float64 by default; cast to video.dtype, or the matmul below (out=flat)
+    # silently allocates a full movie-sized float64 temporary for the mixed-precision multiply.
+    signal = (roi_baseline[np.newaxis, :] * fluorescence.traces).astype(video.dtype)  # (T, N)
+    bleach = np.exp(-np.arange(num_frames) / (bleaching_time * sampling_frequency), dtype=np.float32)
+
+    # `video` is reused as scratch (about to be overwritten); noise is added slab by slab to avoid a full array.
+    flat = video.reshape(num_frames, -1)
+    np.matmul(signal, masks_flat, out=flat)
+    flat += (background * bleach)[:, np.newaxis]
+
+    noise_rng = np.random.default_rng(noise_seed)
+    slab_size = 256
+    for t0 in range(0, num_frames, slab_size):
+        sl = flat[t0 : t0 + slab_size]
+        if noise_std == "poisson":
+            sl[:] = noise_rng.poisson(np.clip(sl, 0, None))
+        else:
+            sl += noise_rng.normal(0, noise_std, sl.shape)
 
     rois.register_imaging(imaging)  # Link the ROIs to the imaging data
 
-    return rois, imaging
+    return rois, imaging, fluorescence
 
 
 def generate_fluorescence(
     num_frames: int,
     num_rois: int = 1,
     sampling_frequency: float = 30.0,
-    decay_seconds: float = 2.0,
+    decay_time: float = 2.0,
+    event_rate: float = 0.3,
     noise_std: float = 0.0,
-    bleaching_tau: float | None = None,
+    bleaching_time: float = np.inf,
     seed: int | None = None,
 ) -> FluorescenceData:
     """Generate synthetic fluorescence traces by convolving random spike events with an exponential kernel.
@@ -261,43 +328,47 @@ def generate_fluorescence(
         Number of independent fluorescence traces to generate.
     sampling_frequency : float, default: 30.0
         Sampling frequency in Hz.
-    decay_seconds : float, default: 2.0
+    decay_time : float, default: 2.0
         Time constant of the exponential decay kernel in seconds.
+    event_rate : float, default: 0.3
+        Mean spike-event rate in Hz. Each ROI's number of events is drawn as
+        ``round(uniform(0.5, 1.5) * event_rate * num_frames / sampling_frequency)``, scaling
+        with the recording's duration. Clamped to ``[0, num_frames]``.
     noise_std : float, default: 0.0
         Standard deviation of additive Gaussian noise. 0 means no noise.
-    bleaching_tau : float | None, default: None
-        Time constant of multiplicative photobleaching in seconds.
-        If None, no bleaching is applied.
+    bleaching_time : float, default: inf
+        Time constant of multiplicative photobleaching in seconds. The default of ``inf``
+        means no photobleaching.
     seed : int | None, default: None
         Random seed for reproducibility.
 
     Returns
     -------
     FluorescenceData
-        Named tuple with fields ``traces``, ``spikes``, and ``clean_traces``,
-        each of shape ``(num_frames, num_rois)`` as float32.
+        See :class:`FluorescenceData` for field descriptions.
     """
     from scipy.signal import lfilter
 
     rng = np.random.default_rng(seed)
 
-    # Generate binary spike trains
+    # Generate binary spike trains. Each event has unit amplitude, i.e. a single, isolated
+    # spike produces a dF/F peak of 1 (100%); this is close to single-AP responses reported
+    # for newer, high-sensitivity indicators like jGCaMP8m/8s (Zhang et al. 2023, Nature).
     spikes = np.zeros((num_frames, num_rois), dtype=np.float32)
     for roi_idx in range(num_rois):
-        num_events = rng.integers(5, 15)
+        num_events = round(rng.uniform(0.5, 1.5) * event_rate * num_frames / sampling_frequency)
+        num_events = min(max(num_events, 0), num_frames)
         event_times = rng.choice(num_frames, size=num_events, replace=False)
         spikes[event_times, roi_idx] = 1.0
 
     # Convolve spikes with exponential kernel via exact IIR recurrence: traces[t] = spikes[t] + g * traces[t-1]
-    g = np.exp(-1.0 / (decay_seconds * sampling_frequency))
+    g = np.exp(-1.0 / (decay_time * sampling_frequency))
     clean_traces = lfilter([1.0], [1.0, -g], spikes, axis=0).astype(np.float32)
 
-    # Apply bleaching and noise
-    traces = clean_traces.copy()
-    if bleaching_tau is not None:
-        # bleach acts as F0(t): F = (1 + dF/F) * F0(t), with F0 normalised to 1 at t=0
-        bleach = np.exp(-np.arange(num_frames) / (bleaching_tau * sampling_frequency), dtype=np.float32)
-        traces = (1.0 + clean_traces) * bleach[:, np.newaxis]
+    # traces acts as F = (1 + dF/F) * F0(t), with F0 normalised to 1 at t=0; bleaching_time=inf
+    # is exactly the no-bleaching limit, since bleach(t) = exp(-t / (inf * sf)) == 1 for all t.
+    bleach = np.exp(-np.arange(num_frames) / (bleaching_time * sampling_frequency), dtype=np.float32)
+    traces = (1.0 + clean_traces) * bleach[:, np.newaxis]
     if noise_std > 0:
         traces = traces + rng.normal(0, noise_std, (num_frames, num_rois)).astype(np.float32)
 

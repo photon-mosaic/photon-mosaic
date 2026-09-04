@@ -44,6 +44,9 @@ widgets = [
 suite2p-registration = [
   "suite2p==1.0.0.1",
 ]
+deconvolution = [
+  "oasis-deconv>=0.3.2",
+]
 dev = [
   "pytest",
   "pytest-cov",
@@ -54,6 +57,7 @@ dev = [
   "ruff",
   "setuptools-scm",
   "suite2p==1.0.0.1",
+  "oasis-deconv>=0.3.2",
 ]
 
 [build-system]
