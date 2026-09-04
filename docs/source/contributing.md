@@ -12,7 +12,7 @@ and [opening a pull request](#pull-requests).
 ## Creating a development environment
 
 To install ``photon-mosaic`` for development, first the
-[GitHub repository](https://github.com/photon-mosaic/photon-mosaic-pipeline)
+[GitHub repository](https://github.com/photon-mosaic/photon-mosaic)
 should be cloned. Then, you can change-directory
 to the cloned repository and run pip install with the developer tag:
 
@@ -52,7 +52,7 @@ Dependencies for building the documentation locally can be found at `docs/requir
 To install these, change directory to the `docs` folder in your terminal and type:
 
 ```
-pip install -r requirements.txt
+pip install -r docs/requirements.txt
 ```
 
 The command to build the documentation is:
