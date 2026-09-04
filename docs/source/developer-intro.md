@@ -36,6 +36,8 @@ On a conceptual level, analysing multi-photon time series typically means perfor
 While we can still _conceptually_ think of analysis as a linear sequence of steps, some algorithms simultaneously segment the ROIs and extract their temporal signal, e.g. by minimising a function that depends on both.
 :::
 
+![](_static/image-and-signal-processing.png)
+
 For image processing, `photon-mosaic` defines its own data structures to represent multi-photon time series (`Imaging` and `Epoch`) and ROIs (classes derived from `BaseROIs`). Signal extraction from ROIs, and further signal processing steps are encoded in `AnalyzerExtensions` which are wrapped into an `Analyzer` class.
 
 We provide notebooks demonstrating how we envision usage of `photon-mosaic` in [our examples folder on GitHub](https://github.com/photon-mosaic/photon-mosaic/tree/dev/examples).
