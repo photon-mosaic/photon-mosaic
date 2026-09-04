@@ -1,10 +1,10 @@
-"""Tests for FluorescenceNode, FluorescenceExtension, and DfOverFExtension."""
+"""Tests for FluorescenceNode, FluorescenceExtension, DfOverFExtension, and DeconvolutionExtension."""
 
 import numpy as np
 import pytest
 
 from photon_mosaic.core import create_roi_analyzer
-from photon_mosaic.core.generators import generate_random_imaging, generate_rois
+from photon_mosaic.core.generators import generate_fluorescence, generate_random_imaging, generate_rois
 from photon_mosaic.core.roianalyzer_core_extensions import (
     FluorescenceNode,
     _kde_mode_percentile,
@@ -405,6 +405,162 @@ def test_df_over_f_select_extension_data(analyzer_with_fluorescence, rois):
     analyzer_with_fluorescence.compute("df_over_f")
     sub = analyzer_with_fluorescence.get_extension("df_over_f")._select_extension_data(rois.roi_ids[:2])
     assert sub["df_over_f"].shape == (NUM_FRAMES, 2)
+
+
+# ---------------------------------------------------------------------------
+# DeconvolutionExtension
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def analyzer_with_df_over_f(analyzer_with_fluorescence):
+    analyzer_with_fluorescence.compute("df_over_f")
+    return analyzer_with_fluorescence
+
+
+def test_deconvolution_shape_dtype_finite(analyzer_with_df_over_f):
+    """Deconvolution output should have correct shape, float32 dtype, and finite values."""
+    analyzer_with_df_over_f.compute("deconvolution")
+    ext = analyzer_with_df_over_f.get_extension("deconvolution")
+    deconvolved = ext.get_data()
+    denoised = ext.data["denoised"]
+    assert deconvolved.shape == (NUM_FRAMES, NUM_ROIS)
+    assert denoised.shape == (NUM_FRAMES, NUM_ROIS)
+    assert deconvolved.dtype == np.float32
+    assert denoised.dtype == np.float32
+    assert np.isfinite(deconvolved).all()
+    assert np.isfinite(denoised).all()
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {},  # default: decay_time=None, rise_time=0 -> AR(1) auto-estimated
+        {"rise_time": None},  # both None -> AR(2), both auto-estimated
+        {"decay_time": 2.0},  # known decay, default rise=0 -> AR(1) with known decay
+        {"decay_time": 2.0, "rise_time": 0.1},  # both known -> AR(2) with known kinetics
+    ],
+)
+def test_deconvolution_kinetics_combinations_run_and_are_finite(analyzer_with_df_over_f, kwargs):
+    """Every supported decay_time/rise_time combination should run without error."""
+    analyzer_with_df_over_f.compute("deconvolution", **kwargs)
+    ext = analyzer_with_df_over_f.get_extension("deconvolution")
+    assert np.isfinite(ext.data["deconvolved"]).all()
+    assert np.isfinite(ext.data["denoised"]).all()
+
+
+def test_deconvolution_rise_time_without_decay_time_raises(analyzer_with_df_over_f):
+    """rise_time given without decay_time is ambiguous and should raise, matching oasis's own validation."""
+    with pytest.raises(ValueError, match="tau_d is required"):
+        analyzer_with_df_over_f.compute("deconvolution", rise_time=0.1)
+
+
+def test_deconvolution_unknown_kwarg_raises(analyzer_with_df_over_f):
+    """A misspelled/unknown keyword argument should raise instead of being silently ignored."""
+    with pytest.raises(TypeError, match="noisestd"):
+        analyzer_with_df_over_f.compute("deconvolution", noisestd=0.1)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"penalty": None},  # plain deconvolution, default lam=0/s_min=0
+        {"penalty": None, "lam": 0.5},  # plain deconvolution, explicit sparsity weight
+        {"penalty": None, "s_min": 0.1},  # plain deconvolution, explicit minimal spike size
+    ],
+)
+def test_deconvolution_penalty_none_runs_and_is_finite(analyzer_with_df_over_f, kwargs):
+    """penalty=None (plain, non-noise-constrained deconvolution) should run without error."""
+    analyzer_with_df_over_f.compute("deconvolution", **kwargs)
+    ext = analyzer_with_df_over_f.get_extension("deconvolution")
+    assert np.isfinite(ext.data["deconvolved"]).all()
+    assert np.isfinite(ext.data["denoised"]).all()
+
+
+def test_deconvolution_parallel_matches_serial(analyzer_with_df_over_f):
+    """ProcessPoolExecutor result should closely match serial computation.
+
+    Not bit-exact: OASIS's solver can diverge at floating-point-noise level between
+    processes (e.g. BLAS/FFT thread-count differences) -- not something it guarantees against.
+    """
+    analyzer_with_df_over_f.compute("deconvolution", n_jobs=1)
+    serial = analyzer_with_df_over_f.get_extension("deconvolution").get_data().copy()
+    analyzer_with_df_over_f.compute("deconvolution", n_jobs=2)
+    parallel = analyzer_with_df_over_f.get_extension("deconvolution").get_data()
+    np.testing.assert_allclose(serial, parallel, atol=1e-2)
+
+
+def test_deconvolution_get_data_recording(analyzer_with_df_over_f):
+    """get_data(outputs='recording') should return a NumpyRecording with the analyzer's
+    sampling_frequency, matching what _run actually used to deconvolve."""
+    from spikeinterface.core import NumpyRecording
+
+    analyzer_with_df_over_f.compute("deconvolution")
+    result = analyzer_with_df_over_f.get_extension("deconvolution").get_data(outputs="recording")
+    assert isinstance(result, NumpyRecording)
+    assert result.get_num_channels() == NUM_ROIS
+    assert result.sampling_frequency == SF
+
+
+def test_deconvolution_get_data_invalid_output(analyzer_with_df_over_f):
+    """get_data with an unsupported output type should raise ValueError."""
+    analyzer_with_df_over_f.compute("deconvolution")
+    with pytest.raises(ValueError, match="Unsupported output type"):
+        analyzer_with_df_over_f.get_extension("deconvolution").get_data(outputs="pandas")
+
+
+def test_deconvolution_select_extension_data(analyzer_with_df_over_f, rois):
+    """_select_extension_data should return only the requested ROI columns for both fields."""
+    analyzer_with_df_over_f.compute("deconvolution")
+    sub = analyzer_with_df_over_f.get_extension("deconvolution")._select_extension_data(rois.roi_ids[:2])
+    assert sub["deconvolved"].shape == (NUM_FRAMES, 2)
+    assert sub["denoised"].shape == (NUM_FRAMES, 2)
+
+
+def test_deconvolution_works_without_loaded_imaging(analyzer_with_df_over_f):
+    """need_imaging=False should hold in practice: no raw imaging should be required.
+
+    Simulates an analyzer whose raw imaging was never loaded (e.g. reloaded
+    from disk), where ``roi_analyzer.imaging`` raises. sampling_frequency
+    should fall back to ``roi_analyzer.sampling_frequency`` instead.
+    """
+    analyzer_with_df_over_f._imaging = None
+    analyzer_with_df_over_f._temporary_imaging = None
+    assert not analyzer_with_df_over_f.has_imaging()
+    assert not analyzer_with_df_over_f.has_temporary_imaging()
+
+    analyzer_with_df_over_f.compute("deconvolution")
+    result = analyzer_with_df_over_f.get_extension("deconvolution").get_data()
+    assert result.shape == (NUM_FRAMES, NUM_ROIS)
+
+
+def test_deconvolution_recovers_ground_truth_spikes_and_trace(analyzer_with_df_over_f):
+    """OASIS output should correlate strongly with the true spikes and clean trace.
+
+    Bypasses the (separately tested) baseline-estimation step by injecting
+    known noisy traces from :func:`generate_fluorescence` directly as the
+    ``df_over_f`` extension's data, isolating the deconvolution step itself.
+    """
+    ground_truth_frames = 1000
+    ground_truth = generate_fluorescence(
+        num_frames=ground_truth_frames,
+        num_rois=NUM_ROIS,
+        sampling_frequency=SF,
+        decay_time=2.0,
+        noise_std=0.2,
+        seed=SEED,
+    )
+    # traces == (1 + clean_traces) * bleach(t) + noise; bleach(t) == 1 since bleaching_time
+    # defaults to inf, so subtracting 1 gives dF/F == clean_traces + noise.
+    analyzer_with_df_over_f.get_extension("df_over_f").data["df_over_f"] = ground_truth.traces - 1.0
+    analyzer_with_df_over_f.compute("deconvolution")
+    ext = analyzer_with_df_over_f.get_extension("deconvolution")
+
+    for roi_idx in range(NUM_ROIS):
+        deconvolved_corr = np.corrcoef(ext.data["deconvolved"][:, roi_idx], ground_truth.spikes[:, roi_idx])[0, 1]
+        denoised_corr = np.corrcoef(ext.data["denoised"][:, roi_idx], ground_truth.clean_traces[:, roi_idx])[0, 1]
+        assert deconvolved_corr > 0.75
+        assert denoised_corr > 0.97
 
 
 # ---------------------------------------------------------------------------

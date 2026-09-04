@@ -1,0 +1,33 @@
+name: Docs
+
+on:
+  push:
+    branches:
+      - dev
+    tags:
+      - "*"
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+jobs:
+  build_sphinx_docs:
+    name: Build Sphinx Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: neuroinformatics-unit/actions/build_sphinx_docs@34bedfdfd70c6010be02182c9ca37fae8a1fd99d # v3.0.0
+        with:
+          python-version: 3.12
+          use-make: true
+
+  deploy_sphinx_docs:
+    name: Deploy Sphinx Docs
+    permissions:
+      contents: write
+    if: (github.event_name == 'push' && github.ref_type == 'tag') || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: neuroinformatics-unit/actions/deploy_sphinx_docs@34bedfdfd70c6010be02182c9ca37fae8a1fd99d # v3.0.0
+        with:
+          secret_input: ${{ secrets.GITHUB_TOKEN }}
+          use-make: true
