@@ -105,7 +105,7 @@ class TestFolderConstructor:
         assert masks.shape == (len(stats), ops["Ly"], ops["Lx"])
         assert masks.dtype == bool
         for i, stat in enumerate(stats):
-            assert np.all(masks[i][stat["ypix"], stat["xpix"]])
+            assert np.all(masks[i].todense()[stat["ypix"], stat["xpix"]])
 
     def test_image_masks_subset(self, suite2p_folder):
         folder, _, _ = suite2p_folder
@@ -114,8 +114,22 @@ class TestFolderConstructor:
         all_masks = rois.get_roi_image_masks()
 
         assert subset.shape[0] == 2
-        np.testing.assert_array_equal(subset[0], all_masks[0])
-        np.testing.assert_array_equal(subset[1], all_masks[2])
+        np.testing.assert_array_equal(subset[0].todense(), all_masks[0].todense())
+        np.testing.assert_array_equal(subset[1].todense(), all_masks[2].todense())
+
+    def test_image_masks_dense_when_sparse_false(self, suite2p_folder):
+        folder, ops, stats = suite2p_folder
+        rois = Suite2pRois(folder, sparse=False)
+        masks = rois.get_roi_image_masks()
+
+        assert isinstance(masks, np.ndarray)
+        assert masks.shape == (len(stats), ops["Ly"], ops["Lx"])
+        assert masks.dtype == bool
+        for i, stat in enumerate(stats):
+            assert np.all(masks[i][stat["ypix"], stat["xpix"]])
+
+        sparse_masks = Suite2pRois(folder).get_roi_image_masks()
+        np.testing.assert_array_equal(masks, sparse_masks.todense())
 
     def test_pixel_masks(self, suite2p_folder):
         folder, _, stats = suite2p_folder
@@ -153,7 +167,9 @@ class TestFolderConstructor:
         rois = Suite2pRois(folder)
         selected = rois.select_rois([1, 3])
         assert selected.get_num_rois() == 2
-        np.testing.assert_array_equal(selected.get_roi_image_masks(), rois.get_roi_image_masks(roi_ids=[1, 3]))
+        np.testing.assert_array_equal(
+            selected.get_roi_image_masks().todense(), rois.get_roi_image_masks(roi_ids=[1, 3]).todense()
+        )
 
     def test_no_imaging_registered_by_default(self, suite2p_folder):
         folder, _, _ = suite2p_folder
@@ -194,7 +210,30 @@ class TestFromStat:
         masks = rois.get_roi_image_masks()
         assert masks.shape == (3, 20, 24)
         for i, stat in enumerate(stats):
+            assert np.all(masks[i].todense()[stat["ypix"], stat["xpix"]])
+
+    def test_image_masks_dense_when_sparse_false(self):
+        rng = np.random.default_rng(1)
+        stats = _make_stats(rng, num_rois=3, height=20, width=24)
+        rois = Suite2pRois.from_stat(stats, shape=(20, 24, 1), sampling_frequency=15.0, sparse=False)
+
+        masks = rois.get_roi_image_masks()
+        assert isinstance(masks, np.ndarray)
+        assert masks.shape == (3, 20, 24)
+        for i, stat in enumerate(stats):
             assert np.all(masks[i][stat["ypix"], stat["xpix"]])
+
+        assert rois.get_roi_image_masks([]).shape == (0, 20, 24)
+        assert isinstance(rois.get_roi_image_masks([]), np.ndarray)
+
+    def test_image_masks_empty_roi_ids(self):
+        """get_roi_image_masks([]) should return an empty array, not raise."""
+        rng = np.random.default_rng(1)
+        stats = _make_stats(rng, num_rois=3, height=20, width=24)
+        rois = Suite2pRois.from_stat(stats, shape=(20, 24, 1), sampling_frequency=15.0)
+
+        assert rois.get_roi_image_masks([]).shape == (0, 20, 24)
+        assert rois.select_rois([]).get_roi_image_masks().shape == (0, 20, 24)
 
     def test_multiplane_with_assignments(self):
         rng = np.random.default_rng(2)

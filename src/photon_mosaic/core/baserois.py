@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import sparse
 from numpy.typing import ArrayLike
 from spikeinterface.core.base import BaseExtractor
 
@@ -130,9 +131,19 @@ class BaseRois(BaseExtractor):
         """
         return len(self.roi_ids)
 
-    def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> np.ndarray:  # pragma: no cover
+    def get_roi_image_masks(
+        self, roi_ids: list[int | str] | None = None
+    ) -> np.ndarray | sparse.SparseArray:  # pragma: no cover
         """Get the image mask for a specific ROI. The image mask can be binary or weighted and 2D (single plane)
         or 3D (multi-plane).
+
+        Subclasses may return either a dense ``np.ndarray`` or a sparse
+        `pydata/sparse <https://sparse.pydata.org/>`_ array (e.g. ``sparse.GCXS``). Each ROI
+        typically occupies only a tiny fraction of the full imaging volume, so a sparse
+        representation avoids the out-of-memory errors a dense array would cause once there
+        are many ROIs over a large (e.g. volumetric) field of view -- see photon-mosaic#103.
+        Callers that need actual pixel values (e.g. for plotting) should call ``.todense()``
+        explicitly rather than assume a dense array.
 
         Parameters
         ----------
@@ -141,7 +152,7 @@ class BaseRois(BaseExtractor):
 
         Returns
         -------
-        np.ndarray
+        np.ndarray | sparse.SparseArray
             The image mask for the specified ROIs.
         """
         raise NotImplementedError("This method should be implemented in subclasses.")
@@ -166,16 +177,17 @@ class BaseRois(BaseExtractor):
         pixel_masks = []
         image_masks = self.get_roi_image_masks(roi_ids)
         for img_mask in image_masks:
-            if self.num_planes == 1:
-                # 2D case
-                y_coords, x_coords = np.nonzero(img_mask)
-                weights = img_mask[y_coords, x_coords]
-                pixel_masks.append(np.column_stack([y_coords, x_coords, weights]))
+            if isinstance(img_mask, sparse.SparseArray):
+                # .coords/.data give pixel coordinates and weights directly -- no need to
+                # densify or scan for nonzero entries. coords has shape (ndim, nnz); unpacking
+                # it gives one array per spatial dimension (y, x, [z]).
+                coo = img_mask.tocoo()
+                coords, weights = coo.coords, coo.data
             else:
-                # 3D case
-                y_coords, x_coords, z_coords = np.nonzero(img_mask)
-                weights = img_mask[y_coords, x_coords, z_coords]
-                pixel_masks.append(np.column_stack([y_coords, x_coords, z_coords, weights]))
+                # Dense case (2D or 3D): np.nonzero returns one array per dimension.
+                coords = np.nonzero(img_mask)
+                weights = img_mask[coords]
+            pixel_masks.append(np.column_stack([*coords, weights]))
 
         return pixel_masks
 
@@ -224,8 +236,8 @@ class BaseRois(BaseExtractor):
             ``"binary"`` or ``"zarr"``.
         **save_kwargs
             For ``"binary"``: must include ``folder`` (str or Path).
-            For ``"zarr"``: must include ``zarr_path`` (str or Path).
-                Optional: ``saving_options`` (dict), ``storage_options`` (dict).
+            For ``"zarr"``: must include ``zarr_path`` (str or Path), pre-resolved by
+            ``BaseExtractor.save_to_zarr()`` from the public ``folder``/``name`` kwargs.
 
         Returns
         -------
@@ -246,7 +258,14 @@ class BaseRois(BaseExtractor):
         folder.mkdir(parents=True, exist_ok=True)
 
         image_masks = self.get_roi_image_masks()
-        np.save(folder / "roi_image_masks.npy", image_masks)
+        if isinstance(image_masks, sparse.SparseArray):
+            # np.save doesn't understand sparse arrays; sparse.save_npz stores the
+            # data/coords/shape directly instead of densifying.
+            mask_file = folder / "roi_image_masks.npz"
+            sparse.save_npz(mask_file, image_masks)
+        else:
+            mask_file = folder / "roi_image_masks.npy"
+            np.save(mask_file, image_masks)
         np.save(folder / "roi_ids.npy", np.array(self.roi_ids))
 
         metadata = dict(
@@ -257,7 +276,7 @@ class BaseRois(BaseExtractor):
             json.dump(metadata, f, indent=4)
 
         binary_rois = BinaryRois(
-            file_path=folder / "roi_image_masks.npy",
+            file_path=mask_file,
             sampling_frequency=self.sampling_frequency,
             roi_ids=self.roi_ids,
             shape=self.shape,
@@ -270,6 +289,7 @@ class BaseRois(BaseExtractor):
 
     def _save_zarr(self, **save_kwargs):
         import zarr
+        from spikeinterface.core.core_tools import retrieve_importing_provenance
 
         from .zarrrois import ZarrRois, save_rois_to_zarr
 
@@ -278,6 +298,10 @@ class BaseRois(BaseExtractor):
         storage_options = save_kwargs.get("storage_options", None)
 
         zarr_root = zarr.open(str(zarr_path), mode="w", storage_options=storage_options)
+        # Lets spikeinterface's own read_zarr() (called by BaseExtractor.save_to_zarr()
+        # right after this) reconstruct a ZarrRois directly, instead of falling back to its
+        # channel_ids/unit_ids recording/sorting check, which ROI data doesn't match.
+        zarr_root.attrs["zarr_class_info"] = retrieve_importing_provenance(ZarrRois)
         rois_group = zarr_root.create_group("rois")
         save_rois_to_zarr(self, rois_group, saving_options=saving_options)
         zarr.consolidate_metadata(zarr_root.store)

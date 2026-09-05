@@ -102,10 +102,13 @@ class FluorescenceNode(PipelineNode):
         self.neuropil = neuropil
         self.neuropil_weight = neuropil_weight
 
-        # Precompute flattened masks for efficient matrix multiplication
+        # Precompute flattened masks for efficient matrix multiplication. masks may be a
+        # dense ndarray or a sparse array (see BaseRois.get_roi_image_masks) -- reshape must
+        # be called with a single shape tuple for sparse arrays to accept it (unlike ndarray,
+        # which also accepts unpacked dimensions); a tuple works for both.
         masks = rois.get_roi_image_masks()  # (N, H, W) or (N, H, W, P)
         num_rois = masks.shape[0]
-        self._masks_flat = masks.reshape(num_rois, -1).astype(np.float32)  # (N, spatial)
+        self._masks_flat = masks.reshape((num_rois, -1)).astype(np.float32)  # (N, spatial)
 
         # Precompute flattened neuropil masks
         if neuropil is not None:

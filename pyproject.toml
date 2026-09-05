@@ -15,6 +15,7 @@ dependencies = [
     "roiextractors[full]>=0.8.0",
     "pydantic-settings>=2",
     "pooch",
+    "sparse",
 ]
 
 license = {text = "MIT License"}
@@ -97,6 +98,7 @@ ignore_missing_imports = true
 [tool.codespell]
 skip = '.git'
 check-hidden = true
+ignore-words-list = "coo"
 
 [tool.tox]
 legacy_tox_ini = """

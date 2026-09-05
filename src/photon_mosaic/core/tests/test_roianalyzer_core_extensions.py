@@ -90,6 +90,18 @@ def test_zero_mask_gives_zero_fluorescence(imaging, rois, chunk):
     np.testing.assert_array_equal(fluorescence, 0.0)
 
 
+def test_compute_matches_dense_result_with_sparse_masks(imaging, chunk):
+    """FluorescenceNode should give the same result for sparse (e.g. Suite2p-backed) ROIs
+    as for dense ones, since it operates polymorphically on whatever get_roi_image_masks
+    returns (see photon-mosaic#103)."""
+    sparse_rois = generate_rois(num_rois=NUM_ROIS, height=H, width=W, sampling_frequency=SF, seed=SEED, sparse=True)
+    dense_rois = generate_rois(num_rois=NUM_ROIS, height=H, width=W, sampling_frequency=SF, seed=SEED)
+
+    (fluorescence_sparse,) = FluorescenceNode(imaging, sparse_rois).compute(chunk, 0, NUM_FRAMES, 0, 0)
+    (fluorescence_dense,) = FluorescenceNode(imaging, dense_rois).compute(chunk, 0, NUM_FRAMES, 0, 0)
+    np.testing.assert_allclose(fluorescence_sparse, fluorescence_dense, rtol=1e-5)
+
+
 # ---------------------------------------------------------------------------
 # Neuropil subtraction — per-ROI (N, H, W)
 # ---------------------------------------------------------------------------

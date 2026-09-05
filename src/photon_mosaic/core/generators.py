@@ -79,6 +79,7 @@ def generate_rois(
     weighted: bool = False,
     num_planes: int = 1,
     seed: int | None = None,
+    sparse: bool = False,
 ) -> BaseRois:
     """Generate circular ROIs for testing.
 
@@ -102,6 +103,8 @@ def generate_rois(
         Whether to create weighted masks (values between 0 and 1) or binary masks (0 or 1), by default False
     num_planes : int, default: 1
         Number of planes for the ROIs, by default 1 (2D masks). If >1, creates 3D masks.
+    sparse : bool, default: False
+        If True, return the masks as a sparse.GCXS array instead of a dense np.ndarray.
     """
     if num_planes == 1:
         roi_masks = np.zeros((num_rois, height, width))
@@ -156,6 +159,12 @@ def generate_rois(
                 roi_masks[roi_idx] = weighted_mask
 
     roi_ids = np.arange(num_rois) if roi_ids is None else roi_ids
+    if sparse:
+        import sparse as sparse_module
+
+        # Compress along the ROI axis so per-ROI indexing (e.g. select_rois) stays fast --
+        # the default heuristic often picks a different axis, making it ~40x slower.
+        roi_masks = sparse_module.GCXS.from_numpy(roi_masks, compressed_axes=(0,))
     return NumpyRois(roi_image_masks=roi_masks, roi_ids=roi_ids, sampling_frequency=sampling_frequency)
 
 
@@ -283,7 +292,7 @@ def generate_imaging_with_rois(
     # (T, N) @ (N, H*W*P) -> (T, H*W*P) -> (T, H, W, P).
     video = imaging.epochs[0]._video
     masks = rois.get_roi_image_masks()  # (N, H, W) or (N, H, W, P)
-    masks_flat = masks.reshape(num_rois, -1).astype(video.dtype)
+    masks_flat = masks.reshape((num_rois, -1)).astype(video.dtype)
     # roi_baseline is float64 by default; cast to video.dtype, or the matmul below (out=flat)
     # silently allocates a full movie-sized float64 temporary for the mixed-precision multiply.
     signal = (roi_baseline[np.newaxis, :] * fluorescence.traces).astype(video.dtype)  # (T, N)

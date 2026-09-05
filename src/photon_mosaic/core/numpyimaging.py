@@ -9,6 +9,7 @@ NumpyRois
 """
 
 import numpy as np
+import sparse
 from numpy.typing import ArrayLike
 
 from .baseimaging import BaseImaging, BaseImagingEpoch
@@ -140,7 +141,7 @@ class NumpyImagingEpoch(BaseImagingEpoch):
 
 
 class NumpyRois(BaseRois):
-    """A ROIs object specified by numpy arrays for masks and traces."""
+    """A ROIs object specified by numpy or sparse pydata arrays for masks and traces."""
 
     def __init__(
         self,
@@ -148,12 +149,12 @@ class NumpyRois(BaseRois):
         sampling_frequency: float,
         roi_ids: ArrayLike | None = None,
     ):
-        """Create a NumpyRois object from numpy arrays.
+        """Create a NumpyRois object from numpy or sparse pydata arrays.
 
         Parameters
         ----------
         roi_image_masks : ArrayLike
-            Numpy array representing the image masks for each ROI
+            Numpy or sparse (e.g. `sparse.GCXS`) array representing the image masks for each ROI.
             Accepted dimensions are: (num_rois x height x width) for single-plane and
             (num_rois x height x width x num_planes) for multi-plane.
         sampling_frequency : float
@@ -182,8 +183,11 @@ class NumpyRois(BaseRois):
             "sampling_frequency": sampling_frequency,
             "roi_ids": roi_ids,
         }
+        if isinstance(roi_image_masks, sparse.SparseArray):
+            # sparse arrays aren't handled by spikeinterface's JSON encoder; fall back to pickle.
+            self._serializability["json"] = False
 
-    def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> list[np.ndarray]:
+    def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> np.ndarray | sparse.SparseArray:
         """Get the image masks for specific ROIs.
 
         Parameters
@@ -193,7 +197,7 @@ class NumpyRois(BaseRois):
 
         Returns
         -------
-        list[np.ndarray]
+        np.ndarray | sparse.SparseArray
             The image masks for the specified ROIs.
         """
         if roi_ids is None:
