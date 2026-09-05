@@ -105,7 +105,7 @@ class TestCreateMemory:
         assert analyzer.get_total_samples() == 100
 
     def test_get_dtype(self, analyzer):
-        assert analyzer.get_dtype() == np.float64
+        assert analyzer.get_dtype() == np.float32
 
     def test_is_read_only(self, analyzer):
         assert not analyzer.is_read_only()

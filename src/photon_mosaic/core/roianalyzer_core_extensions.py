@@ -208,7 +208,7 @@ class DfOverFExtension(AnalyzerExtension):
         if method == "maximin":  # maximin baseline estimation as in Suite2p
             from scipy.ndimage import gaussian_filter1d, maximum_filter1d, minimum_filter1d
 
-            fs = self.roi_analyzer.imaging.sampling_frequency
+            fs = self.roi_analyzer.sampling_frequency
             win = int(self.params["win_baseline"] * fs)
             win += 1 if win % 2 == 0 else 0  # ensure odd window
             F0 = gaussian_filter1d(F, sigma=self.params["sig_baseline"], axis=0)
@@ -217,7 +217,7 @@ class DfOverFExtension(AnalyzerExtension):
         elif method in ("percentile", "running_percentile"):  # running percentile baseline as in CaImAn
             from concurrent.futures import ProcessPoolExecutor
 
-            win = int(self.params["win_baseline"] * self.roi_analyzer.imaging.sampling_frequency)
+            win = int(self.params["win_baseline"] * self.roi_analyzer.sampling_frequency)
             n_jobs = fix_job_kwargs(job_kwargs).get("n_jobs", 1)
             prctile_baseline = self.params["prctile_baseline"]
             args = [(F[:, i].copy(), win, prctile_baseline) for i in range(F.shape[1])]
@@ -255,7 +255,7 @@ class DfOverFExtension(AnalyzerExtension):
 
             return NumpyRecording(
                 df_over_f_traces,
-                sampling_frequency=self.roi_analyzer.imaging.sampling_frequency,
+                sampling_frequency=self.roi_analyzer.sampling_frequency,
                 channel_ids=self.roi_analyzer.rois.roi_ids,
             )
         else:
@@ -264,6 +264,189 @@ class DfOverFExtension(AnalyzerExtension):
     def _select_extension_data(self, roi_ids):
         roi_indices = self.roi_analyzer.rois.ids_to_indices(roi_ids)
         return {"df_over_f": self.data["df_over_f"][:, roi_indices]}
+
+
+class DeconvolutionExtension(AnalyzerExtension):
+    """Extension to deconvolve neural activity from dF/F traces using OASIS.
+
+    Solves the noise-constrained sparse non-negative deconvolution problem
+    (Friedrich, Zhou & Paninski, PLOS Comput Biol 2017) to infer, for each
+    ROI, the most likely deconvolved activity trace and denoised calcium
+    trace underlying its dF/F signal.
+    """
+
+    extension_name = "deconvolution"
+    depend_on: list[str] = ["df_over_f"]
+    need_imaging = False
+    need_job_kwargs = True
+
+    def _set_params(
+        self,
+        decay_time: float | None = None,
+        rise_time: float | None = 0,
+        baseline: float | None = None,
+        baseline_nonneg: bool = False,
+        penalty: int | None = 1,
+        **params: Any,
+    ) -> dict[str, Any]:
+        """Set parameters for OASIS deconvolution.
+
+        Parameters
+        ----------
+        decay_time : float or None, optional
+            Decay time constant in seconds. If provided, sets the decay kinetics
+            directly instead of estimating it per ROI. Default is None.
+        rise_time : float or None, optional
+            Rise time constant in seconds, modeling the calcium kinetics as a
+            rise-and-decay (double exponential) process instead of
+            decay-only. Default is 0 (no rise, decay-only). Set both
+            `decay_time` and `rise_time` to None to auto-estimate a
+            rise-and-decay model instead of a decay-only one.
+        baseline : float or None, optional
+            Fixed baseline value. Optimized per ROI if not given. Unused
+            when `penalty` is None (treated as a fixed offset, default 0).
+            Default is None.
+        baseline_nonneg : bool, optional
+            Enforce a strictly non-negative estimated baseline. Default is
+            False, since the input is dF/F (already baseline-subtracted and
+            free to fluctuate below zero), unlike raw fluorescence. Unused
+            when `penalty` is None.
+        penalty : int or None, optional
+            Sparsity penalty: 1 for L1 (convex), 0 for L0. If None, skips
+            the noise-constrained optimization entirely and deconvolves
+            without imposing sparsity by default (`noise_std` and
+            `baseline_nonneg` are unused in this mode). Default is 1.
+
+        Advanced, undocumented keyword arguments are also accepted and
+        passed through to :func:`oasis.functions.deconvolve` for power
+        users: ``noise_std`` (overrides the per-ROI noise estimate that
+        otherwise controls the sparsity weight), ``refine_kinetics``
+        (number of large, isolated events used to refine the time
+        constant(s) per ROI — can make estimates worse on noisy or
+        low-event-count traces), and, only when `penalty` is None,
+        ``lam`` (fixed sparsity weight, default 0) and ``s_min`` (minimal
+        non-zero activity per bin, default 0).
+        """
+        lam = params.pop("lam", 0.0)
+        s_min = params.pop("s_min", 0.0)
+        noise_std = params.pop("noise_std", None)
+        refine_kinetics = params.pop("refine_kinetics", 0)
+        if params:
+            raise TypeError(f"_set_params() got unexpected keyword argument(s): {sorted(params)}")
+        return dict(
+            decay_time=decay_time,
+            rise_time=rise_time,
+            baseline=baseline,
+            baseline_nonneg=baseline_nonneg,
+            penalty=penalty,
+            lam=lam,
+            s_min=s_min,
+            noise_std=noise_std,
+            refine_kinetics=refine_kinetics,
+        )
+
+    def _run(self, verbose: bool = False, **job_kwargs) -> None:
+        from concurrent.futures import ProcessPoolExecutor
+
+        dff = self.roi_analyzer.get_extension("df_over_f").get_data()
+        fs = self.roi_analyzer.sampling_frequency
+        n_jobs = fix_job_kwargs(job_kwargs).get("n_jobs", 1)
+
+        # deconvolve() never mutates its input, and pickling a column slice (for the parallel
+        # path below) serializes just that slice's own data, not the whole dff matrix.
+        args = [(dff[:, i], fs, self.params) for i in range(dff.shape[1])]
+        if n_jobs == 1:
+            results = [_deconvolve_roi(a) for a in args]
+        else:
+            with ProcessPoolExecutor(max_workers=n_jobs) as ex:
+                results = list(ex.map(_deconvolve_roi, args))
+
+        self.data["denoised"] = np.stack([r[0] for r in results], axis=1).astype(np.float32)
+        self.data["deconvolved"] = np.stack([r[1] for r in results], axis=1).astype(np.float32)
+
+    def _get_data(self, outputs="numpy"):
+        """Return the deconvolved activity trace.
+
+        Parameters
+        ----------
+        outputs : str, optional
+            Output format. ``'numpy'`` returns an ``ndarray`` of shape ``(n_frames, n_rois)``.
+            ``'recording'`` wraps the traces in a :class:`~spikeinterface.core.NumpyRecording`.
+            Default is ``'numpy'``.
+
+        Returns
+        -------
+        np.ndarray or NumpyRecording
+            Deconvolved activity trace in the requested format. The
+            denoised calcium traces are available via
+            ``self.data["denoised"]``.
+        """
+        deconvolved = self.data["deconvolved"]
+        if outputs == "numpy":
+            return deconvolved
+        elif outputs == "recording":
+            from spikeinterface.core import NumpyRecording
+
+            return NumpyRecording(
+                deconvolved,
+                sampling_frequency=self.roi_analyzer.sampling_frequency,
+                channel_ids=self.roi_analyzer.rois.roi_ids,
+            )
+        else:
+            raise ValueError(f"Unsupported output type: {outputs}. Supported types are 'numpy' and 'recording'.")
+
+    def _select_extension_data(self, roi_ids):
+        roi_indices = self.roi_analyzer.rois.ids_to_indices(roi_ids)
+        return {
+            "denoised": self.data["denoised"][:, roi_indices],
+            "deconvolved": self.data["deconvolved"][:, roi_indices],
+        }
+
+
+def _deconvolve_roi(args: tuple) -> tuple[np.ndarray, np.ndarray]:
+    """Run OASIS deconvolution on a single ROI's dF/F trace.
+
+    Unpacks ``(y, framerate, params)`` — required as a module-level function
+    so it can be pickled by :class:`~concurrent.futures.ProcessPoolExecutor`.
+
+    Parameters
+    ----------
+    args : tuple
+        ``(y, framerate, params)`` where:
+
+        - ``y`` : dF/F trace for one ROI, shape ``(n_frames,)``.
+        - ``framerate`` : imaging sampling frequency in Hz.
+        - ``params`` : dict with keys ``decay_time``, ``rise_time``,
+          ``noise_std``, ``baseline``, ``baseline_nonneg``, ``penalty``,
+          ``refine_kinetics``, ``lam``, ``s_min``
+          (see :meth:`DeconvolutionExtension._set_params`).
+
+    Returns
+    -------
+    c : np.ndarray
+        Denoised calcium trace, shape ``(n_frames,)``.
+    s : np.ndarray
+        Deconvolved activity trace, shape ``(n_frames,)``.
+    """
+    from oasis.functions import deconvolve
+
+    y, framerate, params = args
+    kwargs = dict(
+        framerate=framerate,
+        sn=params["noise_std"],
+        b=params["baseline"],
+        b_nonneg=params["baseline_nonneg"],
+        optimize_g=params["refine_kinetics"],
+        penalty=params["penalty"],
+    )
+    if params["penalty"] is None:
+        # lam/s_min are only accepted by oasisAR1/oasisAR2 (via deconvolve's penalty=None
+        # path), not by constrained_oasisAR1/constrained_onnlsAR2 used for the default penalty.
+        kwargs["lam"] = params["lam"]
+        kwargs["s_min"] = params["s_min"]
+
+    c, s, _b, _g, _lam = deconvolve(y, tau_d=params["decay_time"], tau_r=params["rise_time"], **kwargs)
+    return c, s
 
 
 def _percentile_filter_roi(args: tuple) -> np.ndarray:
@@ -577,3 +760,4 @@ def _build_halo_neuropil_masks(
 
 
 register_result_extension(NeuropilExtension)
+register_result_extension(DeconvolutionExtension)
