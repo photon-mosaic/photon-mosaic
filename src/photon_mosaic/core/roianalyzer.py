@@ -1608,10 +1608,15 @@ class AnalyzerExtension:
                         df_group.create_dataset(name=col, data=col_data)
                     df_group.attrs["dataframe"] = True
                 else:
+                    # Wrap via an object array assignment rather than np.array([data], dtype=object):
+                    # the latter still invokes data.__array__ for array-like objects (e.g. sparse
+                    # arrays), which either densifies unexpectedly or raises outright.
+                    boxed = np.empty(1, dtype=object)
+                    boxed[0] = data
                     try:
                         group.create_dataset(
                             name=name,
-                            data=np.array([data], dtype=object),
+                            data=boxed,
                             object_codec=numcodecs.Pickle(),
                         )
                     except Exception:

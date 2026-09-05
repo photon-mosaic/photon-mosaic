@@ -1,15 +1,17 @@
-"""Tests for FluorescenceNode, FluorescenceExtension, DfOverFExtension, and DeconvolutionExtension."""
+"""Tests for FluorescenceNode, FluorescenceExtension, DfOverFExtension, NeuropilExtension, DeconvolutionExtension."""
 
 import numpy as np
 import pytest
 
-from photon_mosaic.core import create_roi_analyzer
+from photon_mosaic.core import create_roi_analyzer, load_roi_analyzer
 from photon_mosaic.core.generators import generate_fluorescence, generate_random_imaging, generate_rois
 from photon_mosaic.core.roianalyzer_core_extensions import (
     FluorescenceNode,
+    _build_halo_neuropil_masks,
     _kde_mode_percentile,
     _percentile_filter_roi,
 )
+from photon_mosaic.extractors.suite2prois import Suite2pRois
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -577,3 +579,201 @@ def test_kde_returns_valid_percentile():
     """KDE should return a value in [0, 100) for well-behaved data."""
     prct = _kde_mode_percentile(np.random.default_rng(0).standard_normal(1000))
     assert 0.0 <= prct < 100.0
+
+
+# ---------------------------------------------------------------------------
+# NeuropilExtension ("halo" / Suite2p-style ring mask)
+# ---------------------------------------------------------------------------
+
+# Suite2p's default min_neuropil_pixels (350) is a third of this file's 32x32 test frame, so
+# halo-mask tests use their own larger frame and a much smaller min_neuropil_pixels.
+NEUROPIL_H, NEUROPIL_W = 64, 64
+
+
+def _make_halo_stats(centers, radius=2):
+    """Small, well-separated square ROIs, for testing ring exclusion/weighting precisely."""
+    stats = []
+    for cy, cx in centers:
+        yy, xx = np.meshgrid(
+            np.arange(cy - radius, cy + radius + 1), np.arange(cx - radius, cx + radius + 1), indexing="ij"
+        )
+        ypix, xpix = yy.ravel(), xx.ravel()
+        stats.append(dict(ypix=ypix, xpix=xpix, lam=np.ones(len(ypix)), radius=float(radius)))
+    return stats
+
+
+@pytest.fixture
+def halo_stats():
+    return _make_halo_stats([(15, 15), (45, 45), (15, 45)])
+
+
+@pytest.fixture
+def suite2p_rois(halo_stats):
+    return Suite2pRois.from_stat(halo_stats, shape=(NEUROPIL_H, NEUROPIL_W, 1), sampling_frequency=SF)
+
+
+@pytest.fixture
+def neuropil_imaging():
+    return generate_random_imaging(
+        num_frames=NUM_FRAMES, height=NEUROPIL_H, width=NEUROPIL_W, sampling_frequency=SF, seed=SEED
+    )
+
+
+def test_halo_masks_shape_and_dtype(suite2p_rois):
+    masks = _build_halo_neuropil_masks(suite2p_rois.get_roi_image_masks(), min_neuropil_pixels=30)
+    assert masks.shape == (3, NEUROPIL_H, NEUROPIL_W)
+    assert masks.dtype == np.float32
+
+
+def test_halo_masks_ring_weights_sum_to_one(suite2p_rois):
+    masks = _build_halo_neuropil_masks(suite2p_rois.get_roi_image_masks(), min_neuropil_pixels=30)
+    dense = masks.todense()
+    for i in range(suite2p_rois.get_num_rois()):
+        assert dense[i].sum() == pytest.approx(1.0)
+
+
+def test_halo_masks_exclude_own_and_other_roi_pixels(halo_stats, suite2p_rois):
+    """Each ROI's ring should have zero weight at every pixel belonging to any ROI, not just itself."""
+    masks = _build_halo_neuropil_masks(suite2p_rois.get_roi_image_masks(), min_neuropil_pixels=30)
+    dense = masks.todense()
+    for i in range(len(halo_stats)):
+        for stat in halo_stats:
+            assert dense[i][stat["ypix"], stat["xpix"]].sum() == 0.0
+
+
+def test_halo_masks_works_with_generic_dense_masks(halo_stats):
+    """The mask-based helper should work with any dense (n_rois, Ly, Lx) mask array, not just Suite2p."""
+    dense_masks = np.zeros((len(halo_stats), NEUROPIL_H, NEUROPIL_W), dtype=bool)
+    for i, stat in enumerate(halo_stats):
+        dense_masks[i, stat["ypix"], stat["xpix"]] = True
+
+    masks = _build_halo_neuropil_masks(dense_masks, min_neuropil_pixels=30)
+    dense = masks.todense()
+    for i in range(len(halo_stats)):
+        assert dense[i].sum() == pytest.approx(1.0)
+        for stat in halo_stats:
+            assert dense[i][stat["ypix"], stat["xpix"]].sum() == 0.0
+
+
+def test_halo_masks_zero_rois():
+    masks = _build_halo_neuropil_masks(np.zeros((0, NEUROPIL_H, NEUROPIL_W), dtype=bool))
+    assert masks.shape == (0, NEUROPIL_H, NEUROPIL_W)
+
+
+def test_neuropil_extension_run_and_get_data(suite2p_rois, neuropil_imaging):
+    analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
+    analyzer.compute("neuropil", min_neuropil_pixels=30)
+    masks = analyzer.get_extension("neuropil").get_data()
+    assert masks.shape == (3, NEUROPIL_H, NEUROPIL_W)
+    dense = masks.todense()
+    for i in range(3):
+        assert dense[i].sum() == pytest.approx(1.0)
+
+
+def test_neuropil_extension_select_extension_data(suite2p_rois, neuropil_imaging):
+    analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
+    analyzer.compute("neuropil", min_neuropil_pixels=30)
+    sub = analyzer.get_extension("neuropil")._select_extension_data(suite2p_rois.roi_ids[:2])
+    assert sub["neuropil_masks"].shape == (2, NEUROPIL_H, NEUROPIL_W)
+
+
+def test_neuropil_extension_default_params(suite2p_rois, neuropil_imaging):
+    analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
+    analyzer.compute("neuropil", min_neuropil_pixels=30)
+    params = analyzer.get_extension("neuropil").params
+    assert params["method"] == "halo"
+    assert params["inner_neuropil_radius"] == 2
+    assert params["circular"] is False
+
+
+def test_neuropil_extension_unknown_method_raises(suite2p_rois, neuropil_imaging):
+    analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
+    with pytest.raises(ValueError, match="Unknown method"):
+        analyzer.compute("neuropil", method="bogus")
+
+
+def test_neuropil_extension_unknown_kwarg_raises(suite2p_rois, neuropil_imaging):
+    analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
+    with pytest.raises(TypeError, match="bogus_kwarg"):
+        analyzer.compute("neuropil", bogus_kwarg=1)
+
+
+def test_neuropil_extension_works_with_non_suite2p_rois(imaging, rois):
+    """NeuropilExtension('halo') derives pixel coordinates from get_roi_image_masks(), so it
+    works with any BaseRois, not only Suite2pRois -- this also matches the fact that
+    create_roi_analyzer(..., format="memory") snapshots ROIs into a plain NumpyRois internally,
+    so requiring a Suite2p-specific accessor would break even genuine Suite2pRois input."""
+    analyzer = create_roi_analyzer(rois, imaging, format="memory")
+    analyzer.compute("neuropil", min_neuropil_pixels=30)
+    masks = analyzer.get_extension("neuropil").get_data()
+    assert masks.shape == (NUM_ROIS, H, W)
+
+
+def test_neuropil_extension_multiplane_rois_raises(halo_stats):
+    multiplane_rois = Suite2pRois.from_stat(
+        halo_stats,
+        shape=(NEUROPIL_H, NEUROPIL_W, 2),
+        sampling_frequency=SF,
+        plane_assignments=np.zeros(len(halo_stats), dtype=int),
+    )
+    multiplane_imaging = generate_random_imaging(
+        num_frames=NUM_FRAMES, height=NEUROPIL_H, width=NEUROPIL_W, num_planes=2, sampling_frequency=SF, seed=SEED
+    )
+    analyzer = create_roi_analyzer(multiplane_rois, multiplane_imaging, format="memory")
+    with pytest.raises(NotImplementedError, match="single-plane"):
+        analyzer.compute("neuropil")
+
+
+def test_neuropil_extension_binary_folder_roundtrip(suite2p_rois, neuropil_imaging, tmp_path):
+    folder = tmp_path / "neuropil_binary"
+    analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="binary_folder", folder=folder)
+    analyzer.compute("neuropil", min_neuropil_pixels=30)
+    original = analyzer.get_extension("neuropil").get_data()
+
+    loaded = load_roi_analyzer(folder)
+    reloaded = loaded.get_extension("neuropil").get_data()
+    np.testing.assert_array_equal(reloaded.todense(), original.todense())
+
+
+def test_neuropil_extension_zarr_roundtrip(suite2p_rois, neuropil_imaging, tmp_path):
+    folder = tmp_path / "neuropil.zarr"
+    analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="zarr", folder=folder)
+    analyzer.compute("neuropil", min_neuropil_pixels=30)
+    original = analyzer.get_extension("neuropil").get_data()
+
+    loaded = load_roi_analyzer(folder)
+    reloaded = loaded.get_extension("neuropil").get_data()
+    np.testing.assert_array_equal(reloaded.todense(), original.todense())
+
+
+def test_fluorescence_extension_auto_uses_neuropil_extension(suite2p_rois, neuropil_imaging):
+    """FluorescenceExtension should automatically pick up a computed NeuropilExtension."""
+    analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
+    analyzer.compute("neuropil", min_neuropil_pixels=30)
+    neuropil_masks = analyzer.get_extension("neuropil").get_data()
+
+    neuropil_weight = 0.7
+    analyzer.compute("fluorescence", use_neuropil=True, neuropil_weight=neuropil_weight)
+    fluorescence = analyzer.get_extension("fluorescence").get_data()
+
+    chunk = neuropil_imaging.get_series(epoch_index=0)
+    chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
+    roi_masks_flat = suite2p_rois.get_roi_image_masks().reshape((3, -1)).astype(np.float32)
+    neuropil_flat = neuropil_masks.reshape((3, -1)).astype(np.float32)
+    expected = chunk_flat @ roi_masks_flat.T - neuropil_weight * (chunk_flat @ neuropil_flat.T)
+
+    np.testing.assert_allclose(fluorescence, expected, rtol=1e-4)
+
+
+def test_fluorescence_extension_use_neuropil_false_ignores_computed_extension(suite2p_rois, neuropil_imaging):
+    analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
+    analyzer.compute("neuropil", min_neuropil_pixels=30)
+    analyzer.compute("fluorescence", use_neuropil=False)
+    fluorescence = analyzer.get_extension("fluorescence").get_data()
+
+    chunk = neuropil_imaging.get_series(epoch_index=0)
+    chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
+    roi_masks_flat = suite2p_rois.get_roi_image_masks().reshape((3, -1)).astype(np.float32)
+    expected = chunk_flat @ roi_masks_flat.T
+
+    np.testing.assert_allclose(fluorescence, expected, rtol=1e-5)

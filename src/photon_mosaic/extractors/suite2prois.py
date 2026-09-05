@@ -221,5 +221,28 @@ class Suite2pRois(BaseRois):
         # the default heuristic often picks a different axis, making it ~40x slower.
         return sparse.GCXS.from_coo(sparse.stack(masks, axis=0), compressed_axes=(0,))
 
+    def get_stats(self, roi_ids: list[int | str] | None = None) -> list[dict[str, Any]]:
+        """Return the raw suite2p ``stat`` dicts for the given ROIs.
+
+        Unlike :meth:`get_roi_image_masks`, which keeps only ``ypix``/``xpix`` (as a binary
+        mask), this exposes the full per-ROI stat dict -- including ``lam`` and ``radius`` --
+        needed by consumers that call suite2p's own mask-construction functions directly (e.g.
+        ``suite2p.extraction.masks.create_cell_pix``/``create_neuropil_masks``).
+
+        Parameters
+        ----------
+        roi_ids : list[int | str] | None
+            The IDs of the ROIs. If None, all ROIs are returned.
+
+        Returns
+        -------
+        list[dict]
+            The stat dicts, in the order of ``roi_ids`` (or ``self.roi_ids`` if None). Returned
+            by reference, not copied -- callers must not mutate the result.
+        """
+        if roi_ids is None:
+            roi_ids = self.roi_ids.tolist()
+        return [self._stats[int(roi_id)] for roi_id in roi_ids]
+
 
 read_suite2p_rois = Suite2pRois
