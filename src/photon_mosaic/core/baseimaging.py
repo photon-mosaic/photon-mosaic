@@ -37,6 +37,7 @@ class BaseImaging(BaseExtractor, TimeSeries):
         dtype = self.get_dtype()
         sf_hz = self.sampling_frequency
 
+        # why is this in-line when convert_seconds_to_str and convert_bytes_to_str are used below? It seems like it could be a separate function for clarity.
         # Format sampling frequency
         if not sf_hz.is_integer():
             sampling_frequency_repr = f"{sf_hz:f} Hz"
@@ -74,9 +75,12 @@ class BaseImaging(BaseExtractor, TimeSeries):
         )
 
     def __repr__(self):
+        # missing docstring
+        # also why needed? this might just be me being dumb about good practices, but it seems like this is just calling _repr_header, which is already called in _repr_html_. Is there a reason to have both?
         return self._repr_header()
 
     def _repr_html_(self, display_name=True):
+        # missing docstring
         common_style = "margin-left: 10px;"
         border_style = "border:1px solid #ddd; padding:10px;"
 
@@ -176,9 +180,11 @@ class BaseImaging(BaseExtractor, TimeSeries):
         self.add_segment(epoch)
 
     def get_sampling_frequency(self):
+        # missing docstring
         return self._sampling_frequency
 
     def get_sample_size_in_bytes(self):
+        # missing docstring
         return self.get_num_pixels() * np.dtype(self.get_dtype()).itemsize
 
     def get_shape(self, segment_index: int | None = None) -> tuple:
@@ -253,6 +259,7 @@ class BaseImaging(BaseExtractor, TimeSeries):
         int
             The total number of frames.
         """
+        # why is this called get_num_frames when the other function is called get_num_samples? Is this a byproduct of this coming from spikeinterface? If so, it might be worth adding a comment to clarify that.
         return self.get_num_samples(segment_index=epoch_index)
 
     def get_total_frames(self) -> int:
