@@ -2,7 +2,7 @@
 
 from .baseimaging import BaseImaging
 
-
+# noticing that this file has a lot of defined types which looks different to the other files. Is this a style choice? If so, should it be consistent across all files? (i.e. either use defined types or not use defined types)
 def get_imaging_attributes(imaging: BaseImaging) -> dict:
     """Extract key attributes from a BaseImaging object for serialization.
 

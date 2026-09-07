@@ -42,6 +42,7 @@ class BaseRois(BaseExtractor):
         return f"{name}:\n{self.get_num_rois()} ROIs - {shape_repr}"
 
     def _repr_html_(self, display_name=True):
+        # no docstring
         common_style = "margin-left: 10px;"
         border_style = "border:1px solid #ddd; padding:10px;"
 
@@ -89,6 +90,7 @@ class BaseRois(BaseExtractor):
 
     @property
     def sampling_frequency(self):
+        # no docstring
         return self._sampling_frequency
 
     @property
@@ -102,6 +104,7 @@ class BaseRois(BaseExtractor):
         """
         return self._roi_ids
 
+    # super pedantic but in baseimaging.py all the @property methods are grouped together but here there interlaced - should this be consistent? (i.e. all @property methods together and all other methods together)
     def get_num_planes(self) -> int:
         """Get the number of planes.
 
@@ -198,7 +201,7 @@ class BaseRois(BaseExtractor):
 
     def register_imaging(self, imaging: BaseImaging):
         """
-        Register an imaging to the ROIs. If the ROIs and imaging both contain
+        Register an 'imaging object' or 'image'?? to the ROIs. If the ROIs and imaging (as before) both contain
         time information, the imaging's time information will be used.
 
         Parameters

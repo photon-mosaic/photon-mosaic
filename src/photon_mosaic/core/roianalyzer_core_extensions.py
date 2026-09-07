@@ -118,6 +118,7 @@ class FluorescenceNode(PipelineNode):
         else:
             self._neuropil_flat = None
 
+    # why not just return float32 directly for consistency with the compute method?
     def get_dtype(self):
         return np.float32
 
@@ -345,6 +346,20 @@ def _kde_mode_percentile(data: np.ndarray, N: int = 2**12) -> float:
     sq = (dct_data[1:] / 2) ** 2
 
     def fixed_point(t):
+        '''
+        Fixed-point iteration function for bandwidth selection.
+
+        Parameters
+        ----------
+        t : float
+            Current estimate of the bandwidth.
+
+        Returns
+        -------
+        float
+            Difference between the current estimate and the updated estimate.
+        ''' 
+        # wasn't sure what this did but this is what Claude auto-completed. does it make sense?? 
         ell = 7
         f = 2 * np.pi ** (2 * ell) * np.sum(i_sq**ell * sq * np.exp(-i_sq * np.pi**2 * t))
         for s in range(ell, 1, -1):

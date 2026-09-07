@@ -88,9 +88,11 @@ class BinaryImaging(BaseImaging):
         }
 
     def is_binary_compatible(self) -> bool:
+        # docstring missing
         return True
 
     def get_binary_description(self):
+        # docstring missing
         d = dict(
             file_paths=self._kwargs["file_paths"],
             dtype=np.dtype(self._kwargs["dtype"]),
@@ -138,6 +140,8 @@ class BinaryImagingEpoch(BaseImagingEpoch):
         end_frame: int,
         plane_indices: slice | np.ndarray | None = None,
     ) -> np.ndarray:
+        # docstring missing
+
         # Calculate byte offsets for start and end frames
         start_byte = self.file_offset + start_frame * self.bytes_per_sample
         end_byte = self.file_offset + end_frame * self.bytes_per_sample
@@ -241,6 +245,7 @@ class BinaryFolderImaging(BinaryImaging):
         self._kwargs = dict(folder_path=str(Path(folder_path).absolute()))
         self._bin_kwargs = d["kwargs"]
 
+    # seems like a repeat to above is_binary_compatible and get_binary_description methods, but for folders? feels like there might be way to combine? or maybe naming should be slightly different to avoid confusion? 
     def is_binary_compatible(self) -> bool:
         return True
 

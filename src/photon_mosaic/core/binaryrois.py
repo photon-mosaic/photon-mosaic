@@ -51,6 +51,7 @@ class BinaryRois(BaseRois):
         }
 
     def get_roi_image_masks(self, roi_ids=None):
+        # docstring?
         masks = np.load(self._file_path)
         if roi_ids is None:
             return masks

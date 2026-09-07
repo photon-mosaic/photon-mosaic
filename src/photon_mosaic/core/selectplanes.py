@@ -1,3 +1,6 @@
+''' 
+Lazy proxy imaging that exposes only a selected subset of planes from a parent imaging object.
+'''
 from collections.abc import Sequence
 
 import numpy as np
@@ -11,6 +14,7 @@ class SelectPlanesImaging(BaseImaging):
 
     @staticmethod
     def _validate_plane_ids(plane_ids: np.ndarray, available_plane_ids: list | np.ndarray, error_suffix: str) -> None:
+        '''Validate that the requested plane IDs are a subset of the available plane IDs.'''
         available_plane_ids = set(np.asarray(available_plane_ids).tolist())
         for plane_id in plane_ids:
             if plane_id not in available_plane_ids:

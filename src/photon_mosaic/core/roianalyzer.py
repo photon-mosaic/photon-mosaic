@@ -294,6 +294,27 @@ class RoiAnalyzer:
 
     @classmethod
     def create_binary_folder(cls, folder, rois, imaging, imaging_attributes, backend_options):
+        '''
+        Create a RoiAnalyzer with the "binary_folder" backend.
+        Parameters
+        ----------
+        folder : str or Path
+            Path to the folder where the binary data will be stored.
+        rois : NumpyRois
+            ROI data to be associated with the analyzer.
+        imaging : optional
+            Imaging data to be associated with the analyzer.
+        imaging_attributes : dict
+            Attributes describing the imaging data.
+        backend_options : dict
+            Additional options for the backend.
+
+        Returns
+        -------
+        RoiAnalyzer
+            An instance of RoiAnalyzer configured to use the "binary_folder" backend.
+        '''
+        # once again just autocompleting w Claude/
         folder = Path(folder)
         if folder.is_dir():
             raise ValueError(f"Folder already exists: {folder}")
