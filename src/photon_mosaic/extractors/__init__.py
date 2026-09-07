@@ -45,3 +45,9 @@ def _setup_dynamic_imports():
 # Execute setup and clean up
 _setup_dynamic_imports()
 del _setup_dynamic_imports
+
+# Convenience builder for ScanImage multi-ROI files. Imported after the dynamic setup so the
+# generated loaders it relies on are already bound.
+from .scanimage_multifield import multifield_from_scanimage  # noqa: E402
+
+__all__.append("multifield_from_scanimage")
