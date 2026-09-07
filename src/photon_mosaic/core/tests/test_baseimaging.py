@@ -116,6 +116,26 @@ def test_baseimaging_constructor_with_2d_dhape():
     assert base_imaging.shape == (50, 50, 1)
 
 
+def test_baseimaging_is_registered_defaults_false_and_is_settable():
+    imaging = BaseImaging(sampling_frequency=15.0, shape=(8, 8))
+    assert imaging.is_registered is False
+
+    imaging.is_registered = True
+    assert imaging.is_registered is True
+
+    # The flag can also be set at construction
+    registered = BaseImaging(sampling_frequency=15.0, shape=(8, 8), is_registered=True)
+    assert registered.is_registered is True
+
+
+def test_baseimaging_is_registered_propagates_via_copy_metadata():
+    parent = BaseImaging(sampling_frequency=15.0, shape=(8, 8), is_registered=True)
+    child = BaseImaging(sampling_frequency=15.0, shape=(8, 8))
+    assert child.is_registered is False
+    parent.copy_metadata(child)
+    assert child.is_registered is True
+
+
 def test_baseimaging_multi_epoch_requires_epoch_index():
     sf = 10.0
     h, w = 3, 4
