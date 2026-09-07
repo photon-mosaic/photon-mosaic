@@ -14,5 +14,6 @@ from .roianalyzer import (
     register_result_extension,
 )
 from .roianalyzer_core_extensions import FluorescenceExtension
+from .selectplanes import select_planes
 from .split import SelectEpochImaging, split_epochs
 from .zarrrois import ZarrRois
