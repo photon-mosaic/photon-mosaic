@@ -630,7 +630,8 @@ class NeuropilExtension(AnalyzerExtension):
       long as each ROI's own mask is confined to a single plane (e.g. well-separated mesoscope
       planes) -- each plane's ROIs are then treated as an independent 2D problem. A genuinely
       volumetric ROI spanning multiple planes is not yet supported (would need a true 3D
-      "shell" neuropil mask, e.g. as in Suite3D, rather than this per-plane approach).
+      "shell" neuropil mask, e.g. as in `Suite3D <https://www.biorxiv.org/content/10.1101/2025.03.26.645628v2.full>`_
+      (`code <https://github.com/alihaydaroglu/suite3d>`_), rather than this per-plane approach).
 
     Once computed, this extension is picked up automatically by :class:`FluorescenceExtension`
     (see its ``use_neuropil``/``neuropil_weight`` params) -- just call
@@ -749,7 +750,9 @@ def _build_surround_neuropil_masks(
     ring only ever excludes/competes with same-plane neighbors. This is correct for
     well-separated planes (e.g. mesoscope acquisitions where each ROI shows up in exactly one
     plane) but not for genuinely volumetric ROIs spanning multiple planes -- that would need a
-    true 3D "shell" neuropil mask (e.g. as in Suite3D) and raises ``NotImplementedError``.
+    true 3D "shell" neuropil mask (e.g. as in
+    `Suite3D <https://www.biorxiv.org/content/10.1101/2025.03.26.645628v2.full>`_, code at
+    https://github.com/alihaydaroglu/suite3d) and raises ``NotImplementedError``.
 
     Parameters
     ----------
