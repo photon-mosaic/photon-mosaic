@@ -840,14 +840,23 @@ def _build_surround_neuropil_masks(
             circular=circular,
         )
 
-    neuropil_ipix: list = [None] * n_rois
+    # An all-zero ROI (no pixels) gets an all-zero ring directly: suite2p's rectangular (the
+    # default, non-circular) growth path calls .min()/.max() on a ROI's own pixel coordinates
+    # while extending it, which raises on an empty array. Such a ROI can never contribute any
+    # cell pixels either, so simply excluding it from the suite2p calls below changes nothing
+    # for the other ROIs.
+    neuropil_ipix: list = [np.zeros(0, dtype=np.intp)] * n_rois
     if n_planes == 1:
-        neuropil_ipix = list(_cell_pix_and_neuropil_ipix(stats))
+        non_empty = [i for i in range(n_rois) if len(stats[i]["ypix"])]
+        if non_empty:
+            ipix = _cell_pix_and_neuropil_ipix([stats[i] for i in non_empty])
+            for local_i, global_i in enumerate(non_empty):
+                neuropil_ipix[global_i] = ipix[local_i]
     else:
         # Each plane's ROIs are solved as an independent 2D problem (see docstring): a ring
         # only excludes/competes with pixels from the same plane's other ROIs.
         for p in range(n_planes):
-            roi_indices_p = np.flatnonzero(roi_planes == p)
+            roi_indices_p = [i for i in np.flatnonzero(roi_planes == p) if len(stats[i]["ypix"])]
             if len(roi_indices_p) == 0:
                 continue
             ipix_p = _cell_pix_and_neuropil_ipix([stats[i] for i in roi_indices_p])

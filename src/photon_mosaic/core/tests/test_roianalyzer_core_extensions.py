@@ -778,6 +778,25 @@ def test_surround_masks_empty_ring_when_no_non_roi_pixels_available():
     assert dense[1].sum() == 0.0
 
 
+def test_surround_masks_all_zero_roi_does_not_raise():
+    """An ROI with no pixels at all (e.g. a detection that ended up empty) must not be passed
+    to suite2p's create_neuropil_masks: its rectangular (default, non-circular) growth path
+    calls .min()/.max() on the ROI's own pixel coordinates, which raises on an empty array.
+    Such a ROI gets an all-zero ring directly instead, and doesn't affect its neighbors'
+    rings."""
+    masks = np.zeros((3, NEUROPIL_H, NEUROPIL_W), dtype=bool)
+    masks[0, 15:20, 15:20] = True
+    # masks[1] stays all-zero -- no pixels anywhere
+    masks[2, 45:50, 45:50] = True
+
+    result = _build_surround_neuropil_masks(masks, min_neuropil_pixels=30)
+    dense = result.todense()
+    assert result.shape == (3, NEUROPIL_H, NEUROPIL_W)
+    assert dense[1].sum() == 0.0
+    assert dense[0].sum() == pytest.approx(1.0)
+    assert dense[2].sum() == pytest.approx(1.0)
+
+
 def test_surround_masks_circular_differs_from_rectangular():
     """circular=True should actually change the ring geometry -- not covered by any other
     test, which all use the default circular=False."""
