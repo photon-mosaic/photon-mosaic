@@ -56,6 +56,7 @@ dev = [
   "mypy",
   "pre-commit",
   "ruff",
+  "nbstripout",
   "setuptools-scm",
   "suite2p==1.0.0.1",
   "oasis-deconv>=0.3.2",
