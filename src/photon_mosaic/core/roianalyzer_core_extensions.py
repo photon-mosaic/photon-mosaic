@@ -145,20 +145,18 @@ class FluorescenceNode(PipelineNode):
         # non-overlapping ROIs is diagonal with each entry ||mask_n||^2 (L2 norm squared, not
         # L1) -- so the correctly-scaled trace divides by L2 squared, not L1. This L1->L2
         # rescale step is itself a no-op for binary masks (mask**2 == mask, so L1 == L2^2 --
-        # true for every current mask source: Suite2pRois, generate_rois's default). That does
-        # NOT mean binary masks are unaffected overall, though: the L1-normalization above (not
-        # this rescale) is what changes F from a raw per-ROI pixel *sum* (the pre-neuropil-fix
-        # behavior) to a per-pixel *mean*, for every mask -- binary included. That scale change
-        # is deliberate (see above -- matching Suite2p's F/Fneu mean convention so neuropil
-        # subtraction is dimensionally meaningful), not a side effect specific to weighted
-        # masks. It's harmless for dF/F (a per-ROI constant scale factor cancels in
-        # (F - F0) / F0) but does change raw `fluorescence` values for every existing binary
-        # mask, contrary to what an earlier revision of this comment claimed. Extracting via L1
-        # first (for neuropil-subtraction consistency, above) and rescaling the result by
-        # L1/L2^2 afterwards is algebraically identical to extracting via L2^2 directly and
-        # rescaling the neuropil term by the same factor -- scalar multiplication distributes
-        # over the subtraction -- so this order also keeps the neuropil subtraction itself
-        # correctly in Suite2p's mean-scale convention.
+        # true for every current mask source: Suite2pRois, generate_rois's default). The
+        # L1-normalization above is not a no-op for binary masks, though: it changes F from a
+        # raw per-ROI pixel sum to a per-pixel mean, for every mask, binary included --
+        # deliberate (matching Suite2p's F/Fneu mean convention so neuropil subtraction is
+        # dimensionally meaningful), not specific to weighted masks. Harmless for dF/F (a
+        # per-ROI constant scale factor cancels in (F - F0) / F0), but does change raw
+        # `fluorescence` values for every binary mask. Extracting via L1 first (for
+        # neuropil-subtraction consistency, above) and rescaling the result by L1/L2^2
+        # afterwards is algebraically identical to extracting via L2^2 directly and rescaling
+        # the neuropil term by the same factor -- scalar multiplication distributes over the
+        # subtraction -- so this order also keeps the neuropil subtraction itself correctly in
+        # Suite2p's mean-scale convention.
         l2sq_norm = _row_norm((masks_flat**2).sum(axis=1))
         self._rescale_to_l2 = (l1_norm / l2sq_norm).reshape(1, -1)  # (1, N), for compute()
 
