@@ -626,8 +626,11 @@ class NeuropilExtension(AnalyzerExtension):
       data), since ``RoiAnalyzer`` always stores its own in-memory/on-disk snapshot of the ROIs
       rather than the original object passed to ``create_roi_analyzer`` (e.g. ``format="memory"``
       always copies into a plain ``NumpyRois``, so a `Suite2pRois`-specific accessor would not be
-      reachable via ``roi_analyzer.rois`` in the common case). Multi-plane ROIs are not yet
-      supported.
+      reachable via ``roi_analyzer.rois`` in the common case). Multi-plane ROIs are supported as
+      long as each ROI's own mask is confined to a single plane (e.g. well-separated mesoscope
+      planes) -- each plane's ROIs are then treated as an independent 2D problem. A genuinely
+      volumetric ROI spanning multiple planes is not yet supported (would need a true 3D
+      "shell" neuropil mask, e.g. as in Suite3D, rather than this per-plane approach).
 
     Once computed, this extension is picked up automatically by :class:`FluorescenceExtension`
     (see its ``use_neuropil``/``neuropil_weight`` params) -- just call
@@ -684,13 +687,6 @@ class NeuropilExtension(AnalyzerExtension):
         method = self.params["method"]
         rois = self.roi_analyzer.rois
 
-        if rois.num_planes > 1:
-            raise NotImplementedError(
-                f"NeuropilExtension currently only supports single-plane ROIs "
-                f"(got num_planes={rois.num_planes}). Multi-plane surround neuropil masks are not "
-                "yet implemented."
-            )
-
         if method == "surround":
             masks = rois.get_roi_image_masks()
             self.data["neuropil_masks"] = _build_surround_neuropil_masks(
@@ -709,9 +705,10 @@ class NeuropilExtension(AnalyzerExtension):
         Returns
         -------
         sparse.GCXS
-            Shape ``(n_rois, Ly, Lx)``. Each ROI's ring pixels sum to 1.0 (an unweighted mean
-            over the ring, matching suite2p's own ``Fneu`` convention), except ROIs whose ring
-            ended up empty (e.g. fully surrounded by other ROIs), which get an all-zero row.
+            Shape ``(n_rois, Ly, Lx)``, or ``(n_rois, Ly, Lx, n_planes)`` for multi-plane ROIs.
+            Each ROI's ring pixels sum to 1.0 (an unweighted mean over the ring, matching
+            suite2p's own ``Fneu`` convention), except ROIs whose ring ended up empty (e.g.
+            fully surrounded by other ROIs), which get an all-zero row.
         """
         return self.data["neuropil_masks"]
 
@@ -746,17 +743,26 @@ def _build_surround_neuropil_masks(
     roughly circular shape (``sqrt(n_pixels / pi)``); ``lam`` is taken from the mask's own
     values, falling back to uniform weights for all-zero/binary masks.
 
+    Multi-plane input (``masks.ndim == 4``, shape ``(n_rois, Ly, Lx, n_planes)``) is supported
+    as long as every ROI's own mask is confined to a single plane -- each plane's ROIs are then
+    treated as an independent 2D problem via suite2p's (inherently 2D) mask functions, so a
+    ring only ever excludes/competes with same-plane neighbors. This is correct for
+    well-separated planes (e.g. mesoscope acquisitions where each ROI shows up in exactly one
+    plane) but not for genuinely volumetric ROIs spanning multiple planes -- that would need a
+    true 3D "shell" neuropil mask (e.g. as in Suite3D) and raises ``NotImplementedError``.
+
     Parameters
     ----------
     masks : np.ndarray | sparse.SparseArray
-        ROI image masks, shape ``(n_rois, Ly, Lx)`` (e.g. from ``BaseRois.get_roi_image_masks()``).
+        ROI image masks, shape ``(n_rois, Ly, Lx)`` or ``(n_rois, Ly, Lx, n_planes)`` (e.g.
+        from ``BaseRois.get_roi_image_masks()``).
     inner_neuropil_radius, min_neuropil_pixels, circular, lam_percentile
         Passed through to suite2p's ``create_cell_pix``/``create_neuropil_masks``.
 
     Returns
     -------
     sparse.GCXS
-        Shape ``(n_rois, Ly, Lx)``, dtype float32. Ring pixels sum to 1.0 per ROI; ROIs whose
+        Same shape as ``masks``, dtype float32. Ring pixels sum to 1.0 per ROI; ROIs whose
         ring ended up empty get an all-zero row (no neuropil subtraction for that ROI).
     """
     import sparse
@@ -769,47 +775,94 @@ def _build_surround_neuropil_masks(
             "'pip install \"photon-mosaic[suite2p-registration]\"'."
         ) from e
 
-    n_rois, Ly, Lx = masks.shape
-    if n_rois == 0:
-        return sparse.GCXS.from_numpy(np.zeros((0, Ly, Lx), dtype=np.float32), compressed_axes=(0,))
+    if masks.ndim == 3:
+        n_rois, Ly, Lx = masks.shape
+        n_planes = 1
+    elif masks.ndim == 4:
+        n_rois, Ly, Lx, n_planes = masks.shape
+    else:
+        raise ValueError(f"Expected masks with 3 or 4 dimensions (n_rois, Ly, Lx[, n_planes]), got {masks.shape}")
 
+    out_shape = (0, Ly, Lx) if masks.ndim == 3 else (0, Ly, Lx, n_planes)
+    if n_rois == 0:
+        return sparse.GCXS.from_numpy(np.zeros(out_shape, dtype=np.float32), compressed_axes=(0,))
+
+    # roi_planes[i] is only meaningful (and only used) when masks.ndim == 4.
+    roi_planes = np.zeros(n_rois, dtype=int)
     stats = []
     for i in range(n_rois):
         roi_mask = masks[i]
         if isinstance(roi_mask, sparse.SparseArray):
             coo = roi_mask.tocoo()
-            ypix, xpix = coo.coords
-            lam = np.asarray(coo.data, dtype=np.float64)
+            coords, data = coo.coords, np.asarray(coo.data, dtype=np.float64)
         else:
-            ypix, xpix = np.nonzero(roi_mask)
-            lam = np.asarray(roi_mask[ypix, xpix], dtype=np.float64)
+            nz = np.nonzero(roi_mask)
+            coords, data = np.stack(nz), np.asarray(roi_mask[nz], dtype=np.float64)
+
+        if masks.ndim == 4:
+            ypix, xpix, plane_idx = coords[0], coords[1], coords[2]
+            planes_present = np.unique(plane_idx)
+            if len(planes_present) > 1:
+                raise NotImplementedError(
+                    f"ROI {i} spans multiple planes ({planes_present.tolist()}). "
+                    "NeuropilExtension(method='surround') only supports ROIs confined to a "
+                    "single plane each (e.g. well-separated mesoscope planes); a genuinely "
+                    "volumetric neuropil mask (Suite3D-style 3D shell) is not yet implemented."
+                )
+            if len(planes_present):
+                roi_planes[i] = int(planes_present[0])
+        else:
+            ypix, xpix = coords[0], coords[1]
+
+        lam = data
         if len(ypix) == 0 or lam.sum() <= 0:
             lam = np.ones(len(ypix))
         radius = np.sqrt(len(ypix) / np.pi) if len(ypix) > 0 else 1.0
         stats.append({"ypix": ypix, "xpix": xpix, "lam": lam, "radius": radius})
 
-    cell_pix = create_cell_pix(stats, Ly, Lx, lam_percentile=lam_percentile)
-    neuropil_ipix = create_neuropil_masks(
-        ypixs=[s["ypix"] for s in stats],
-        xpixs=[s["xpix"] for s in stats],
-        cell_pix=cell_pix,
-        inner_neuropil_radius=inner_neuropil_radius,
-        min_neuropil_pixels=min_neuropil_pixels,
-        circular=circular,
-    )
+    def _cell_pix_and_neuropil_ipix(stats_subset):
+        cell_pix = create_cell_pix(stats_subset, Ly, Lx, lam_percentile=lam_percentile)
+        return create_neuropil_masks(
+            ypixs=[s["ypix"] for s in stats_subset],
+            xpixs=[s["xpix"] for s in stats_subset],
+            cell_pix=cell_pix,
+            inner_neuropil_radius=inner_neuropil_radius,
+            min_neuropil_pixels=min_neuropil_pixels,
+            circular=circular,
+        )
+
+    neuropil_ipix: list = [None] * n_rois
+    if n_planes == 1:
+        neuropil_ipix = list(_cell_pix_and_neuropil_ipix(stats))
+    else:
+        # Each plane's ROIs are solved as an independent 2D problem (see docstring): a ring
+        # only excludes/competes with pixels from the same plane's other ROIs.
+        for p in range(n_planes):
+            roi_indices_p = np.flatnonzero(roi_planes == p)
+            if len(roi_indices_p) == 0:
+                continue
+            ipix_p = _cell_pix_and_neuropil_ipix([stats[i] for i in roi_indices_p])
+            for local_i, global_i in enumerate(roi_indices_p):
+                neuropil_ipix[global_i] = ipix_p[local_i]
 
     ring_masks = []
-    for ipix in neuropil_ipix:
+    for i, ipix in enumerate(neuropil_ipix):
         ipix = np.asarray(ipix)
         n_pixels = len(ipix)
+        shape = (Ly, Lx) if masks.ndim == 3 else (Ly, Lx, n_planes)
         if n_pixels == 0:
             ring_masks.append(
-                sparse.COO(np.zeros((2, 0), dtype=np.intp), np.zeros(0, dtype=np.float32), shape=(Ly, Lx))
+                sparse.COO(np.zeros((len(shape), 0), dtype=np.intp), np.zeros(0, dtype=np.float32), shape=shape)
             )
             continue
         ring_y, ring_x = np.unravel_index(ipix, (Ly, Lx))
         weights = np.full(n_pixels, 1.0 / n_pixels, dtype=np.float32)
-        ring_masks.append(sparse.COO(np.stack([ring_y, ring_x]), weights, shape=(Ly, Lx)))
+        if masks.ndim == 3:
+            coords = np.stack([ring_y, ring_x])
+        else:
+            plane_coord = np.full(n_pixels, roi_planes[i], dtype=np.intp)
+            coords = np.stack([ring_y, ring_x, plane_coord])
+        ring_masks.append(sparse.COO(coords, weights, shape=shape))
 
     return sparse.GCXS.from_coo(sparse.stack(ring_masks, axis=0), compressed_axes=(0,))
 

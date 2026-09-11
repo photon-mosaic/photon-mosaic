@@ -683,6 +683,34 @@ def test_surround_masks_zero_rois():
     assert masks.shape == (0, NEUROPIL_H, NEUROPIL_W)
 
 
+def test_surround_masks_multiplane_confines_ring_to_same_plane():
+    """Multi-plane input (Ly, Lx, n_planes) is solved per-plane -- each ROI's ring stays within
+    its own plane, as long as every ROI is itself confined to a single plane (e.g. well-
+    separated mesoscope planes)."""
+    stats = _make_surround_stats([(15, 15), (45, 45)])
+    dense_masks = np.zeros((2, NEUROPIL_H, NEUROPIL_W, 2), dtype=bool)
+    for i, stat in enumerate(stats):
+        dense_masks[i, stat["ypix"], stat["xpix"], i] = True  # ROI i lives entirely in plane i
+
+    masks = _build_surround_neuropil_masks(dense_masks, min_neuropil_pixels=30)
+    assert masks.shape == (2, NEUROPIL_H, NEUROPIL_W, 2)
+    assert masks.dtype == np.float32
+    dense = masks.todense()
+    for i in range(2):
+        assert dense[i].sum() == pytest.approx(1.0)
+        assert dense[i, :, :, i].sum() == pytest.approx(1.0)  # entirely within its own plane
+
+
+def test_surround_masks_roi_spanning_multiple_planes_raises():
+    """A genuinely volumetric ROI (spanning more than one plane) isn't supported yet -- distinct
+    from the well-separated-planes case above, which is."""
+    masks = np.zeros((1, NEUROPIL_H, NEUROPIL_W, 2), dtype=bool)
+    masks[0, 15, 15, 0] = True
+    masks[0, 15, 15, 1] = True  # same ROI has pixels in both planes
+    with pytest.raises(NotImplementedError, match="spans multiple planes"):
+        _build_surround_neuropil_masks(masks, min_neuropil_pixels=30)
+
+
 def test_neuropil_extension_run_and_get_data(suite2p_rois, neuropil_imaging):
     analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
     analyzer.compute("neuropil", min_neuropil_pixels=30)
@@ -732,19 +760,29 @@ def test_neuropil_extension_works_with_non_suite2p_rois(imaging, rois):
     assert masks.shape == (NUM_ROIS, H, W)
 
 
-def test_neuropil_extension_multiplane_rois_raises(surround_stats):
+def test_neuropil_extension_multiplane_well_separated_rois(surround_stats):
+    """ROIs confined to a single plane each (e.g. well-separated mesoscope planes) are
+    supported: each plane is solved as an independent 2D problem, end-to-end through the
+    extension (not raising, unlike a genuinely volumetric ROI -- see
+    test_surround_masks_roi_spanning_multiple_planes_raises)."""
+    plane_assignments = np.array([0, 1, 0])  # centers are [(15, 15), (45, 45), (15, 45)]
     multiplane_rois = Suite2pRois.from_stat(
         surround_stats,
         shape=(NEUROPIL_H, NEUROPIL_W, 2),
         sampling_frequency=SF,
-        plane_assignments=np.zeros(len(surround_stats), dtype=int),
+        plane_assignments=plane_assignments,
     )
     multiplane_imaging = generate_random_imaging(
         num_frames=NUM_FRAMES, height=NEUROPIL_H, width=NEUROPIL_W, num_planes=2, sampling_frequency=SF, seed=SEED
     )
     analyzer = create_roi_analyzer(multiplane_rois, multiplane_imaging, format="memory")
-    with pytest.raises(NotImplementedError, match="single-plane"):
-        analyzer.compute("neuropil")
+    analyzer.compute("neuropil", min_neuropil_pixels=30)
+    masks = analyzer.get_extension("neuropil").get_data()
+    assert masks.shape == (3, NEUROPIL_H, NEUROPIL_W, 2)
+    dense = masks.todense()
+    for i, plane in enumerate(plane_assignments):
+        assert dense[i].sum() == pytest.approx(1.0)
+        assert dense[i, :, :, plane].sum() == pytest.approx(1.0)
 
 
 def test_neuropil_extension_binary_folder_roundtrip(suite2p_rois, neuropil_imaging, tmp_path):
