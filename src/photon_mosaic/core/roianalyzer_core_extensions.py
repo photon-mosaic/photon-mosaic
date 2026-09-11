@@ -1,6 +1,7 @@
 from typing import Any
 
 import numpy as np
+import sparse
 from spikeinterface.core.job_tools import fix_job_kwargs
 from spikeinterface.core.node_pipeline import PipelineNode, run_node_pipeline
 
@@ -47,7 +48,14 @@ class FluorescenceExtension(AnalyzerExtension):
             neuropil = self.roi_analyzer.get_extension("neuropil").get_data()
         else:
             neuropil = None
-        return [FluorescenceNode(self.roi_analyzer.imaging, self.roi_analyzer.rois, neuropil=neuropil)]
+        return [
+            FluorescenceNode(
+                self.roi_analyzer.imaging,
+                self.roi_analyzer.rois,
+                neuropil=neuropil,
+                neuropil_weight=self.params["neuropil_weight"],
+            )
+        ]
 
     def _get_data(self, outputs="numpy"):
         fluorescence_traces = self.data["fluorescence"]
@@ -80,6 +88,13 @@ class FluorescenceNode(PipelineNode):
         """
         Pipeline node to extract fluorescence traces from ROIs, with optional neuropil subtraction.
 
+        Each ROI's own mask (whatever ``rois.get_roi_image_masks()`` returns) is renormalized
+        internally so the returned trace correctly reconstructs the movie via ``traces @
+        masks`` (using the original, unnormalized masks) and, for non-overlapping ROIs,
+        matches the least-squares solution of ``movie ~ traces @ masks``. For binary masks
+        (Suite2pRois and generate_rois's default) this exactly recovers each ROI's own
+        per-pixel value; masks themselves are untouched (`rois` isn't mutated).
+
         Parameters
         ----------
         imaging : BaseImaging
@@ -108,16 +123,51 @@ class FluorescenceNode(PipelineNode):
         # which also accepts unpacked dimensions); a tuple works for both.
         masks = rois.get_roi_image_masks()  # (N, H, W) or (N, H, W, P)
         num_rois = masks.shape[0]
-        self._masks_flat = masks.reshape((num_rois, -1)).astype(np.float32)  # (N, spatial)
+        masks_flat = masks.reshape((num_rois, -1)).astype(np.float32)  # (N, spatial)
+
+        def _row_norm(x):
+            x = x.todense() if isinstance(x, sparse.SparseArray) else x
+            x = np.asarray(x).reshape(-1, 1)
+            x[x == 0] = 1.0  # an all-zero mask ROI stays all-zero, not NaN, downstream
+            return x
+
+        # Extraction uses each ROI's mask normalized to sum to 1 (L1, "mean" convention) --
+        # matching Suite2p's own F/Fneu convention (stat['lam'] weights sum to ~1;
+        # NeuropilExtension's ring masks are likewise L1-normalized, see
+        # _build_surround_neuropil_masks) so that F and the neuropil trace are on the same scale
+        # and F - neuropil_weight * neuropil_trace is dimensionally meaningful.
+        l1_norm = _row_norm(masks_flat.sum(axis=1))
+        self._masks_flat = masks_flat / l1_norm
+
+        # But L1 isn't the scale that correctly reconstructs the movie (or generalizes to
+        # regression-based extraction of overlapping ROIs): movie ~ traces @ masks has the
+        # least-squares solution traces = movie @ masks.T @ pinv(masks @ masks.T), which for
+        # non-overlapping ROIs is diagonal with each entry ||mask_n||^2 (L2 norm squared, not
+        # L1) -- so the correctly-scaled trace divides by L2 squared, not L1. This L1->L2
+        # rescale step is itself a no-op for binary masks (mask**2 == mask, so L1 == L2^2 --
+        # true for every current mask source: Suite2pRois, generate_rois's default). The
+        # L1-normalization above is not a no-op for binary masks, though: it changes F from a
+        # raw per-ROI pixel sum to a per-pixel mean, for every mask, binary included --
+        # deliberate (matching Suite2p's F/Fneu mean convention so neuropil subtraction is
+        # dimensionally meaningful), not specific to weighted masks. Harmless for dF/F (a
+        # per-ROI constant scale factor cancels in (F - F0) / F0), but does change raw
+        # `fluorescence` values for every binary mask. Extracting via L1 first (for
+        # neuropil-subtraction consistency, above) and rescaling the result by L1/L2^2
+        # afterwards is algebraically identical to extracting via L2^2 directly and rescaling
+        # the neuropil term by the same factor -- scalar multiplication distributes over the
+        # subtraction -- so this order also keeps the neuropil subtraction itself correctly in
+        # Suite2p's mean-scale convention.
+        l2sq_norm = _row_norm((masks_flat**2).sum(axis=1))
+        self._rescale_to_l2 = (l1_norm / l2sq_norm).reshape(1, -1)  # (1, N), for compute()
 
         # Precompute flattened neuropil masks
         if neuropil is not None:
             if neuropil.ndim == 2:
                 # Global neuropil (H, W) -> (1, spatial)
-                self._neuropil_flat = neuropil.reshape(1, -1).astype(np.float32)
+                self._neuropil_flat = neuropil.reshape((1, -1)).astype(np.float32)
             else:
                 # Per-ROI neuropil (N, H, W) -> (N, spatial)
-                self._neuropil_flat = neuropil.reshape(neuropil.shape[0], -1).astype(np.float32)
+                self._neuropil_flat = neuropil.reshape((neuropil.shape[0], -1)).astype(np.float32)
         else:
             self._neuropil_flat = None
 
@@ -132,11 +182,15 @@ class FluorescenceNode(PipelineNode):
         # Weighted fluorescence per ROI: (T, N)
         fluorescence = chunk_flat @ self._masks_flat.T
 
-        # Neuropil subtraction
+        # Neuropil subtraction, in the same L1/mean scale as self._masks_flat
         if self._neuropil_flat is not None:
             # (T, 1) for global or (T, N) for per-ROI
             neuropil_trace = chunk_flat @ self._neuropil_flat.T
             fluorescence -= self.neuropil_weight * neuropil_trace
+
+        # Rescale from L1 to the L2-normalized scale (see __init__) -- a no-op (factor 1) for
+        # binary masks (Suite2pRois and generate_rois's default).
+        fluorescence *= self._rescale_to_l2
 
         return (fluorescence,)
 
@@ -157,6 +211,9 @@ class DfOverFExtension(AnalyzerExtension):
       filter, as used in CaImAn. The percentile level can be fixed
       (``prctile_baseline=<float>``) or estimated automatically per ROI via a
       DCT-based KDE of the fluorescence distribution (``prctile_baseline=None``).
+
+    The fitted baseline itself is kept alongside the dF/F traces, accessible via
+    ``self.data["f0"]`` (shape ``(n_frames, n_rois)``, matching ``self.data["df_over_f"]``).
     """
 
     extension_name = "df_over_f"
@@ -231,6 +288,7 @@ class DfOverFExtension(AnalyzerExtension):
             raise ValueError(f"Unknown method: '{method}'. Supported: 'maximin', 'percentile'.")
 
         self.data["df_over_f"] = ((F - F0) / (F0 + np.finfo(np.float32).eps)).astype(np.float32)
+        self.data["f0"] = F0.astype(np.float32)
 
     def _get_data(self, outputs="numpy"):
         """Return the computed dF/F traces.
@@ -263,7 +321,10 @@ class DfOverFExtension(AnalyzerExtension):
 
     def _select_extension_data(self, roi_ids):
         roi_indices = self.roi_analyzer.rois.ids_to_indices(roi_ids)
-        return {"df_over_f": self.data["df_over_f"][:, roi_indices]}
+        return {
+            "df_over_f": self.data["df_over_f"][:, roi_indices],
+            "f0": self.data["f0"][:, roi_indices],
+        }
 
 
 class DeconvolutionExtension(AnalyzerExtension):
@@ -554,4 +615,275 @@ def _kde_mode_percentile(data: np.ndarray, N: int = 2**12) -> float:
 
 
 register_result_extension(DfOverFExtension)
+
+
+class NeuropilExtension(AnalyzerExtension):
+    """Extension to compute neuropil masks for background/contamination subtraction.
+
+    Currently one method is supported:
+
+    - ``'surround'``: Suite2p-style neuropil mask -- the region surrounding each ROI (excluding
+      pixels belonging to any ROI), rectangular by default or circular when ``circular=True``,
+      via :func:`suite2p.extraction.masks.create_cell_pix`/:func:`~suite2p.extraction.masks.create_neuropil_masks`.
+      Ring pixels are weighted ``1 / n_ring_pixels`` so that the weighted-sum matmul in
+      :class:`FluorescenceNode` reproduces suite2p's own unweighted-mean ``Fneu`` convention.
+      Works with *any* :class:`~photon_mosaic.core.baserois.BaseRois` -- per-ROI pixel
+      coordinates are derived from ``rois.get_roi_image_masks()`` (not suite2p-specific stat
+      data), since ``RoiAnalyzer`` always stores its own in-memory/on-disk snapshot of the ROIs
+      rather than the original object passed to ``create_roi_analyzer`` (e.g. ``format="memory"``
+      always copies into a plain ``NumpyRois``, so a `Suite2pRois`-specific accessor would not be
+      reachable via ``roi_analyzer.rois`` in the common case). Multi-plane ROIs are supported as
+      long as each ROI's own mask is confined to a single plane (e.g. well-separated mesoscope
+      planes) -- each plane's ROIs are then treated as an independent 2D problem. A genuinely
+      volumetric ROI spanning multiple planes is not yet supported (would need a true 3D
+      "shell" neuropil mask, e.g. as in `Suite3D <https://www.biorxiv.org/content/10.1101/2025.03.26.645628v2.full>`_
+      (`code <https://github.com/alihaydaroglu/suite3d>`_), rather than this per-plane approach).
+
+    Once computed, this extension is picked up automatically by :class:`FluorescenceExtension`
+    (see its ``use_neuropil``/``neuropil_weight`` params) -- just call
+    ``roi_analyzer.compute("neuropil")`` before ``roi_analyzer.compute("fluorescence")``.
+    """
+
+    extension_name = "neuropil"
+    depend_on: list[str] = []
+    need_imaging = False
+    use_nodepipeline = False
+    need_job_kwargs = False
+
+    def _set_params(
+        self,
+        method: str = "surround",
+        inner_neuropil_radius: int = 2,
+        min_neuropil_pixels: int = 350,
+        circular: bool = False,
+        lam_percentile: float = 50.0,
+        **params: Any,
+    ) -> dict[str, Any]:
+        """Set parameters for neuropil mask computation.
+
+        Parameters
+        ----------
+        method : str, optional
+            Neuropil mask construction method. Only ``'surround'`` (Suite2p-style neighborhood mask,
+            rectangular or circular) is currently supported. Default is ``'surround'``.
+        inner_neuropil_radius : int, optional
+            Pixels around each ROI to exclude before the ring starts. Only used with
+            ``method='surround'``. Default is ``2``.
+        min_neuropil_pixels : int, optional
+            Minimum ring pixel count; the ring grows outward until this many pixels are found.
+            Only used with ``method='surround'``. Default is ``350``.
+        circular : bool, optional
+            Restrict the ring to a circular region instead of a rectangular bounding-box grow.
+            Only used with ``method='surround'``. Default is ``False``.
+        lam_percentile : float, optional
+            Percentile threshold used to decide which weighted pixels count as "ROI" pixels,
+            excluded from every ROI's ring. Only used with ``method='surround'``. Default is
+            ``50.0``.
+        """
+        if params:
+            raise TypeError(f"_set_params() got unexpected keyword argument(s): {sorted(params)}")
+        return dict(
+            method=method,
+            inner_neuropil_radius=inner_neuropil_radius,
+            min_neuropil_pixels=min_neuropil_pixels,
+            circular=circular,
+            lam_percentile=lam_percentile,
+        )
+
+    def _run(self, verbose: bool = False, **kwargs: Any) -> None:
+        method = self.params["method"]
+        rois = self.roi_analyzer.rois
+
+        if method == "surround":
+            masks = rois.get_roi_image_masks()
+            self.data["neuropil_masks"] = _build_surround_neuropil_masks(
+                masks,
+                inner_neuropil_radius=self.params["inner_neuropil_radius"],
+                min_neuropil_pixels=self.params["min_neuropil_pixels"],
+                circular=self.params["circular"],
+                lam_percentile=self.params["lam_percentile"],
+            )
+        else:
+            raise ValueError(f"Unknown method: '{method}'. Supported: 'surround'.")
+
+    def _get_data(self):
+        """Return the computed neuropil masks.
+
+        Returns
+        -------
+        sparse.GCXS
+            Shape ``(n_rois, Ly, Lx)``, or ``(n_rois, Ly, Lx, n_planes)`` for multi-plane ROIs.
+            Each ROI's ring pixels sum to 1.0 (an unweighted mean over the ring, matching
+            suite2p's own ``Fneu`` convention), except ROIs whose ring ended up empty (e.g.
+            fully surrounded by other ROIs), which get an all-zero row.
+        """
+        return self.data["neuropil_masks"]
+
+    def _select_extension_data(self, roi_ids):
+        roi_indices = self.roi_analyzer.rois.ids_to_indices(roi_ids)
+        return {"neuropil_masks": self.data["neuropil_masks"][roi_indices]}
+
+
+def _build_surround_neuropil_masks(
+    masks,
+    inner_neuropil_radius: int = 2,
+    min_neuropil_pixels: int = 350,
+    circular: bool = False,
+    lam_percentile: float = 50.0,
+):
+    """Build Suite2p-style ("surround") neuropil masks from ROI image masks.
+
+    For each ROI, builds the ring of pixels surrounding it (excluding pixels belonging to any
+    ROI) via :mod:`suite2p.extraction.masks`, then converts the flattened-index ring into a
+    mask where each ring pixel has weight ``1 / n_ring_pixels``. This weighting is required (not
+    optional): :meth:`FluorescenceNode.compute` consumes this mask via
+    ``chunk_flat @ neuropil_flat.T``, a *weighted sum*. A binary ring mask would instead compute
+    a sum scaled by ring pixel count (typically >=350), which does not match suite2p's own
+    ``Fneu = mean(movie[neuropil_ipix], axis=0)`` convention and would make ``neuropil_weight``
+    uninterpretable.
+
+    Per-ROI pixel coordinates and weights are derived directly from ``masks`` (each ROI's own
+    nonzero entries), rather than requiring suite2p's raw stat dicts -- this makes ``'surround'``
+    usable with any :class:`~photon_mosaic.core.baserois.BaseRois`, not only
+    :class:`~photon_mosaic.extractors.Suite2pRois`. Each ROI's ``radius`` (needed by
+    ``create_cell_pix``'s internal smoothing) is estimated from its pixel count assuming a
+    roughly circular shape (``sqrt(n_pixels / pi)``); ``lam`` is taken from the mask's own
+    values, falling back to uniform weights for all-zero/binary masks.
+
+    Multi-plane input (``masks.ndim == 4``, shape ``(n_rois, Ly, Lx, n_planes)``) is supported
+    as long as every ROI's own mask is confined to a single plane -- each plane's ROIs are then
+    treated as an independent 2D problem via suite2p's (inherently 2D) mask functions, so a
+    ring only ever excludes/competes with same-plane neighbors. This is correct for
+    well-separated planes (e.g. mesoscope acquisitions where each ROI shows up in exactly one
+    plane) but not for genuinely volumetric ROIs spanning multiple planes -- that would need a
+    true 3D "shell" neuropil mask (e.g. as in
+    `Suite3D <https://www.biorxiv.org/content/10.1101/2025.03.26.645628v2.full>`_, code at
+    https://github.com/alihaydaroglu/suite3d) and raises ``NotImplementedError``.
+
+    Parameters
+    ----------
+    masks : np.ndarray | sparse.SparseArray
+        ROI image masks, shape ``(n_rois, Ly, Lx)`` or ``(n_rois, Ly, Lx, n_planes)`` (e.g.
+        from ``BaseRois.get_roi_image_masks()``).
+    inner_neuropil_radius, min_neuropil_pixels, circular, lam_percentile
+        Passed through to suite2p's ``create_cell_pix``/``create_neuropil_masks``.
+
+    Returns
+    -------
+    sparse.GCXS
+        Same shape as ``masks``, dtype float32. Ring pixels sum to 1.0 per ROI; ROIs whose
+        ring ended up empty get an all-zero row (no neuropil subtraction for that ROI).
+    """
+    import sparse
+
+    try:
+        from suite2p.extraction.masks import create_cell_pix, create_neuropil_masks
+    except ImportError as e:
+        raise ImportError(
+            "NeuropilExtension(method='surround') requires suite2p. Install it with "
+            "'pip install \"photon-mosaic[suite2p-registration]\"'."
+        ) from e
+
+    if masks.ndim == 3:
+        n_rois, Ly, Lx = masks.shape
+        n_planes = 1
+    elif masks.ndim == 4:
+        n_rois, Ly, Lx, n_planes = masks.shape
+    else:
+        raise ValueError(f"Expected masks with 3 or 4 dimensions (n_rois, Ly, Lx[, n_planes]), got {masks.shape}")
+
+    out_shape = (0, Ly, Lx) if masks.ndim == 3 else (0, Ly, Lx, n_planes)
+    if n_rois == 0:
+        return sparse.GCXS.from_numpy(np.zeros(out_shape, dtype=np.float32), compressed_axes=(0,))
+
+    # roi_planes[i] is only meaningful (and only used) when masks.ndim == 4.
+    roi_planes = np.zeros(n_rois, dtype=int)
+    stats = []
+    for i in range(n_rois):
+        roi_mask = masks[i]
+        if isinstance(roi_mask, sparse.SparseArray):
+            coo = roi_mask.tocoo()
+            coords, data = coo.coords, np.asarray(coo.data, dtype=np.float64)
+        else:
+            nz = np.nonzero(roi_mask)
+            coords, data = np.stack(nz), np.asarray(roi_mask[nz], dtype=np.float64)
+
+        if masks.ndim == 4:
+            ypix, xpix, plane_idx = coords[0], coords[1], coords[2]
+            planes_present = np.unique(plane_idx)
+            if len(planes_present) > 1:
+                raise NotImplementedError(
+                    f"ROI {i} spans multiple planes ({planes_present.tolist()}). "
+                    "NeuropilExtension(method='surround') only supports ROIs confined to a "
+                    "single plane each (e.g. well-separated mesoscope planes); a genuinely "
+                    "volumetric neuropil mask (Suite3D-style 3D shell) is not yet implemented."
+                )
+            if len(planes_present):
+                roi_planes[i] = int(planes_present[0])
+        else:
+            ypix, xpix = coords[0], coords[1]
+
+        lam = data
+        if len(ypix) == 0 or lam.sum() <= 0:
+            lam = np.ones(len(ypix))
+        radius = np.sqrt(len(ypix) / np.pi) if len(ypix) > 0 else 1.0
+        stats.append({"ypix": ypix, "xpix": xpix, "lam": lam, "radius": radius})
+
+    def _cell_pix_and_neuropil_ipix(stats_subset):
+        cell_pix = create_cell_pix(stats_subset, Ly, Lx, lam_percentile=lam_percentile)
+        return create_neuropil_masks(
+            ypixs=[s["ypix"] for s in stats_subset],
+            xpixs=[s["xpix"] for s in stats_subset],
+            cell_pix=cell_pix,
+            inner_neuropil_radius=inner_neuropil_radius,
+            min_neuropil_pixels=min_neuropil_pixels,
+            circular=circular,
+        )
+
+    # An all-zero ROI (no pixels) gets an all-zero ring directly: suite2p's rectangular (the
+    # default, non-circular) growth path calls .min()/.max() on a ROI's own pixel coordinates
+    # while extending it, which raises on an empty array. Such a ROI can never contribute any
+    # cell pixels either, so simply excluding it from the suite2p calls below changes nothing
+    # for the other ROIs.
+    neuropil_ipix: list = [np.zeros(0, dtype=np.intp)] * n_rois
+    if n_planes == 1:
+        non_empty = [i for i in range(n_rois) if len(stats[i]["ypix"])]
+        if non_empty:
+            ipix = _cell_pix_and_neuropil_ipix([stats[i] for i in non_empty])
+            for local_i, global_i in enumerate(non_empty):
+                neuropil_ipix[global_i] = ipix[local_i]
+    else:
+        # Each plane's ROIs are solved as an independent 2D problem (see docstring): a ring
+        # only excludes/competes with pixels from the same plane's other ROIs.
+        for p in range(n_planes):
+            roi_indices_p = [i for i in np.flatnonzero(roi_planes == p) if len(stats[i]["ypix"])]
+            if len(roi_indices_p) == 0:
+                continue
+            ipix_p = _cell_pix_and_neuropil_ipix([stats[i] for i in roi_indices_p])
+            for local_i, global_i in enumerate(roi_indices_p):
+                neuropil_ipix[global_i] = ipix_p[local_i]
+
+    ring_masks = []
+    for i, ipix in enumerate(neuropil_ipix):
+        ipix = np.asarray(ipix)
+        n_pixels = len(ipix)
+        shape = (Ly, Lx) if masks.ndim == 3 else (Ly, Lx, n_planes)
+        if n_pixels == 0:
+            ring_masks.append(
+                sparse.COO(np.zeros((len(shape), 0), dtype=np.intp), np.zeros(0, dtype=np.float32), shape=shape)
+            )
+            continue
+        ring_y, ring_x = np.unravel_index(ipix, (Ly, Lx))
+        weights = np.full(n_pixels, 1.0 / n_pixels, dtype=np.float32)
+        if masks.ndim == 3:
+            coords = np.stack([ring_y, ring_x])
+        else:
+            plane_coord = np.full(n_pixels, roi_planes[i], dtype=np.intp)
+            coords = np.stack([ring_y, ring_x, plane_coord])
+        ring_masks.append(sparse.COO(coords, weights, shape=shape))
+
+    return sparse.GCXS.from_coo(sparse.stack(ring_masks, axis=0), compressed_axes=(0,))
+
+
+register_result_extension(NeuropilExtension)
 register_result_extension(DeconvolutionExtension)
