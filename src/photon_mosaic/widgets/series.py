@@ -376,17 +376,34 @@ class ImagingSeriesWidget(BaseWidget):
         self.play_button.button_style = "success"
 
     def _playback_loop(self):
-        """Main playback loop running in separate thread."""
+        """Main playback loop running in separate thread.
+
+        Paced by elapsed wall-clock time rather than a fixed per-iteration increment: each
+        redraw involves a full figure re-render plus a Jupyter comm/websocket round trip, which
+        can take longer than ``1 / playback_fps``. A naive ``current_frame += 1`` on a fixed
+        timer would race ahead of what's actually reached the browser -- since ipywidgets only
+        syncs the latest value, whichever intermediate frames never got flushed are silently
+        dropped, with no control over which ones. Instead, each iteration computes how many
+        frames *should* have elapsed since the last actual advance and jumps straight there --
+        deliberately skipping frames (evenly, by real elapsed time) so playback speed stays
+        correct under load, rather than an uncontrolled, backpressure-dependent frame drop. The
+        reference timestamp only moves forward on an actual advance (not every poll), so this
+        also stays correct if ``playback_fps`` changes mid-playback via the FPS slider.
+        """
         import time
 
         dp = to_attr(self.data_plot)
 
+        last_time = time.monotonic()
         while self.is_playing and self.current_frame < dp.num_frames - 1:
-            time.sleep(1.0 / self.playback_fps)
-            if self.is_playing:  # Check again in case it was stopped
-                self.current_frame += 1
+            now = time.monotonic()
+            frames_elapsed = int((now - last_time) * self.playback_fps)
+            if self.is_playing and frames_elapsed > 0:  # Check again in case it was stopped
+                self.current_frame = min(self.current_frame + frames_elapsed, dp.num_frames - 1)
+                last_time = now
                 # Update slider and display
                 self.frame_slider.value = self.current_frame
+            time.sleep(1.0 / (4 * self.playback_fps))
         # Stop when reaching the end
         if self.current_frame >= dp.num_frames - 1:
             self._stop_playback()

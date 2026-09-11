@@ -188,3 +188,84 @@ class TestImagingSeriesWidgetInit:
                 ImagingSeriesWidget(tiny, immediate_plot=True)
 
         assert captured == [10], f"expected widget to clamp end_frame to num_frames=10; calls were {captured}"
+
+
+# ---------------------------------------------------------------------------
+# ImagingSeriesWidget -- playback loop pacing
+# ---------------------------------------------------------------------------
+
+
+class _FakeButton:
+    def __init__(self):
+        self.description = ""
+        self.button_style = ""
+
+
+class _FakeSlider:
+    def __init__(self, value=0):
+        self.value = value
+
+
+class _PlaybackHarness:
+    """Minimal stand-in exposing exactly what _playback_loop/_stop_playback touch, so the
+    pacing logic can be exercised without going through __init__/plot_ipywidgets at all."""
+
+    def __init__(self, num_frames, playback_fps, current_frame=0):
+        self.data_plot = {"num_frames": num_frames}
+        self.playback_fps = playback_fps
+        self.current_frame = current_frame
+        self.is_playing = True
+        self.frame_slider = _FakeSlider(current_frame)
+        self.play_button = _FakeButton()
+
+    _playback_loop = ImagingSeriesWidget._playback_loop
+    _stop_playback = ImagingSeriesWidget._stop_playback
+
+
+def test_playback_loop_skips_ahead_after_slow_iteration(monkeypatch):
+    """A slow redraw (simulated by a big wall-clock jump between poll ticks) should make the
+    loop jump straight to the frame matching elapsed time, not silently fall one frame at a
+    time -- see _playback_loop's docstring for why a naive `current_frame += 1` on a fixed
+    timer drops frames unpredictably instead."""
+    harness = _PlaybackHarness(num_frames=1000, playback_fps=10)
+
+    fake_time = [0.0]
+    monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
+
+    sleep_calls = []
+
+    def fake_sleep(duration):
+        sleep_calls.append(duration)
+        if len(sleep_calls) == 1:
+            fake_time[0] += 1.0  # simulate one slow redraw stalling a full second
+        else:
+            harness.is_playing = False  # stop right after observing the post-stall frame
+
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    harness._playback_loop()
+
+    # at playback_fps=10, a 1s stall should skip straight to frame 10, not crawl to frame 1
+    assert harness.current_frame == 10
+    assert harness.frame_slider.value == 10
+    # poll interval is 1 / (4 * playback_fps)
+    assert sleep_calls[0] == pytest.approx(0.025)
+
+
+def test_playback_loop_stops_at_last_frame(monkeypatch):
+    """Reaching the final frame should stop playback (button reset to Play)."""
+    harness = _PlaybackHarness(num_frames=5, playback_fps=10, current_frame=3)
+
+    fake_time = [0.0]
+    monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
+
+    def fake_sleep(duration):
+        fake_time[0] += 1.0  # always enough to reach the end in one jump
+
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    harness._playback_loop()
+
+    assert harness.current_frame == 4  # num_frames - 1
+    assert harness.is_playing is False
+    assert harness.play_button.description == "▶ Play"
