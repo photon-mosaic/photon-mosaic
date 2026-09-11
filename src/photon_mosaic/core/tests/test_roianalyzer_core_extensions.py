@@ -742,6 +742,42 @@ def test_surround_masks_zero_rois():
     assert masks.shape == (0, NEUROPIL_H, NEUROPIL_W)
 
 
+def test_surround_masks_handles_degenerate_lam_sum():
+    """A mask whose nonzero values happen to sum to <= 0 (e.g. mixed positive/negative
+    weights) should fall back to uniform weights internally, rather than propagating a
+    degenerate lam array into suite2p's create_cell_pix/create_neuropil_masks (which use
+    lam_percentile to decide which weighted pixels count as "ROI" pixels -- a non-positive
+    sum would make that comparison meaningless)."""
+    masks = np.zeros((1, NEUROPIL_H, NEUROPIL_W), dtype=np.float32)
+    # Four nonzero pixels, but weights sum to exactly 0 -- triggers the lam.sum() <= 0 fallback.
+    masks[0, 15, 15] = 1.0
+    masks[0, 15, 16] = -1.0
+    masks[0, 16, 15] = 0.5
+    masks[0, 16, 16] = -0.5
+
+    result = _build_surround_neuropil_masks(masks, min_neuropil_pixels=30)
+    dense = result.todense()
+    assert result.shape == (1, NEUROPIL_H, NEUROPIL_W)
+    assert np.isfinite(dense).all()
+    assert dense[0].sum() == pytest.approx(1.0)
+
+
+def test_surround_masks_empty_ring_when_no_non_roi_pixels_available():
+    """An ROI with no available non-ROI pixels anywhere in the frame (here: two ROIs together
+    tiling the entire image) should get an all-zero ring row rather than erroring -- the
+    documented behavior for a ring that ends up empty."""
+    small_h, small_w = 20, 20
+    masks = np.zeros((2, small_h, small_w), dtype=bool)
+    masks[0, : small_h // 2, :] = True  # top half
+    masks[1, small_h // 2 :, :] = True  # bottom half -- together, every pixel belongs to an ROI
+
+    result = _build_surround_neuropil_masks(masks, min_neuropil_pixels=30)
+    dense = result.todense()
+    assert result.shape == (2, small_h, small_w)
+    assert dense[0].sum() == 0.0
+    assert dense[1].sum() == 0.0
+
+
 def test_surround_masks_multiplane_confines_ring_to_same_plane():
     """Multi-plane input (Ly, Lx, n_planes) is solved per-plane -- each ROI's ring stays within
     its own plane, as long as every ROI is itself confined to a single plane (e.g. well-
