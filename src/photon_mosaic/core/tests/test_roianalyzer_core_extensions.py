@@ -778,6 +778,36 @@ def test_surround_masks_empty_ring_when_no_non_roi_pixels_available():
     assert dense[1].sum() == 0.0
 
 
+def test_surround_masks_circular_differs_from_rectangular():
+    """circular=True should actually change the ring geometry -- not covered by any other
+    test, which all use the default circular=False."""
+    mask = np.zeros((1, NEUROPIL_H, NEUROPIL_W), dtype=bool)
+    mask[0, 28:36, 28:36] = True
+
+    rectangular = _build_surround_neuropil_masks(mask, min_neuropil_pixels=30, circular=False)
+    circular = _build_surround_neuropil_masks(mask, min_neuropil_pixels=30, circular=True)
+    assert not np.allclose(rectangular.todense(), circular.todense())
+
+
+def test_surround_masks_lam_percentile_affects_nearby_weighted_rois():
+    """lam_percentile should actually change the ring for weighted, nearby ROIs (raising it
+    excludes fewer low-weight edge pixels as "ROI territory", freeing more pixels for a
+    neighboring ROI's ring) -- not covered by any other test, which all use the default 50.0."""
+    yy, xx = np.meshgrid(np.arange(NEUROPIL_H), np.arange(NEUROPIL_W), indexing="ij")
+
+    def _blob(cy, cx, radius):
+        dist = np.sqrt((yy - cy) ** 2 + (xx - cx) ** 2)
+        return np.clip(1 - dist / radius, 0, 1).astype(np.float32)
+
+    masks = np.stack([_blob(24, 32, 8), _blob(38, 32, 8)])  # close enough for fuzzy tails to interact
+
+    default = _build_surround_neuropil_masks(masks, min_neuropil_pixels=30, inner_neuropil_radius=1)
+    high_percentile = _build_surround_neuropil_masks(
+        masks, min_neuropil_pixels=30, inner_neuropil_radius=1, lam_percentile=90.0
+    )
+    assert not np.allclose(default.todense(), high_percentile.todense())
+
+
 def test_surround_masks_multiplane_confines_ring_to_same_plane():
     """Multi-plane input (Ly, Lx, n_planes) is solved per-plane -- each ROI's ring stays within
     its own plane, as long as every ROI is itself confined to a single plane (e.g. well-
