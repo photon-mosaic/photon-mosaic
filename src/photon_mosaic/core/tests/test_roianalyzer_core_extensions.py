@@ -110,6 +110,32 @@ def test_compute_matches_dense_result_with_sparse_masks(imaging, chunk):
     np.testing.assert_allclose(fluorescence_sparse, fluorescence_dense, rtol=1e-5)
 
 
+def test_compute_matches_least_squares_for_weighted_nonoverlapping_masks(imaging, chunk):
+    """For non-overlapping weighted (non-binary) masks, FluorescenceNode's internal L1/L2
+    rescaling should reproduce the least-squares reconstruction of movie ~ traces @ masks,
+    which for non-overlapping ROIs is dividing by each mask's own L2 norm squared -- not L1
+    (pixel count/sum), which is what a naive Suite2p-style mean convention would give instead.
+    Every other FluorescenceNode test in this file uses binary masks, for which L1 == L2^2 and
+    this rescaling is a no-op -- so this is the only test that actually exercises it."""
+    from photon_mosaic.core.numpyimaging import NumpyRois
+
+    weighted_masks = np.zeros((2, H, W), dtype=np.float32)
+    # Two disjoint weighted (non-binary) patches -- fractional values matter here, since
+    # L1 == L2^2 for any binary mask regardless of its shape.
+    weighted_masks[0, 2:6, 2:6] = np.linspace(0.2, 1.0, 4)[:, None]
+    weighted_masks[1, 20:25, 20:25] = np.linspace(0.1, 0.8, 5)[None, :]
+    weighted_rois = NumpyRois(roi_image_masks=weighted_masks, sampling_frequency=SF)
+
+    node = FluorescenceNode(imaging, weighted_rois)
+    (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+
+    chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
+    masks_flat = weighted_masks.reshape(2, -1)
+    expected = (chunk_flat @ masks_flat.T) / (masks_flat**2).sum(axis=1)
+
+    np.testing.assert_allclose(fluorescence, expected, rtol=1e-4)
+
+
 # ---------------------------------------------------------------------------
 # Neuropil subtraction — per-ROI (N, H, W)
 # ---------------------------------------------------------------------------
@@ -132,6 +158,39 @@ def test_neuropil_per_roi_subtraction(imaging, rois, chunk):
     expected = chunk_flat @ masks_flat.T - neuropil_weight * (chunk_flat @ neuropil_flat.T)
 
     np.testing.assert_allclose(fluorescence, expected, rtol=1e-5)
+
+
+def test_neuropil_subtraction_with_weighted_masks_matches_manual(imaging, chunk):
+    """Neuropil subtraction combined with weighted (non-binary) ROI masks should match a manual
+    computation of the full algorithm (L1-normalized extraction and subtraction, then rescaled
+    to the L2-normalized reconstruction scale -- see FluorescenceNode's docstring). Every other
+    neuropil-subtraction test in this file uses binary ROI masks, for which the L1/L2 rescaling
+    is a no-op, so this is the only one that exercises rescaling and neuropil subtraction
+    together."""
+    from photon_mosaic.core.numpyimaging import NumpyRois
+
+    weighted_masks = np.zeros((2, H, W), dtype=np.float32)
+    weighted_masks[0, 2:6, 2:6] = np.linspace(0.2, 1.0, 4)[:, None]
+    weighted_masks[1, 20:25, 20:25] = np.linspace(0.1, 0.8, 5)[None, :]
+    weighted_rois = NumpyRois(roi_image_masks=weighted_masks, sampling_frequency=SF)
+
+    rng = np.random.default_rng(789)
+    neuropil = rng.random((2, H, W)).astype(np.float32)
+    neuropil_weight = 0.7
+
+    node = FluorescenceNode(imaging, weighted_rois, neuropil=neuropil, neuropil_weight=neuropil_weight)
+    (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+
+    chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
+    masks_flat = weighted_masks.reshape(2, -1)
+    neuropil_flat = neuropil.reshape(2, -1).astype(np.float32)
+
+    l1 = masks_flat.sum(axis=1, keepdims=True)
+    l2sq = (masks_flat**2).sum(axis=1, keepdims=True)
+    extracted_l1 = (chunk_flat @ (masks_flat / l1).T) - neuropil_weight * (chunk_flat @ neuropil_flat.T)
+    expected = extracted_l1 * (l1 / l2sq).reshape(1, -1)
+
+    np.testing.assert_allclose(fluorescence, expected, rtol=1e-4)
 
 
 def test_neuropil_per_roi_shape(imaging, rois, chunk):
