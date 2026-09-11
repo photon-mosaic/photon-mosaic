@@ -770,6 +770,31 @@ def test_surround_masks_roi_spanning_multiple_planes_raises():
         _build_surround_neuropil_masks(masks, min_neuropil_pixels=30)
 
 
+def test_surround_masks_multiplane_skips_planes_with_no_rois():
+    """A declared plane that no ROI is assigned to (e.g. 3 planes, ROIs only in planes 0 and 2)
+    should be skipped gracefully, not erroring or contributing any ring pixels."""
+    stats = _make_surround_stats([(15, 15), (45, 45)])
+    dense_masks = np.zeros((2, NEUROPIL_H, NEUROPIL_W, 3), dtype=bool)
+    dense_masks[0, stats[0]["ypix"], stats[0]["xpix"], 0] = True  # ROI 0 in plane 0
+    dense_masks[1, stats[1]["ypix"], stats[1]["xpix"], 2] = True  # ROI 1 in plane 2, plane 1 unused
+
+    masks = _build_surround_neuropil_masks(dense_masks, min_neuropil_pixels=30)
+    assert masks.shape == (2, NEUROPIL_H, NEUROPIL_W, 3)
+    dense = masks.todense()
+    assert dense[:, :, :, 1].sum() == 0.0  # unused plane gets no ring pixels from either ROI
+    assert dense[0, :, :, 0].sum() == pytest.approx(1.0)
+    assert dense[1, :, :, 2].sum() == pytest.approx(1.0)
+
+
+def test_surround_masks_invalid_ndim_raises():
+    """masks must be (n_rois, Ly, Lx) or (n_rois, Ly, Lx, n_planes) -- anything else is rejected
+    explicitly rather than failing confusingly deeper in the suite2p calls."""
+    with pytest.raises(ValueError, match="3 or 4 dimensions"):
+        _build_surround_neuropil_masks(np.zeros((NEUROPIL_H, NEUROPIL_W)))  # missing ROI axis
+    with pytest.raises(ValueError, match="3 or 4 dimensions"):
+        _build_surround_neuropil_masks(np.zeros((2, NEUROPIL_H, NEUROPIL_W, 2, 1)))  # one axis too many
+
+
 def test_neuropil_extension_run_and_get_data(suite2p_rois, neuropil_imaging):
     analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
     analyzer.compute("neuropil", min_neuropil_pixels=30)
