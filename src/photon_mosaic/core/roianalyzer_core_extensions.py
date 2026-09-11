@@ -92,8 +92,8 @@ class FluorescenceNode(PipelineNode):
         internally so the returned trace correctly reconstructs the movie via ``traces @
         masks`` (using the original, unnormalized masks) and, for non-overlapping ROIs,
         matches the least-squares solution of ``movie ~ traces @ masks``. For binary masks
-        (the only kind currently produced anywhere in this codebase) this exactly recovers
-        each ROI's own per-pixel value; masks themselves are untouched (`rois` isn't mutated).
+        (Suite2pRois and generate_rois's default) this exactly recovers each ROI's own
+        per-pixel value; masks themselves are untouched (`rois` isn't mutated).
 
         Parameters
         ----------
@@ -189,7 +189,7 @@ class FluorescenceNode(PipelineNode):
             fluorescence -= self.neuropil_weight * neuropil_trace
 
         # Rescale from L1 to the L2-normalized scale (see __init__) -- a no-op (factor 1) for
-        # binary masks, the only kind currently produced anywhere in this codebase.
+        # binary masks (Suite2pRois and generate_rois's default).
         fluorescence *= self._rescale_to_l2
 
         return (fluorescence,)
