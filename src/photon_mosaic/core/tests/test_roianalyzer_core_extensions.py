@@ -65,13 +65,19 @@ def test_compute_output_dtype(imaging, rois, chunk):
 
 
 def test_compute_matches_manual_weighted_sum(imaging, rois, chunk):
-    """Verify compute() matches a simple loop over ROIs."""
+    """Verify compute() matches a simple loop over ROIs.
+
+    FluorescenceNode normalizes each ROI's mask to sum to 1 internally (see its docstring),
+    so "manual" here means normalizing rois.get_roi_image_masks() the same way before
+    comparing -- for the binary masks used here, that's equivalent to dividing by pixel count.
+    """
     node = FluorescenceNode(imaging, rois)
     (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
 
     masks = rois.get_roi_image_masks()  # (N, H, W)
     chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
     masks_flat = masks.reshape(NUM_ROIS, -1).astype(np.float32)
+    masks_flat = masks_flat / masks_flat.sum(axis=1, keepdims=True)
 
     expected = chunk_flat @ masks_flat.T
     np.testing.assert_allclose(fluorescence, expected, rtol=1e-5)
@@ -118,9 +124,10 @@ def test_neuropil_per_roi_subtraction(imaging, rois, chunk):
     node = FluorescenceNode(imaging, rois, neuropil=neuropil, neuropil_weight=neuropil_weight)
     (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
 
-    # Compute expected manually
+    # Compute expected manually (masks_flat normalized to sum to 1, see FluorescenceNode's docstring)
     chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
     masks_flat = rois.get_roi_image_masks().reshape(NUM_ROIS, -1).astype(np.float32)
+    masks_flat = masks_flat / masks_flat.sum(axis=1, keepdims=True)
     neuropil_flat = neuropil.reshape(NUM_ROIS, -1).astype(np.float32)
     expected = chunk_flat @ masks_flat.T - neuropil_weight * (chunk_flat @ neuropil_flat.T)
 
@@ -150,6 +157,7 @@ def test_neuropil_global_subtraction(imaging, rois, chunk):
 
     chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
     masks_flat = rois.get_roi_image_masks().reshape(NUM_ROIS, -1).astype(np.float32)
+    masks_flat = masks_flat / masks_flat.sum(axis=1, keepdims=True)
     neuropil_flat = neuropil.reshape(1, -1).astype(np.float32)
     expected = chunk_flat @ masks_flat.T - neuropil_weight * (chunk_flat @ neuropil_flat.T)  # (T, N) - (T, 1)
 
@@ -191,6 +199,7 @@ def test_neuropil_weight_scales_subtraction(imaging, rois, chunk, neuropil_weigh
 
     chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
     masks_flat = rois.get_roi_image_masks().reshape(NUM_ROIS, -1).astype(np.float32)
+    masks_flat = masks_flat / masks_flat.sum(axis=1, keepdims=True)
     neuropil_flat = neuropil.reshape(NUM_ROIS, -1).astype(np.float32)
     expected = chunk_flat @ masks_flat.T - neuropil_weight * (chunk_flat @ neuropil_flat.T)
 
@@ -230,12 +239,13 @@ def test_neuropil_weight_default(imaging, rois, chunk):
 # ---------------------------------------------------------------------------
 
 
-def test_no_neuropil_returns_raw_weighted_sum(imaging, rois, chunk):
+def test_no_neuropil_returns_normalized_weighted_sum(imaging, rois, chunk):
     node = FluorescenceNode(imaging, rois, neuropil=None)
     (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
 
     chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
     masks_flat = rois.get_roi_image_masks().reshape(NUM_ROIS, -1).astype(np.float32)
+    masks_flat = masks_flat / masks_flat.sum(axis=1, keepdims=True)
     expected = chunk_flat @ masks_flat.T
 
     np.testing.assert_allclose(fluorescence, expected, rtol=1e-5)
@@ -347,6 +357,18 @@ def test_df_over_f_shape_dtype_finite(analyzer_with_fluorescence, method, kwargs
     assert np.isfinite(result).all()
 
 
+@pytest.mark.parametrize("method", ["maximin", "percentile"])
+def test_df_over_f_f0_matches_baseline_used(analyzer_with_fluorescence, method):
+    """The stored f0 should be exactly the baseline df_over_f was computed against."""
+    ext = analyzer_with_fluorescence.compute("df_over_f", method=method)
+    fluorescence = analyzer_with_fluorescence.get_extension("fluorescence").get_data()
+    f0 = ext.data["f0"]
+    assert f0.shape == (NUM_FRAMES, NUM_ROIS)
+    assert f0.dtype == np.float32
+    expected = (fluorescence - f0) / (f0 + np.finfo(np.float32).eps)
+    np.testing.assert_allclose(ext.get_data(), expected, rtol=1e-5)
+
+
 def test_df_over_f_invalid_method(analyzer_with_fluorescence):
     """An unknown method name should raise ValueError."""
     with pytest.raises(ValueError, match="Unknown method"):
@@ -407,6 +429,7 @@ def test_df_over_f_select_extension_data(analyzer_with_fluorescence, rois):
     analyzer_with_fluorescence.compute("df_over_f")
     sub = analyzer_with_fluorescence.get_extension("df_over_f")._select_extension_data(rois.roi_ids[:2])
     assert sub["df_over_f"].shape == (NUM_FRAMES, 2)
+    assert sub["f0"].shape == (NUM_FRAMES, 2)
 
 
 # ---------------------------------------------------------------------------
@@ -746,19 +769,25 @@ def test_neuropil_extension_zarr_roundtrip(suite2p_rois, neuropil_imaging, tmp_p
     np.testing.assert_array_equal(reloaded.todense(), original.todense())
 
 
-def test_fluorescence_extension_auto_uses_neuropil_extension(suite2p_rois, neuropil_imaging):
-    """FluorescenceExtension should automatically pick up a computed NeuropilExtension."""
+@pytest.mark.parametrize("neuropil_weight", [0.3, 1.0])
+def test_fluorescence_extension_auto_uses_neuropil_extension(suite2p_rois, neuropil_imaging, neuropil_weight):
+    """FluorescenceExtension should automatically pick up a computed NeuropilExtension.
+
+    Uses weights other than FluorescenceNode's own default (0.7) so that a regression where
+    the extension's ``neuropil_weight`` param stops being forwarded to the node (silently
+    falling back to that unrelated default instead) would actually be caught.
+    """
     analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
     analyzer.compute("neuropil", min_neuropil_pixels=30)
     neuropil_masks = analyzer.get_extension("neuropil").get_data()
 
-    neuropil_weight = 0.7
     analyzer.compute("fluorescence", use_neuropil=True, neuropil_weight=neuropil_weight)
     fluorescence = analyzer.get_extension("fluorescence").get_data()
 
     chunk = neuropil_imaging.get_series(epoch_index=0)
     chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
-    roi_masks_flat = suite2p_rois.get_roi_image_masks().reshape((3, -1)).astype(np.float32)
+    roi_masks_flat = suite2p_rois.get_roi_image_masks().todense().reshape(3, -1).astype(np.float32)
+    roi_masks_flat = roi_masks_flat / roi_masks_flat.sum(axis=1, keepdims=True)
     neuropil_flat = neuropil_masks.reshape((3, -1)).astype(np.float32)
     expected = chunk_flat @ roi_masks_flat.T - neuropil_weight * (chunk_flat @ neuropil_flat.T)
 
@@ -773,7 +802,8 @@ def test_fluorescence_extension_use_neuropil_false_ignores_computed_extension(su
 
     chunk = neuropil_imaging.get_series(epoch_index=0)
     chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
-    roi_masks_flat = suite2p_rois.get_roi_image_masks().reshape((3, -1)).astype(np.float32)
+    roi_masks_flat = suite2p_rois.get_roi_image_masks().todense().reshape(3, -1).astype(np.float32)
+    roi_masks_flat = roi_masks_flat / roi_masks_flat.sum(axis=1, keepdims=True)
     expected = chunk_flat @ roi_masks_flat.T
 
     np.testing.assert_allclose(fluorescence, expected, rtol=1e-5)

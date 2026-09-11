@@ -1,6 +1,7 @@
 from typing import Any
 
 import numpy as np
+import sparse
 from spikeinterface.core.job_tools import fix_job_kwargs
 from spikeinterface.core.node_pipeline import PipelineNode, run_node_pipeline
 
@@ -47,7 +48,14 @@ class FluorescenceExtension(AnalyzerExtension):
             neuropil = self.roi_analyzer.get_extension("neuropil").get_data()
         else:
             neuropil = None
-        return [FluorescenceNode(self.roi_analyzer.imaging, self.roi_analyzer.rois, neuropil=neuropil)]
+        return [
+            FluorescenceNode(
+                self.roi_analyzer.imaging,
+                self.roi_analyzer.rois,
+                neuropil=neuropil,
+                neuropil_weight=self.params["neuropil_weight"],
+            )
+        ]
 
     def _get_data(self, outputs="numpy"):
         fluorescence_traces = self.data["fluorescence"]
@@ -80,6 +88,13 @@ class FluorescenceNode(PipelineNode):
         """
         Pipeline node to extract fluorescence traces from ROIs, with optional neuropil subtraction.
 
+        Each ROI's own mask (whatever ``rois.get_roi_image_masks()`` returns) is renormalized
+        internally so the returned trace correctly reconstructs the movie via ``traces @
+        masks`` (using the original, unnormalized masks) and, for non-overlapping ROIs,
+        matches the least-squares solution of ``movie ~ traces @ masks``. For binary masks
+        (the only kind currently produced anywhere in this codebase) this exactly recovers
+        each ROI's own per-pixel value; masks themselves are untouched (`rois` isn't mutated).
+
         Parameters
         ----------
         imaging : BaseImaging
@@ -108,7 +123,36 @@ class FluorescenceNode(PipelineNode):
         # which also accepts unpacked dimensions); a tuple works for both.
         masks = rois.get_roi_image_masks()  # (N, H, W) or (N, H, W, P)
         num_rois = masks.shape[0]
-        self._masks_flat = masks.reshape((num_rois, -1)).astype(np.float32)  # (N, spatial)
+        masks_flat = masks.reshape((num_rois, -1)).astype(np.float32)  # (N, spatial)
+
+        def _row_norm(x):
+            x = x.todense() if isinstance(x, sparse.SparseArray) else x
+            x = np.asarray(x).reshape(-1, 1)
+            x[x == 0] = 1.0  # an all-zero mask ROI stays all-zero, not NaN, downstream
+            return x
+
+        # Extraction uses each ROI's mask normalized to sum to 1 (L1, "mean" convention) --
+        # matching Suite2p's own F/Fneu convention (stat['lam'] weights sum to ~1;
+        # NeuropilExtension's ring masks are likewise L1-normalized, see
+        # _build_halo_neuropil_masks) so that F and the neuropil trace are on the same scale
+        # and F - neuropil_weight * neuropil_trace is dimensionally meaningful.
+        l1_norm = _row_norm(masks_flat.sum(axis=1))
+        self._masks_flat = masks_flat / l1_norm
+
+        # But L1 isn't the scale that correctly reconstructs the movie (or generalizes to
+        # regression-based extraction of overlapping ROIs): movie ~ traces @ masks has the
+        # least-squares solution traces = movie @ masks.T @ pinv(masks @ masks.T), which for
+        # non-overlapping ROIs is diagonal with each entry ||mask_n||^2 (L2 norm squared, not
+        # L1) -- so the correctly-scaled trace divides by L2 squared, not L1. The two coincide
+        # exactly for binary masks (mask**2 == mask -- true for every current mask source:
+        # Suite2pRois, generate_rois's default), so this only changes anything for weighted
+        # (non-binary) masks. Extracting via L1 first (for neuropil-subtraction consistency,
+        # above) and rescaling the result by L1/L2^2 afterwards is algebraically identical to
+        # extracting via L2^2 directly and rescaling the neuropil term by the same factor --
+        # scalar multiplication distributes over the subtraction -- so this order also keeps
+        # the neuropil subtraction itself correctly in Suite2p's mean-scale convention.
+        l2sq_norm = _row_norm((masks_flat**2).sum(axis=1))
+        self._rescale_to_l2 = (l1_norm / l2sq_norm).reshape(1, -1)  # (1, N), for compute()
 
         # Precompute flattened neuropil masks
         if neuropil is not None:
@@ -132,11 +176,15 @@ class FluorescenceNode(PipelineNode):
         # Weighted fluorescence per ROI: (T, N)
         fluorescence = chunk_flat @ self._masks_flat.T
 
-        # Neuropil subtraction
+        # Neuropil subtraction, in the same L1/mean scale as self._masks_flat
         if self._neuropil_flat is not None:
             # (T, 1) for global or (T, N) for per-ROI
             neuropil_trace = chunk_flat @ self._neuropil_flat.T
             fluorescence -= self.neuropil_weight * neuropil_trace
+
+        # Rescale from L1 to the L2-normalized scale (see __init__) -- a no-op (factor 1) for
+        # binary masks, the only kind currently produced anywhere in this codebase.
+        fluorescence *= self._rescale_to_l2
 
         return (fluorescence,)
 
@@ -157,6 +205,9 @@ class DfOverFExtension(AnalyzerExtension):
       filter, as used in CaImAn. The percentile level can be fixed
       (``prctile_baseline=<float>``) or estimated automatically per ROI via a
       DCT-based KDE of the fluorescence distribution (``prctile_baseline=None``).
+
+    The fitted baseline itself is kept alongside the dF/F traces, accessible via
+    ``self.data["f0"]`` (shape ``(n_frames, n_rois)``, matching ``self.data["df_over_f"]``).
     """
 
     extension_name = "df_over_f"
@@ -231,6 +282,7 @@ class DfOverFExtension(AnalyzerExtension):
             raise ValueError(f"Unknown method: '{method}'. Supported: 'maximin', 'percentile'.")
 
         self.data["df_over_f"] = ((F - F0) / (F0 + np.finfo(np.float32).eps)).astype(np.float32)
+        self.data["f0"] = F0.astype(np.float32)
 
     def _get_data(self, outputs="numpy"):
         """Return the computed dF/F traces.
@@ -263,7 +315,10 @@ class DfOverFExtension(AnalyzerExtension):
 
     def _select_extension_data(self, roi_ids):
         roi_indices = self.roi_analyzer.rois.ids_to_indices(roi_ids)
-        return {"df_over_f": self.data["df_over_f"][:, roi_indices]}
+        return {
+            "df_over_f": self.data["df_over_f"][:, roi_indices],
+            "f0": self.data["f0"][:, roi_indices],
+        }
 
 
 class DeconvolutionExtension(AnalyzerExtension):
