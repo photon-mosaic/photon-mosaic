@@ -386,6 +386,19 @@ def test_get_data_invalid_output(analyzer):
         ext.get_data(outputs="pandas")
 
 
+def test_get_computable_extensions_lists_all_core_extensions(analyzer):
+    """RoiAnalyzer.get_computable_extensions() is backed by a separate built-in registry
+    from the one compute() uses to auto-import extension classes -- it must list every core
+    extension defined in this module, not just the ones that happened to be registered when
+    that registry was first introduced."""
+    assert set(analyzer.get_computable_extensions()) == {
+        "fluorescence",
+        "df_over_f",
+        "deconvolution",
+        "neuropil",
+    }
+
+
 # ---------------------------------------------------------------------------
 # DfOverFExtension
 # ---------------------------------------------------------------------------

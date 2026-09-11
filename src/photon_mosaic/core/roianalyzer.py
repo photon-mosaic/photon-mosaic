@@ -1650,4 +1650,7 @@ class AnalyzerExtension:
 
 _builtin_extensions: dict[str, str] = {
     "fluorescence": "photon_mosaic.core",
+    "df_over_f": "photon_mosaic.core",
+    "deconvolution": "photon_mosaic.core",
+    "neuropil": "photon_mosaic.core",
 }
