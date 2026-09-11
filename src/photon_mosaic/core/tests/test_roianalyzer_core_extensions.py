@@ -7,7 +7,7 @@ from photon_mosaic.core import create_roi_analyzer, load_roi_analyzer
 from photon_mosaic.core.generators import generate_fluorescence, generate_random_imaging, generate_rois
 from photon_mosaic.core.roianalyzer_core_extensions import (
     FluorescenceNode,
-    _build_halo_neuropil_masks,
+    _build_surround_neuropil_masks,
     _kde_mode_percentile,
     _percentile_filter_roi,
 )
@@ -605,15 +605,15 @@ def test_kde_returns_valid_percentile():
 
 
 # ---------------------------------------------------------------------------
-# NeuropilExtension ("halo" / Suite2p-style ring mask)
+# NeuropilExtension ("surround" / Suite2p-style ring mask)
 # ---------------------------------------------------------------------------
 
 # Suite2p's default min_neuropil_pixels (350) is a third of this file's 32x32 test frame, so
-# halo-mask tests use their own larger frame and a much smaller min_neuropil_pixels.
+# surround-mask tests use their own larger frame and a much smaller min_neuropil_pixels.
 NEUROPIL_H, NEUROPIL_W = 64, 64
 
 
-def _make_halo_stats(centers, radius=2):
+def _make_surround_stats(centers, radius=2):
     """Small, well-separated square ROIs, for testing ring exclusion/weighting precisely."""
     stats = []
     for cy, cx in centers:
@@ -626,13 +626,13 @@ def _make_halo_stats(centers, radius=2):
 
 
 @pytest.fixture
-def halo_stats():
-    return _make_halo_stats([(15, 15), (45, 45), (15, 45)])
+def surround_stats():
+    return _make_surround_stats([(15, 15), (45, 45), (15, 45)])
 
 
 @pytest.fixture
-def suite2p_rois(halo_stats):
-    return Suite2pRois.from_stat(halo_stats, shape=(NEUROPIL_H, NEUROPIL_W, 1), sampling_frequency=SF)
+def suite2p_rois(surround_stats):
+    return Suite2pRois.from_stat(surround_stats, shape=(NEUROPIL_H, NEUROPIL_W, 1), sampling_frequency=SF)
 
 
 @pytest.fixture
@@ -642,44 +642,44 @@ def neuropil_imaging():
     )
 
 
-def test_halo_masks_shape_and_dtype(suite2p_rois):
-    masks = _build_halo_neuropil_masks(suite2p_rois.get_roi_image_masks(), min_neuropil_pixels=30)
+def test_surround_masks_shape_and_dtype(suite2p_rois):
+    masks = _build_surround_neuropil_masks(suite2p_rois.get_roi_image_masks(), min_neuropil_pixels=30)
     assert masks.shape == (3, NEUROPIL_H, NEUROPIL_W)
     assert masks.dtype == np.float32
 
 
-def test_halo_masks_ring_weights_sum_to_one(suite2p_rois):
-    masks = _build_halo_neuropil_masks(suite2p_rois.get_roi_image_masks(), min_neuropil_pixels=30)
+def test_surround_masks_ring_weights_sum_to_one(suite2p_rois):
+    masks = _build_surround_neuropil_masks(suite2p_rois.get_roi_image_masks(), min_neuropil_pixels=30)
     dense = masks.todense()
     for i in range(suite2p_rois.get_num_rois()):
         assert dense[i].sum() == pytest.approx(1.0)
 
 
-def test_halo_masks_exclude_own_and_other_roi_pixels(halo_stats, suite2p_rois):
+def test_surround_masks_exclude_own_and_other_roi_pixels(surround_stats, suite2p_rois):
     """Each ROI's ring should have zero weight at every pixel belonging to any ROI, not just itself."""
-    masks = _build_halo_neuropil_masks(suite2p_rois.get_roi_image_masks(), min_neuropil_pixels=30)
+    masks = _build_surround_neuropil_masks(suite2p_rois.get_roi_image_masks(), min_neuropil_pixels=30)
     dense = masks.todense()
-    for i in range(len(halo_stats)):
-        for stat in halo_stats:
+    for i in range(len(surround_stats)):
+        for stat in surround_stats:
             assert dense[i][stat["ypix"], stat["xpix"]].sum() == 0.0
 
 
-def test_halo_masks_works_with_generic_dense_masks(halo_stats):
+def test_surround_masks_works_with_generic_dense_masks(surround_stats):
     """The mask-based helper should work with any dense (n_rois, Ly, Lx) mask array, not just Suite2p."""
-    dense_masks = np.zeros((len(halo_stats), NEUROPIL_H, NEUROPIL_W), dtype=bool)
-    for i, stat in enumerate(halo_stats):
+    dense_masks = np.zeros((len(surround_stats), NEUROPIL_H, NEUROPIL_W), dtype=bool)
+    for i, stat in enumerate(surround_stats):
         dense_masks[i, stat["ypix"], stat["xpix"]] = True
 
-    masks = _build_halo_neuropil_masks(dense_masks, min_neuropil_pixels=30)
+    masks = _build_surround_neuropil_masks(dense_masks, min_neuropil_pixels=30)
     dense = masks.todense()
-    for i in range(len(halo_stats)):
+    for i in range(len(surround_stats)):
         assert dense[i].sum() == pytest.approx(1.0)
-        for stat in halo_stats:
+        for stat in surround_stats:
             assert dense[i][stat["ypix"], stat["xpix"]].sum() == 0.0
 
 
-def test_halo_masks_zero_rois():
-    masks = _build_halo_neuropil_masks(np.zeros((0, NEUROPIL_H, NEUROPIL_W), dtype=bool))
+def test_surround_masks_zero_rois():
+    masks = _build_surround_neuropil_masks(np.zeros((0, NEUROPIL_H, NEUROPIL_W), dtype=bool))
     assert masks.shape == (0, NEUROPIL_H, NEUROPIL_W)
 
 
@@ -704,7 +704,7 @@ def test_neuropil_extension_default_params(suite2p_rois, neuropil_imaging):
     analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
     analyzer.compute("neuropil", min_neuropil_pixels=30)
     params = analyzer.get_extension("neuropil").params
-    assert params["method"] == "halo"
+    assert params["method"] == "surround"
     assert params["inner_neuropil_radius"] == 2
     assert params["circular"] is False
 
@@ -722,7 +722,7 @@ def test_neuropil_extension_unknown_kwarg_raises(suite2p_rois, neuropil_imaging)
 
 
 def test_neuropil_extension_works_with_non_suite2p_rois(imaging, rois):
-    """NeuropilExtension('halo') derives pixel coordinates from get_roi_image_masks(), so it
+    """NeuropilExtension('surround') derives pixel coordinates from get_roi_image_masks(), so it
     works with any BaseRois, not only Suite2pRois -- this also matches the fact that
     create_roi_analyzer(..., format="memory") snapshots ROIs into a plain NumpyRois internally,
     so requiring a Suite2p-specific accessor would break even genuine Suite2pRois input."""
@@ -732,12 +732,12 @@ def test_neuropil_extension_works_with_non_suite2p_rois(imaging, rois):
     assert masks.shape == (NUM_ROIS, H, W)
 
 
-def test_neuropil_extension_multiplane_rois_raises(halo_stats):
+def test_neuropil_extension_multiplane_rois_raises(surround_stats):
     multiplane_rois = Suite2pRois.from_stat(
-        halo_stats,
+        surround_stats,
         shape=(NEUROPIL_H, NEUROPIL_W, 2),
         sampling_frequency=SF,
-        plane_assignments=np.zeros(len(halo_stats), dtype=int),
+        plane_assignments=np.zeros(len(surround_stats), dtype=int),
     )
     multiplane_imaging = generate_random_imaging(
         num_frames=NUM_FRAMES, height=NEUROPIL_H, width=NEUROPIL_W, num_planes=2, sampling_frequency=SF, seed=SEED

@@ -134,7 +134,7 @@ class FluorescenceNode(PipelineNode):
         # Extraction uses each ROI's mask normalized to sum to 1 (L1, "mean" convention) --
         # matching Suite2p's own F/Fneu convention (stat['lam'] weights sum to ~1;
         # NeuropilExtension's ring masks are likewise L1-normalized, see
-        # _build_halo_neuropil_masks) so that F and the neuropil trace are on the same scale
+        # _build_surround_neuropil_masks) so that F and the neuropil trace are on the same scale
         # and F - neuropil_weight * neuropil_trace is dimensionally meaningful.
         l1_norm = _row_norm(masks_flat.sum(axis=1))
         self._masks_flat = masks_flat / l1_norm
@@ -616,9 +616,9 @@ class NeuropilExtension(AnalyzerExtension):
 
     Currently one method is supported:
 
-    - ``'halo'``: Suite2p-style ring/annulus neuropil mask. For each ROI, builds the ring of
-      pixels surrounding it (excluding pixels belonging to any ROI), via
-      :func:`suite2p.extraction.masks.create_cell_pix`/:func:`~suite2p.extraction.masks.create_neuropil_masks`.
+    - ``'surround'``: Suite2p-style neuropil mask -- the region surrounding each ROI (excluding
+      pixels belonging to any ROI), rectangular by default or circular when ``circular=True``,
+      via :func:`suite2p.extraction.masks.create_cell_pix`/:func:`~suite2p.extraction.masks.create_neuropil_masks`.
       Ring pixels are weighted ``1 / n_ring_pixels`` so that the weighted-sum matmul in
       :class:`FluorescenceNode` reproduces suite2p's own unweighted-mean ``Fneu`` convention.
       Works with *any* :class:`~photon_mosaic.core.baserois.BaseRois` -- per-ROI pixel
@@ -642,7 +642,7 @@ class NeuropilExtension(AnalyzerExtension):
 
     def _set_params(
         self,
-        method: str = "halo",
+        method: str = "surround",
         inner_neuropil_radius: int = 2,
         min_neuropil_pixels: int = 350,
         circular: bool = False,
@@ -654,20 +654,20 @@ class NeuropilExtension(AnalyzerExtension):
         Parameters
         ----------
         method : str, optional
-            Neuropil mask construction method. Only ``'halo'`` (Suite2p-style ring/annulus) is
-            currently supported. Default is ``'halo'``.
+            Neuropil mask construction method. Only ``'surround'`` (Suite2p-style neighborhood mask,
+            rectangular or circular) is currently supported. Default is ``'surround'``.
         inner_neuropil_radius : int, optional
             Pixels around each ROI to exclude before the ring starts. Only used with
-            ``method='halo'``. Default is ``2``.
+            ``method='surround'``. Default is ``2``.
         min_neuropil_pixels : int, optional
             Minimum ring pixel count; the ring grows outward until this many pixels are found.
-            Only used with ``method='halo'``. Default is ``350``.
+            Only used with ``method='surround'``. Default is ``350``.
         circular : bool, optional
             Restrict the ring to a circular region instead of a rectangular bounding-box grow.
-            Only used with ``method='halo'``. Default is ``False``.
+            Only used with ``method='surround'``. Default is ``False``.
         lam_percentile : float, optional
             Percentile threshold used to decide which weighted pixels count as "ROI" pixels,
-            excluded from every ROI's ring. Only used with ``method='halo'``. Default is
+            excluded from every ROI's ring. Only used with ``method='surround'``. Default is
             ``50.0``.
         """
         if params:
@@ -687,13 +687,13 @@ class NeuropilExtension(AnalyzerExtension):
         if rois.num_planes > 1:
             raise NotImplementedError(
                 f"NeuropilExtension currently only supports single-plane ROIs "
-                f"(got num_planes={rois.num_planes}). Multi-plane halo neuropil masks are not "
+                f"(got num_planes={rois.num_planes}). Multi-plane surround neuropil masks are not "
                 "yet implemented."
             )
 
-        if method == "halo":
+        if method == "surround":
             masks = rois.get_roi_image_masks()
-            self.data["neuropil_masks"] = _build_halo_neuropil_masks(
+            self.data["neuropil_masks"] = _build_surround_neuropil_masks(
                 masks,
                 inner_neuropil_radius=self.params["inner_neuropil_radius"],
                 min_neuropil_pixels=self.params["min_neuropil_pixels"],
@@ -701,7 +701,7 @@ class NeuropilExtension(AnalyzerExtension):
                 lam_percentile=self.params["lam_percentile"],
             )
         else:
-            raise ValueError(f"Unknown method: '{method}'. Supported: 'halo'.")
+            raise ValueError(f"Unknown method: '{method}'. Supported: 'surround'.")
 
     def _get_data(self):
         """Return the computed neuropil masks.
@@ -720,14 +720,14 @@ class NeuropilExtension(AnalyzerExtension):
         return {"neuropil_masks": self.data["neuropil_masks"][roi_indices]}
 
 
-def _build_halo_neuropil_masks(
+def _build_surround_neuropil_masks(
     masks,
     inner_neuropil_radius: int = 2,
     min_neuropil_pixels: int = 350,
     circular: bool = False,
     lam_percentile: float = 50.0,
 ):
-    """Build Suite2p-style ring/annulus ("halo") neuropil masks from ROI image masks.
+    """Build Suite2p-style ("surround") neuropil masks from ROI image masks.
 
     For each ROI, builds the ring of pixels surrounding it (excluding pixels belonging to any
     ROI) via :mod:`suite2p.extraction.masks`, then converts the flattened-index ring into a
@@ -739,7 +739,7 @@ def _build_halo_neuropil_masks(
     uninterpretable.
 
     Per-ROI pixel coordinates and weights are derived directly from ``masks`` (each ROI's own
-    nonzero entries), rather than requiring suite2p's raw stat dicts -- this makes ``'halo'``
+    nonzero entries), rather than requiring suite2p's raw stat dicts -- this makes ``'surround'``
     usable with any :class:`~photon_mosaic.core.baserois.BaseRois`, not only
     :class:`~photon_mosaic.extractors.Suite2pRois`. Each ROI's ``radius`` (needed by
     ``create_cell_pix``'s internal smoothing) is estimated from its pixel count assuming a
@@ -765,7 +765,7 @@ def _build_halo_neuropil_masks(
         from suite2p.extraction.masks import create_cell_pix, create_neuropil_masks
     except ImportError as e:
         raise ImportError(
-            "NeuropilExtension(method='halo') requires suite2p. Install it with "
+            "NeuropilExtension(method='surround') requires suite2p. Install it with "
             "'pip install \"photon-mosaic[suite2p-registration]\"'."
         ) from e
 
