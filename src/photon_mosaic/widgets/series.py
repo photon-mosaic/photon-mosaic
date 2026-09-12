@@ -365,11 +365,11 @@ class ImagingSeriesWidget(BaseWidget):
         import threading
         import time
 
-        self.is_playing = True
+        with self._playback_timing_lock:
+            self.is_playing = True
+            self._playback_last_time = time.monotonic()
         self.play_button.description = "⏸ Pause"
         self.play_button.button_style = "warning"
-        with self._playback_timing_lock:
-            self._playback_last_time = time.monotonic()
 
         # Start playback thread
         self.play_thread = threading.Thread(target=self._playback_loop)
@@ -378,7 +378,8 @@ class ImagingSeriesWidget(BaseWidget):
 
     def _stop_playback(self):
         """Stop video playback."""
-        self.is_playing = False
+        with self._playback_timing_lock:
+            self.is_playing = False
         self.play_button.description = "▶ Play"
         self.play_button.button_style = "success"
 
@@ -405,32 +406,40 @@ class ImagingSeriesWidget(BaseWidget):
 
         dp = to_attr(self.data_plot)
 
-        while self.is_playing and self.current_frame < dp.num_frames - 1:
-            reached_last_frame = False
+        reached_last_frame = False
+        while True:
             with self._playback_timing_lock:
+                if not self.is_playing or self.current_frame >= dp.num_frames - 1:
+                    reached_last_frame = self.current_frame >= dp.num_frames - 1
+                    break
                 now = time.monotonic()
                 playback_fps = self.playback_fps
                 elapsed_seconds = max(0.0, now - self._playback_last_time)
                 frames_elapsed = int(elapsed_seconds * playback_fps)
-                if self.is_playing and frames_elapsed > 0:  # Check again in case it was stopped
+                frame_to_display = None
+                if frames_elapsed > 0:
                     self.current_frame = min(self.current_frame + frames_elapsed, dp.num_frames - 1)
                     self._playback_last_time += frames_elapsed / playback_fps
                     reached_last_frame = self.current_frame >= dp.num_frames - 1
-            if self.is_playing and frames_elapsed > 0:  # Check again in case it was stopped
+                    frame_to_display = self.current_frame
+                else:
+                    reached_last_frame = False
+            if frame_to_display is not None:
                 # Update slider and display
-                self.frame_slider.value = self.current_frame
+                self.frame_slider.value = frame_to_display
             if reached_last_frame:
                 break
             with self._playback_timing_lock:
                 sleep_duration = 1.0 / (4 * self.playback_fps)
             time.sleep(sleep_duration)
         # Stop when reaching the end
-        if self.current_frame >= dp.num_frames - 1:
+        if reached_last_frame:
             self._stop_playback()
 
     def _on_frame_changed(self, change):
         """Handle frame slider change."""
-        self.current_frame = change["new"]
+        with self._playback_timing_lock:
+            self.current_frame = change["new"]
         self._update_display()
 
     def _on_fps_changed(self, change):
@@ -457,7 +466,8 @@ class ImagingSeriesWidget(BaseWidget):
         """
         dp = to_attr(self.data_plot)
         if 0 <= frame_number < dp.num_frames:
-            self.current_frame = frame_number
+            with self._playback_timing_lock:
+                self.current_frame = frame_number
             if hasattr(self, "frame_slider"):
                 self.frame_slider.value = frame_number
             self._update_display()
