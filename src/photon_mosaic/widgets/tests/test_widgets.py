@@ -256,6 +256,26 @@ def test_playback_loop_skips_ahead_after_slow_iteration(monkeypatch):
     assert sleep_calls[0] == pytest.approx(0.025)
 
 
+def test_playback_loop_initializes_missing_last_time(monkeypatch):
+    harness = _PlaybackHarness(num_frames=1000, playback_fps=10, last_time=None)
+
+    fake_time = [0.0]
+    sleep_calls = []
+    monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
+
+    def fake_sleep(duration):
+        sleep_calls.append(duration)
+        harness.is_playing = False
+
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    harness._playback_loop()
+
+    assert harness.current_frame == 0
+    assert harness._playback_last_time == pytest.approx(0.0)
+    assert sleep_calls == [pytest.approx(0.025)]
+
+
 def test_playback_loop_stops_at_last_frame(monkeypatch):
     """Reaching the final frame should stop playback (button reset to Play)."""
     harness = _PlaybackHarness(num_frames=5, playback_fps=10, current_frame=3)

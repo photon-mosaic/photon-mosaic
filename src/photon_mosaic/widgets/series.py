@@ -414,6 +414,8 @@ class ImagingSeriesWidget(BaseWidget):
                 if not self.is_playing or self.current_frame >= dp.num_frames - 1:
                     reached_last_frame = self.current_frame >= dp.num_frames - 1
                     break
+                if self._playback_last_time is None:
+                    self._playback_last_time = time.monotonic()
                 now = time.monotonic()
                 playback_fps = self.playback_fps
                 elapsed_seconds = max(0.0, now - self._playback_last_time)
