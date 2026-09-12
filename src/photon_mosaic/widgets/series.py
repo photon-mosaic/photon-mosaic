@@ -3,6 +3,8 @@ from spikeinterface.widgets.base import BaseWidget, to_attr
 
 from photon_mosaic.core.baseimaging import BaseImaging
 
+_PLAYBACK_FPS_MIN = 0.1
+
 
 class ImagingSeriesWidget(BaseWidget):
     """Widget for visualizing an ImagingExtractor series with interactive controls.
@@ -234,7 +236,7 @@ class ImagingSeriesWidget(BaseWidget):
         # Playback speed control
         self.fps_slider = widgets.FloatSlider(
             value=self.playback_fps,
-            min=0.1,
+            min=_PLAYBACK_FPS_MIN,
             max=min(30.0, dp.frame_rate),
             step=0.1,
             description="Speed (fps):",
@@ -446,7 +448,7 @@ class ImagingSeriesWidget(BaseWidget):
         """Handle FPS slider change."""
         import time
 
-        new_fps = max(0.1, float(change["new"]))
+        new_fps = max(_PLAYBACK_FPS_MIN, float(change["new"]))
         with self._playback_timing_lock:
             self.playback_fps = new_fps
             # Reset the pacing reference so the new rate only applies to time elapsed from here on --
