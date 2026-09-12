@@ -102,6 +102,8 @@ class ImagingSeriesWidget(BaseWidget):
 
     def plot_ipywidgets(self, data_plot, **backend_kwargs):
         """Interactive ipywidgets plot with video controls."""
+        import threading
+
         import matplotlib.pyplot as plt
         from IPython.display import display
         from spikeinterface.widgets.utils_ipywidgets import check_ipywidget_backend
@@ -117,6 +119,7 @@ class ImagingSeriesWidget(BaseWidget):
         self.play_thread = None
         self.playback_fps = min(10.0, dp.frame_rate)  # Default playback speed
         self._playback_last_time: float | None = None  # set by _start_playback/_on_fps_changed
+        self._playback_timing_lock = threading.Lock()
 
         # Sample up to 100 frames to compute a global vmin/vmax for the colormap.
         num_samples = min(100, dp.num_frames)
@@ -365,7 +368,8 @@ class ImagingSeriesWidget(BaseWidget):
         self.is_playing = True
         self.play_button.description = "⏸ Pause"
         self.play_button.button_style = "warning"
-        self._playback_last_time = time.monotonic()
+        with self._playback_timing_lock:
+            self._playback_last_time = time.monotonic()
 
         # Start playback thread
         self.play_thread = threading.Thread(target=self._playback_loop)
@@ -403,13 +407,21 @@ class ImagingSeriesWidget(BaseWidget):
 
         while self.is_playing and self.current_frame < dp.num_frames - 1:
             now = time.monotonic()
-            frames_elapsed = int((now - self._playback_last_time) * self.playback_fps)
+            reached_last_frame = False
+            with self._playback_timing_lock:
+                playback_fps = self.playback_fps
+                frames_elapsed = int((now - self._playback_last_time) * playback_fps)
+                if self.is_playing and frames_elapsed > 0:  # Check again in case it was stopped
+                    self.current_frame = min(self.current_frame + frames_elapsed, dp.num_frames - 1)
+                    self._playback_last_time += frames_elapsed / playback_fps
+                    reached_last_frame = self.current_frame >= dp.num_frames - 1
+                sleep_duration = 1.0 / (4 * playback_fps)
             if self.is_playing and frames_elapsed > 0:  # Check again in case it was stopped
-                self.current_frame = min(self.current_frame + frames_elapsed, dp.num_frames - 1)
-                self._playback_last_time += frames_elapsed / self.playback_fps
                 # Update slider and display
                 self.frame_slider.value = self.current_frame
-            time.sleep(1.0 / (4 * self.playback_fps))
+            if reached_last_frame:
+                break
+            time.sleep(sleep_duration)
         # Stop when reaching the end
         if self.current_frame >= dp.num_frames - 1:
             self._stop_playback()
@@ -423,11 +435,12 @@ class ImagingSeriesWidget(BaseWidget):
         """Handle FPS slider change."""
         import time
 
-        self.playback_fps = change["new"]
-        # Reset the pacing reference so the new rate only applies to time elapsed from here on --
-        # otherwise _playback_loop would apply it to time that already elapsed under the old rate,
-        # producing an incorrect frame jump right at the moment of the change.
-        self._playback_last_time = time.monotonic()
+        with self._playback_timing_lock:
+            self.playback_fps = change["new"]
+            # Reset the pacing reference so the new rate only applies to time elapsed from here on --
+            # otherwise _playback_loop would apply it to time that already elapsed under the old rate,
+            # producing an incorrect frame jump right at the moment of the change.
+            self._playback_last_time = time.monotonic()
 
     def _on_display_changed(self, change):
         """Handle display parameter changes (colormap, contrast)."""

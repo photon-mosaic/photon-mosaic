@@ -1,3 +1,4 @@
+import threading
 from unittest.mock import patch
 
 import numpy as np
@@ -218,6 +219,7 @@ class _PlaybackHarness:
         self.frame_slider = _FakeSlider(current_frame)
         self.play_button = _FakeButton()
         self._playback_last_time = last_time  # normally set by _start_playback/_on_fps_changed
+        self._playback_timing_lock = threading.Lock()
 
     _playback_loop = ImagingSeriesWidget._playback_loop
     _stop_playback = ImagingSeriesWidget._stop_playback
@@ -260,8 +262,10 @@ def test_playback_loop_stops_at_last_frame(monkeypatch):
 
     fake_time = [0.0]
     monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
+    sleep_calls = []
 
     def fake_sleep(duration):
+        sleep_calls.append(duration)
         fake_time[0] += 1.0  # always enough to reach the end in one jump
 
     monkeypatch.setattr("time.sleep", fake_sleep)
@@ -271,6 +275,7 @@ def test_playback_loop_stops_at_last_frame(monkeypatch):
     assert harness.current_frame == 4  # num_frames - 1
     assert harness.is_playing is False
     assert harness.play_button.description == "▶ Play"
+    assert len(sleep_calls) == 1
 
 
 def test_playback_loop_does_not_drift_under_irregular_polling(monkeypatch):
@@ -328,3 +333,58 @@ def test_fps_change_does_not_retroactively_apply_to_elapsed_time(monkeypatch):
 
     # without the reset, this would advance by int(0.1 * 20) = 2 frames instead of 0
     assert harness.current_frame == 0
+
+
+class _BlockingLock:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.entered = threading.Event()
+        self.release = threading.Event()
+        self.block_first_enter = True
+
+    def __enter__(self):
+        self._lock.acquire()
+        if self.block_first_enter:
+            self.block_first_enter = False
+            self.entered.set()
+            assert self.release.wait(timeout=1), "timed out waiting to release playback timing lock"
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self._lock.release()
+
+
+def test_fps_change_waits_for_playback_timing_lock(monkeypatch):
+    """Playback updates and FPS changes should serialize through the same timing lock."""
+    harness = _PlaybackHarness(num_frames=10_000, playback_fps=10, last_time=0.0)
+    harness._playback_timing_lock = _BlockingLock()
+
+    fake_time = [0.1]
+    monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
+    monkeypatch.setattr("time.sleep", lambda duration: setattr(harness, "is_playing", False))
+
+    playback_thread = threading.Thread(target=harness._playback_loop)
+    playback_thread.start()
+
+    assert harness._playback_timing_lock.entered.wait(timeout=1), "playback loop never acquired timing lock"
+
+    fps_change_finished = threading.Event()
+
+    def change_fps():
+        harness._on_fps_changed({"new": 20})
+        fps_change_finished.set()
+
+    fps_thread = threading.Thread(target=change_fps)
+    fps_thread.start()
+
+    assert not fps_change_finished.wait(timeout=0.05), "fps change should block on playback timing lock"
+
+    harness._playback_timing_lock.release.set()
+    playback_thread.join(timeout=1)
+    fps_thread.join(timeout=1)
+
+    assert not playback_thread.is_alive()
+    assert not fps_thread.is_alive()
+    assert harness.current_frame == 1
+    assert harness.playback_fps == 20
+    assert harness._playback_last_time == pytest.approx(0.1)
