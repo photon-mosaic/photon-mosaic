@@ -335,6 +335,17 @@ def test_fps_change_does_not_retroactively_apply_to_elapsed_time(monkeypatch):
     assert harness.current_frame == 0
 
 
+def test_fps_change_clamps_non_positive_values(monkeypatch):
+    harness = _PlaybackHarness(num_frames=10_000, playback_fps=10)
+
+    monkeypatch.setattr("time.monotonic", lambda: 1.23)
+
+    harness._on_fps_changed({"new": 0})
+
+    assert harness.playback_fps == pytest.approx(0.1)
+    assert harness._playback_last_time == pytest.approx(1.23)
+
+
 class _BlockingLock:
     def __init__(self):
         self._lock = threading.Lock()

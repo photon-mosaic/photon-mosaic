@@ -446,8 +446,9 @@ class ImagingSeriesWidget(BaseWidget):
         """Handle FPS slider change."""
         import time
 
+        new_fps = max(0.1, float(change["new"]))
         with self._playback_timing_lock:
-            self.playback_fps = change["new"]
+            self.playback_fps = new_fps
             # Reset the pacing reference so the new rate only applies to time elapsed from here on --
             # otherwise _playback_loop would apply it to time that already elapsed under the old rate,
             # producing an incorrect frame jump right at the moment of the change.
