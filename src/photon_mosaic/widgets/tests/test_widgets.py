@@ -372,6 +372,24 @@ class _TimeAdvancingLock:
         self._lock.release()
 
 
+class _SleepFpsLock:
+    def __init__(self, harness, updated_fps):
+        self._lock = threading.Lock()
+        self.harness = harness
+        self.updated_fps = updated_fps
+        self.enter_count = 0
+
+    def __enter__(self):
+        self._lock.acquire()
+        self.enter_count += 1
+        if self.enter_count == 2:
+            self.harness.playback_fps = self.updated_fps
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self._lock.release()
+
+
 def test_playback_loop_samples_time_inside_timing_lock(monkeypatch):
     """The elapsed-time sample should be taken after the timing lock is acquired."""
     fake_time = [0.0]
@@ -384,6 +402,28 @@ def test_playback_loop_samples_time_inside_timing_lock(monkeypatch):
     harness._playback_loop()
 
     assert harness.current_frame == 1
+
+
+def test_playback_loop_rechecks_fps_before_sleep(monkeypatch):
+    """A just-applied FPS change should affect the same iteration's sleep pacing."""
+    harness = _PlaybackHarness(num_frames=10_000, playback_fps=10, last_time=0.0)
+    harness._playback_timing_lock = _SleepFpsLock(harness, updated_fps=20)
+
+    fake_time = [0.1]
+    sleep_calls = []
+
+    monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
+
+    def fake_sleep(duration):
+        sleep_calls.append(duration)
+        harness.is_playing = False
+
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    harness._playback_loop()
+
+    assert harness.current_frame == 1
+    assert sleep_calls == [pytest.approx(0.0125)]
 
 
 def test_fps_change_waits_for_playback_timing_lock(monkeypatch):

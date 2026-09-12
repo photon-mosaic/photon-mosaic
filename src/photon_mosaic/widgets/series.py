@@ -416,12 +416,13 @@ class ImagingSeriesWidget(BaseWidget):
                     self.current_frame = min(self.current_frame + frames_elapsed, dp.num_frames - 1)
                     self._playback_last_time += frames_elapsed / playback_fps
                     reached_last_frame = self.current_frame >= dp.num_frames - 1
-                sleep_duration = 1.0 / (4 * playback_fps)
             if self.is_playing and frames_elapsed > 0:  # Check again in case it was stopped
                 # Update slider and display
                 self.frame_slider.value = self.current_frame
             if reached_last_frame:
                 break
+            with self._playback_timing_lock:
+                sleep_duration = 1.0 / (4 * self.playback_fps)
             time.sleep(sleep_duration)
         # Stop when reaching the end
         if self.current_frame >= dp.num_frames - 1:
