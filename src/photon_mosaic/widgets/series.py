@@ -406,11 +406,12 @@ class ImagingSeriesWidget(BaseWidget):
         dp = to_attr(self.data_plot)
 
         while self.is_playing and self.current_frame < dp.num_frames - 1:
-            now = time.monotonic()
             reached_last_frame = False
             with self._playback_timing_lock:
+                now = time.monotonic()
                 playback_fps = self.playback_fps
-                frames_elapsed = int((now - self._playback_last_time) * playback_fps)
+                elapsed_seconds = max(0.0, now - self._playback_last_time)
+                frames_elapsed = int(elapsed_seconds * playback_fps)
                 if self.is_playing and frames_elapsed > 0:  # Check again in case it was stopped
                     self.current_frame = min(self.current_frame + frames_elapsed, dp.num_frames - 1)
                     self._playback_last_time += frames_elapsed / playback_fps

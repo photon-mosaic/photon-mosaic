@@ -354,6 +354,38 @@ class _BlockingLock:
         self._lock.release()
 
 
+class _TimeAdvancingLock:
+    def __init__(self, fake_time, advanced_to):
+        self._lock = threading.Lock()
+        self.fake_time = fake_time
+        self.advanced_to = advanced_to
+        self.advanced = False
+
+    def __enter__(self):
+        self._lock.acquire()
+        if not self.advanced:
+            self.fake_time[0] = self.advanced_to
+            self.advanced = True
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self._lock.release()
+
+
+def test_playback_loop_samples_time_inside_timing_lock(monkeypatch):
+    """The elapsed-time sample should be taken after the timing lock is acquired."""
+    fake_time = [0.0]
+    harness = _PlaybackHarness(num_frames=10_000, playback_fps=10, last_time=0.0)
+    harness._playback_timing_lock = _TimeAdvancingLock(fake_time, advanced_to=0.1)
+
+    monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
+    monkeypatch.setattr("time.sleep", lambda duration: setattr(harness, "is_playing", False))
+
+    harness._playback_loop()
+
+    assert harness.current_frame == 1
+
+
 def test_fps_change_waits_for_playback_timing_lock(monkeypatch):
     """Playback updates and FPS changes should serialize through the same timing lock."""
     harness = _PlaybackHarness(num_frames=10_000, playback_fps=10, last_time=0.0)
