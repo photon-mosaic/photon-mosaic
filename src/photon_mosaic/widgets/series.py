@@ -323,46 +323,61 @@ class ImagingSeriesWidget(BaseWidget):
         self.vmax_slider.observe(self._on_display_changed, names="value")
 
     def _update_display(self):
-        """Update the image display."""
-        dp = to_attr(self.data_plot)
+        """Update the image display.
 
-        # Update all views
-        for idx, view_name in enumerate(dp.view_names):
-            imaging = dp.imaging_dict[view_name]
-            ax = self.axes[idx]
-            im = self.images[view_name]
+        Captures current_frame and _frame_generation together under the lock and renders that
+        one snapshot throughout, rather than re-reading current_frame at each of the several
+        points below (per-view image data, each title, the time label) -- a concurrent seek or
+        playback advance partway through could otherwise mix pixels from one frame with
+        another's title/time text. Converges the same way _publish_current_frame_to_slider
+        does: redraws again if the generation moved on while this render was in flight.
+        """
+        while True:
+            with self._playback_timing_lock:
+                frame = self.current_frame
+                generation = self._frame_generation
+            dp = to_attr(self.data_plot)
 
-            # Get current frame data
-            frame_data = imaging.get_series(self.current_frame, self.current_frame + 1, epoch_index=dp.epoch_index)
-            frame = frame_data[0]  # Remove time dimension
+            # Update all views
+            for idx, view_name in enumerate(dp.view_names):
+                imaging = dp.imaging_dict[view_name]
+                ax = self.axes[idx]
+                im = self.images[view_name]
 
-            # Use slider values as scaling factors on the global range
-            # This keeps the colorbar fixed but allows user adjustment
-            range_span = self.global_vmax[view_name] - self.global_vmin[view_name]
-            vmin_val = self.global_vmin[view_name] + (self.vmin_slider.value / 100.0) * range_span
-            vmax_val = self.global_vmin[view_name] + (self.vmax_slider.value / 100.0) * range_span
+                # Get current frame data
+                frame_data = imaging.get_series(frame, frame + 1, epoch_index=dp.epoch_index)
 
-            # Update the image data and colormap (much faster than recreating)
-            im.set_data(frame)
-            im.set_cmap(self.colormap_dropdown.value)
-            im.set_clim(vmin=vmin_val, vmax=vmax_val)
+                # Use slider values as scaling factors on the global range
+                # This keeps the colorbar fixed but allows user adjustment
+                range_span = self.global_vmax[view_name] - self.global_vmin[view_name]
+                vmin_val = self.global_vmin[view_name] + (self.vmin_slider.value / 100.0) * range_span
+                vmax_val = self.global_vmin[view_name] + (self.vmax_slider.value / 100.0) * range_span
 
-            # Update title
-            if dp.is_multi_view:
-                ax.set_title(f"{view_name}\nFrame {self.current_frame} | Time: {dp.times[self.current_frame]:.3f}s")
-            else:
-                ax.set_title(f"Frame {self.current_frame} | Time: {dp.times[self.current_frame]:.3f}s")
+                # Update the image data and colormap (much faster than recreating)
+                im.set_data(frame_data[0])  # Remove time dimension
+                im.set_cmap(self.colormap_dropdown.value)
+                im.set_clim(vmin=vmin_val, vmax=vmax_val)
 
-        # Update time label
-        self._update_time_label()
+                # Update title
+                if dp.is_multi_view:
+                    ax.set_title(f"{view_name}\nFrame {frame} | Time: {dp.times[frame]:.3f}s")
+                else:
+                    ax.set_title(f"Frame {frame} | Time: {dp.times[frame]:.3f}s")
 
-        # Refresh the canvas
-        self.figure.canvas.draw_idle()
+            # Update time label
+            self._update_time_label(frame)
 
-    def _update_time_label(self):
+            # Refresh the canvas
+            self.figure.canvas.draw_idle()
+
+            with self._playback_timing_lock:
+                if self._frame_generation == generation:
+                    return
+
+    def _update_time_label(self, frame):
         """Update time display label."""
         dp = to_attr(self.data_plot)
-        current_time = dp.times[self.current_frame]
+        current_time = dp.times[frame]
         total_time = dp.times[-1]
         self.time_label.value = f"Time: {current_time:.3f}s / {total_time:.2f}s"
 

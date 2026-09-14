@@ -1,4 +1,5 @@
 import threading
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
@@ -920,3 +921,99 @@ def test_playback_loop_revalidates_last_frame_before_cleanup_stop(monkeypatch):
     assert harness.current_frame == 2
     assert harness.is_playing is True
     assert len(started_threads) == 1
+
+
+class _FakeImaging:
+    def __init__(self, on_get_series=None):
+        self.on_get_series = on_get_series
+        self.calls = []
+
+    def get_series(self, start, end, epoch_index=0):
+        self.calls.append(start)
+        if self.on_get_series:
+            self.on_get_series(start)
+        return np.zeros((1, 2, 2))
+
+
+class _DisplayHarness:
+    """Minimal stand-in exposing exactly what _update_display touches."""
+
+    def __init__(self, num_frames, current_frame, on_get_series=None):
+        imaging = _FakeImaging(on_get_series)
+        self.data_plot = {
+            "view_names": ["v"],
+            "imaging_dict": {"v": imaging},
+            "is_multi_view": False,
+            "times": np.arange(num_frames, dtype=float),
+            "epoch_index": 0,
+        }
+        self.axes = [_FakeAx()]
+        self.images = {"v": _FakeImage()}
+        self.global_vmin = {"v": 0.0}
+        self.global_vmax = {"v": 1.0}
+        self.vmin_slider = SimpleNamespace(value=0.0)
+        self.vmax_slider = SimpleNamespace(value=100.0)
+        self.colormap_dropdown = SimpleNamespace(value="gray")
+        self.time_label = SimpleNamespace(value="")
+        self.figure = _FakeFigure()
+        self.current_frame = current_frame
+        self._frame_generation = 0
+        self._playback_timing_lock = threading.RLock()
+
+    _update_display = ImagingSeriesWidget._update_display
+    _update_time_label = ImagingSeriesWidget._update_time_label
+
+
+class _FakeAx:
+    def __init__(self):
+        self.title = None
+
+    def set_title(self, title):
+        self.title = title
+
+
+class _FakeImage:
+    def __init__(self):
+        self.clim = None
+
+    def set_data(self, data):
+        pass
+
+    def set_cmap(self, cmap):
+        pass
+
+    def set_clim(self, vmin, vmax):
+        self.clim = (vmin, vmax)
+
+
+class _FakeFigure:
+    def __init__(self):
+        self.draw_count = 0
+        self.canvas = SimpleNamespace(draw_idle=self._draw_idle)
+
+    def _draw_idle(self):
+        self.draw_count += 1
+
+
+def test_update_display_does_not_tear_across_a_concurrent_frame_change():
+    """current_frame is read at several points in _update_display (image data, title, time
+    label) -- without a single captured snapshot, a concurrent change partway through could
+    render one frame's pixels under another frame's title. Also verifies the render converges
+    (redraws again) if current_frame moved on while the first pass was in flight."""
+
+    def advance_during_first_fetch(frame_fetched):
+        if frame_fetched == 5:  # only the very first get_series call, for frame 5
+            harness.current_frame = 9
+            harness._frame_generation += 1
+
+    harness = _DisplayHarness(num_frames=20, current_frame=5, on_get_series=advance_during_first_fetch)
+
+    harness._update_display()
+
+    # Two passes: frame 5 (the snapshot the first pass captured, torn or not) is fetched, then
+    # the convergence check finds the generation changed and redraws with the new frame, 9.
+    assert harness.data_plot["imaging_dict"]["v"].calls == [5, 9]
+    # The final, settled state is fully consistent with the latest frame, not torn.
+    assert harness.axes[0].title == "Frame 9 | Time: 9.000s"
+    assert harness.time_label.value == "Time: 9.000s / 19.00s"
+    assert harness.figure.draw_count == 2
