@@ -122,10 +122,17 @@ class ImagingSeriesWidget(BaseWidget):
         self.playback_fps = min(10.0, dp.frame_rate)  # Default playback speed
         self._playback_last_time: float | None = None  # set by _start_playback/_on_fps_changed
         self._playback_timing_lock = threading.RLock()
-        # Set by _playback_loop right before it writes frame_slider.value, so _on_frame_changed
-        # can tell its own programmatic update apart from a genuine user seek -- both fire the
-        # same observer, but only a real seek should reset current_frame/_playback_last_time.
-        self._updating_slider_internally = False
+        # Bumped under the lock every time current_frame is authoritatively set (a playback
+        # advance, a real seek, or seek_to_frame), so _publish_current_frame_to_slider can tell
+        # whether its own in-flight publish has gone stale and needs to republish the latest
+        # state, instead of leaving the widget showing a value current_frame has moved past.
+        self._frame_generation = 0
+        # Thread-local: set around a publish's own write to frame_slider.value, so
+        # _on_frame_changed can tell that write's own resulting observer call apart from a
+        # genuine seek. Thread-local (not a shared flag) because a publish and a genuine seek
+        # can only ever happen on two different threads (the playback worker vs. the kernel
+        # thread), so one thread's in-flight publish can never be mistaken for the other's seek.
+        self._slider_write_state = threading.local()
 
         # Sample up to 100 frames to compute a global vmin/vmax for the colormap.
         num_samples = min(100, dp.num_frames)
@@ -444,39 +451,17 @@ class ImagingSeriesWidget(BaseWidget):
                 if frames_elapsed > 0:
                     self.current_frame = min(self.current_frame + frames_elapsed, dp.num_frames - 1)
                     self._playback_last_time += frames_elapsed / playback_fps
+                    self._frame_generation += 1
                     reached_last_frame = self.current_frame >= dp.num_frames - 1
                     frame_to_display = self.current_frame
                 else:
                     reached_last_frame = False
             if frame_to_display is not None:
-                with self._playback_timing_lock:
-                    should_publish_frame = self.is_playing and self.current_frame == frame_to_display
-                if not should_publish_frame:
-                    continue
-                # Update slider and display. This write is deliberately outside the lock (a
-                # redraw shouldn't block _on_fps_changed/_on_play_button_clicked), but it fires
-                # _on_frame_changed just like a real user drag would -- flag it as internal so
-                # that callback doesn't treat a stale write (one that lands after a genuine seek
-                # already changed current_frame) as a new seek and clobber it.
-                self._updating_slider_internally = True
-                try:
-                    self.frame_slider.value = frame_to_display
-                finally:
-                    self._updating_slider_internally = False
-                # should_publish_frame is a check, not a lock held across this write -- a real
-                # seek can still land in the gap between it and the line above, leaving the
-                # slider showing our stale frame_to_display while current_frame (and the frame
-                # _update_display just rendered, which reads current_frame fresh) already moved
-                # on. Reconcile immediately: if current_frame no longer matches what we just
-                # wrote, resync the slider to it rather than leave the two visibly inconsistent.
-                with self._playback_timing_lock:
-                    actual_frame = self.current_frame
-                if actual_frame != frame_to_display:
-                    self._updating_slider_internally = True
-                    try:
-                        self.frame_slider.value = actual_frame
-                    finally:
-                        self._updating_slider_internally = False
+                # Publish (not a raw write): current_frame is already authoritative as of the
+                # lock above. _publish_current_frame_to_slider re-reads it fresh and converges
+                # even if a seek or a later loop iteration changes it again while this call is
+                # in flight, so the widget never ends up stuck showing a stale frame_to_display.
+                self._publish_current_frame_to_slider()
             with self._playback_timing_lock:
                 if not self.is_playing:
                     reached_last_frame = False
@@ -507,11 +492,43 @@ class ImagingSeriesWidget(BaseWidget):
             if should_stop_playback:
                 self._stop_playback()
 
+    def _publish_current_frame_to_slider(self):
+        """Sync frame_slider.value to self.current_frame.
+
+        current_frame may keep changing concurrently -- another seek, or the playback loop's
+        own advance -- while this call is in flight, since the actual widget write has to
+        happen outside the lock (it synchronously triggers _on_frame_changed's redraw via the
+        observer, and holding the lock across a redraw would block other callbacks for its
+        duration). So this captures the frame and _frame_generation together under the lock,
+        writes it, then checks whether the generation is still the one just captured -- if
+        something newer landed while the write was in flight, it loops and republishes the
+        latest state instead of leaving the widget showing a value current_frame has already
+        moved past. This converges: whichever call is genuinely the last to change
+        current_frame is also the one whose post-write check finds nothing newer.
+
+        The write is marked as this thread's own (see self._slider_write_state in __init__) so
+        _on_frame_changed treats the resulting observer call as a redraw of state already set
+        under lock by the caller, not as an independent new seek.
+        """
+        while True:
+            with self._playback_timing_lock:
+                frame = self.current_frame
+                generation = self._frame_generation
+            self._slider_write_state.publishing = True
+            try:
+                self.frame_slider.value = frame
+            finally:
+                self._slider_write_state.publishing = False
+            with self._playback_timing_lock:
+                if self._frame_generation == generation:
+                    return
+
     def _on_frame_changed(self, change):
         """Handle frame slider change."""
-        if self._updating_slider_internally:
-            # _playback_loop already set current_frame itself before writing this value; just
-            # redraw, don't touch current_frame/_playback_last_time again (see _playback_loop).
+        if getattr(self._slider_write_state, "publishing", False):
+            # This observer call is _publish_current_frame_to_slider's own write reflecting
+            # back -- current_frame was already set under lock by whoever called it. Just
+            # redraw.
             self._update_display()
             return
         import time
@@ -522,6 +539,7 @@ class ImagingSeriesWidget(BaseWidget):
             # next poll counts time elapsed since the last *playback* advance (which predates
             # the seek) and immediately jumps forward again from the newly seeked position.
             self._playback_last_time = time.monotonic()
+            self._frame_generation += 1
         self._update_display()
 
     def _on_fps_changed(self, change):
@@ -554,9 +572,16 @@ class ImagingSeriesWidget(BaseWidget):
             with self._playback_timing_lock:
                 self.current_frame = frame_number
                 self._playback_last_time = time.monotonic()
+                self._frame_generation += 1
             if hasattr(self, "frame_slider"):
-                self.frame_slider.value = frame_number
-            self._update_display()
+                # Publish rather than a raw write: current_frame is already authoritative as of
+                # the lock above, so this is UI sync for a decision already made, not a new
+                # seek -- a raw write here would fire _on_frame_changed as if it were one, and a
+                # concurrent playback advance landing in the gap before this line would then get
+                # rolled back to frame_number by that misattributed "seek".
+                self._publish_current_frame_to_slider()
+            else:
+                self._update_display()
 
     def seek_to_time(self, time_seconds: float):
         """Seek to a specific time.

@@ -241,7 +241,8 @@ class _PlaybackHarness:
         self.play_button = _FakeButton()
         self._playback_last_time = last_time  # normally set by _start_playback/_on_fps_changed
         self._playback_timing_lock = threading.RLock()
-        self._updating_slider_internally = False
+        self._frame_generation = 0
+        self._slider_write_state = threading.local()
         self.play_thread = None
         self.display_calls = 0
 
@@ -254,6 +255,7 @@ class _PlaybackHarness:
     _stop_playback = ImagingSeriesWidget._stop_playback
     _on_fps_changed = ImagingSeriesWidget._on_fps_changed
     _on_frame_changed = ImagingSeriesWidget._on_frame_changed
+    _publish_current_frame_to_slider = ImagingSeriesWidget._publish_current_frame_to_slider
     seek_to_frame = ImagingSeriesWidget.seek_to_frame
 
 
@@ -675,30 +677,34 @@ def test_stop_playback_button_update_is_atomic_with_state():
     assert harness.play_button.button_style == "warning"
 
 
-def test_playback_loop_stale_slider_write_does_not_clobber_a_concurrent_seek():
-    """The slider write in _playback_loop happens outside the lock and fires _on_frame_changed
-    just like a real seek would. If a genuine seek lands in the gap before that (stale) write
-    executes, the loop's own write must not undo it."""
-    # current_frame=5: what the loop computed under its lock, about to be (belatedly) displayed.
+def test_publish_current_frame_write_does_not_clobber_a_concurrent_seek():
+    """A publish's own write to frame_slider.value fires _on_frame_changed just like a real
+    seek would. If a genuine seek lands before that write executes, the publish's write must
+    not undo it -- the thread-local publishing flag (set here exactly as
+    _publish_current_frame_to_slider sets it) tells _on_frame_changed this is its own write,
+    not an independent new seek."""
+    # current_frame=5: what a publish call captured under its lock, about to be (belatedly)
+    # written to the slider.
     harness = _PlaybackHarness(num_frames=1000, playback_fps=10, current_frame=5)
 
-    # A real user seek arrives before the loop gets around to writing frame_to_display=5.
+    # A real user seek arrives before the publish call gets around to writing frame=5.
     harness.frame_slider.value = 7
     assert harness.current_frame == 7
 
-    # The loop's own (now stale) write happens next, exactly as _playback_loop does it.
-    harness._updating_slider_internally = True
+    # The stale publish write happens next, exactly as _publish_current_frame_to_slider does it.
+    harness._slider_write_state.publishing = True
     try:
         harness.frame_slider.value = 5
     finally:
-        harness._updating_slider_internally = False
+        harness._slider_write_state.publishing = False
 
     assert harness.current_frame == 7  # not clobbered back to the stale value 5
 
 
 class _SlidersPublishSeekLock:
-    """Injects a real seek exactly as the should_publish_frame check releases the lock -- the
-    gap right before _playback_loop's own (about to become stale) slider write."""
+    """Injects a real seek exactly as _publish_current_frame_to_slider captures its
+    frame/generation snapshot -- the gap right before its own (about to become stale) slider
+    write."""
 
     def __init__(self, harness, seek_to):
         self._lock = threading.RLock()
@@ -712,17 +718,16 @@ class _SlidersPublishSeekLock:
         return self
 
     def __exit__(self, exc_type, exc, tb):
-        if self.enter_count == 2:  # the should_publish_frame check
+        if self.enter_count == 2:  # right after the publish call's frame/generation snapshot
             self.harness.frame_slider.value = self.seek_to
         self._lock.release()
 
 
-def test_playback_loop_reconciles_slider_after_a_seek_races_the_write(monkeypatch):
-    """should_publish_frame is checked under the lock, but the actual slider write happens
-    after releasing it -- a real seek can still land in that gap, leaving the slider showing
-    the loop's stale frame while current_frame (and the frame _update_display renders, which
-    reads current_frame fresh) already moved on. _playback_loop must reconcile the slider back
-    to the true current_frame afterward, or the widget visibly shows the wrong frame."""
+def test_playback_loop_converges_slider_after_a_seek_races_the_write(monkeypatch):
+    """_publish_current_frame_to_slider captures current_frame under the lock, but the actual
+    slider write happens after releasing it -- a real seek can still land in that gap, bumping
+    _frame_generation. The publish call must detect that its captured generation is now stale
+    and republish the latest current_frame, or the widget visibly shows the wrong frame."""
     harness = _PlaybackHarness(num_frames=1000, playback_fps=10, current_frame=9, last_time=0.0)
     harness._playback_timing_lock = _SlidersPublishSeekLock(harness, seek_to=3)
 
@@ -736,7 +741,7 @@ def test_playback_loop_reconciles_slider_after_a_seek_races_the_write(monkeypatc
     harness._playback_loop()
 
     assert harness.current_frame == 3  # the seek's target, never clobbered
-    assert harness.frame_slider.value == 3  # reconciled -- not left at the stale write (10)
+    assert harness.frame_slider.value == 3  # converged -- not left at the stale write (10)
 
 
 def test_on_frame_changed_resets_pacing_reference_for_a_real_seek(monkeypatch):
@@ -763,6 +768,100 @@ def test_seek_to_frame_resets_pacing_reference(monkeypatch):
     assert harness.current_frame == 12
     assert harness.frame_slider.value == 12
     assert harness._playback_last_time == pytest.approx(7.5)
+
+
+class _WorkerAdvanceDuringSeekLock:
+    """Simulates the playback worker advancing current_frame in the gap between
+    seek_to_frame's state-setting lock and its slider publish."""
+
+    def __init__(self, harness, advance_to):
+        self._lock = threading.RLock()
+        self.harness = harness
+        self.advance_to = advance_to
+        self.enter_count = 0
+
+    def __enter__(self):
+        self._lock.acquire()
+        self.enter_count += 1
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if self.enter_count == 1:  # right after seek_to_frame's own state-setting lock
+            self.harness.current_frame = self.advance_to
+            self.harness._frame_generation += 1
+        self._lock.release()
+
+
+def test_seek_to_frame_does_not_roll_back_a_concurrent_playback_advance():
+    """seek_to_frame's slider write is a publish, not a raw write with the seek's own captured
+    frame_number -- if the playback worker advances current_frame in the gap between
+    seek_to_frame's locked write and its publish call, the publish must converge to the
+    worker's newer state, not roll it back to the (by then stale) seek target."""
+    harness = _PlaybackHarness(num_frames=1000, playback_fps=10, current_frame=5)
+    harness._playback_timing_lock = _WorkerAdvanceDuringSeekLock(harness, advance_to=8)
+
+    harness.seek_to_frame(3)
+
+    assert harness.current_frame == 8  # the worker's newer advance, not rolled back to 3
+    assert harness.frame_slider.value == 8
+
+
+class _PausingBeforeObserversSlider(_FakeSlider):
+    """Like _FakeSlider, but pauses after storing the new value and before notifying
+    observers -- used to hold a publish's write "in flight" on its own thread so a genuine
+    seek from a different thread can be attempted while it's paused there."""
+
+    def __init__(self, value=0):
+        super().__init__(value)
+        self.entered = threading.Event()
+        self.release = threading.Event()
+
+    @_FakeSlider.value.setter
+    def value(self, new_value):
+        if new_value == self._value:
+            return
+        old_value = self._value
+        self._value = new_value
+        self.entered.set()
+        assert self.release.wait(timeout=1), "timed out waiting to release the slider write"
+        for h in self._observers:
+            h({"new": new_value, "old": old_value, "name": "value"})
+
+
+def test_publishing_flag_is_thread_local_not_a_shared_flag():
+    """A publish's own write must only look like "internal" on the thread that's actually
+    doing it. If the flag were a plain shared attribute instead of thread-local, a genuine
+    seek from another thread landing while the publish thread's write is in flight would be
+    misread as that publish's own callback and silently dropped -- current_frame/pacing would
+    never be updated for a real user seek."""
+    harness = _PlaybackHarness(num_frames=1000, playback_fps=10, current_frame=5, last_time=0.0)
+    harness.frame_slider = _PausingBeforeObserversSlider(0)  # differs from current_frame=5, so
+    # the publish's write below is a real change, not a same-value no-op
+    harness.frame_slider.observe(harness._on_frame_changed, names="value")
+
+    publish_thread = threading.Thread(target=harness._publish_current_frame_to_slider)
+    publish_thread.start()
+
+    assert harness.frame_slider.entered.wait(timeout=1), "publish thread never reached the slider write"
+
+    # A genuine seek arrives on a different thread while the publish thread's write is paused,
+    # mid-flight, with its own thread-local publishing flag still set to True.
+    seek_finished = threading.Event()
+
+    def seek():
+        harness._on_frame_changed({"new": 42, "old": 5})
+        seek_finished.set()
+
+    seek_thread = threading.Thread(target=seek)
+    seek_thread.start()
+    seek_thread.join(timeout=1)
+
+    assert seek_finished.is_set(), "the concurrent seek never completed"
+    assert harness.current_frame == 42  # not silently dropped
+
+    harness.frame_slider.release.set()
+    publish_thread.join(timeout=1)
+    assert not publish_thread.is_alive()
 
 
 def test_playback_loop_rechecks_last_frame_after_internal_redraw(monkeypatch):
