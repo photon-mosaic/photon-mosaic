@@ -203,8 +203,28 @@ class _FakeButton:
 
 
 class _FakeSlider:
+    """Mimics just enough of an ipywidgets trait to make .observe(...) fire on real changes,
+    like the real frame_slider does when _playback_loop or a user seek sets .value."""
+
     def __init__(self, value=0):
-        self.value = value
+        self._value = value
+        self._observers = []
+
+    def observe(self, handler, names="value"):
+        self._observers.append(handler)
+
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, new_value):
+        if new_value == self._value:
+            return
+        old_value = self._value
+        self._value = new_value
+        for handler in self._observers:
+            handler({"new": new_value, "old": old_value, "name": "value"})
 
 
 class _PlaybackHarness:
@@ -217,16 +237,23 @@ class _PlaybackHarness:
         self.current_frame = current_frame
         self.is_playing = True
         self.frame_slider = _FakeSlider(current_frame)
+        self.frame_slider.observe(self._on_frame_changed, names="value")
         self.play_button = _FakeButton()
         self._playback_last_time = last_time  # normally set by _start_playback/_on_fps_changed
         self._playback_timing_lock = threading.RLock()
+        self._updating_slider_internally = False
         self.play_thread = None
+        self.display_calls = 0
+
+    def _update_display(self):
+        self.display_calls += 1
 
     _on_play_button_clicked = ImagingSeriesWidget._on_play_button_clicked
     _start_playback = ImagingSeriesWidget._start_playback
     _playback_loop = ImagingSeriesWidget._playback_loop
     _stop_playback = ImagingSeriesWidget._stop_playback
     _on_fps_changed = ImagingSeriesWidget._on_fps_changed
+    _on_frame_changed = ImagingSeriesWidget._on_frame_changed
 
 
 def test_playback_loop_skips_ahead_after_slow_iteration(monkeypatch):
@@ -277,7 +304,10 @@ def test_play_button_reuses_existing_alive_playback_thread(monkeypatch):
     harness.play_thread = existing_thread
 
     monkeypatch.setattr("time.monotonic", lambda: 1.23)
-    monkeypatch.setattr("threading.Thread", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected new playback thread")))
+    monkeypatch.setattr(
+        "threading.Thread",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected new playback thread")),
+    )
 
     harness._on_play_button_clicked(None)
 
@@ -522,3 +552,110 @@ def test_fps_change_waits_for_playback_timing_lock(monkeypatch):
     assert harness.current_frame == 1
     assert harness.playback_fps == 20
     assert harness._playback_last_time == pytest.approx(0.1)
+
+
+class _AlwaysAliveThread:
+    """Stand-in for play_thread so _start_playback's alive-check finds an existing thread and
+    doesn't spawn a real one -- this test is only about the is_playing/button transition."""
+
+    def is_alive(self):
+        return True
+
+
+class _PausingButton:
+    """Pauses the first time .description is set to `pause_on_value`, until released. Used to
+    check whether the state lock is still held at exactly that write -- a concurrent lock
+    acquisition attempt made while paused here can only succeed if the lock had already been
+    released before this write, which is exactly the bug this guards against."""
+
+    def __init__(self, pause_on_value):
+        self._pause_on_value = pause_on_value
+        self._paused_once = False
+        self.entered = threading.Event()
+        self.release = threading.Event()
+        self.description = ""
+        self.button_style = ""
+
+    def __setattr__(self, name, value):
+        object.__setattr__(self, name, value)
+        if name == "description" and value == getattr(self, "_pause_on_value", None) and not self._paused_once:
+            self._paused_once = True
+            self.entered.set()
+            assert self.release.wait(timeout=1), "timed out waiting to release the button write"
+
+
+def test_stop_playback_button_update_is_atomic_with_state():
+    """_stop_playback (called by the worker thread when it reaches the last frame) must not
+    leave a window where is_playing is already False but the button hasn't been updated yet --
+    a concurrent Play click could otherwise see the flag, start new playback, only for this
+    call's own (still-pending) button write to overwrite it back to "Play" right after."""
+    harness = _PlaybackHarness(num_frames=10_000, playback_fps=10)
+    harness.play_thread = _AlwaysAliveThread()
+    harness.is_playing = True
+    harness.play_button = _PausingButton(pause_on_value="▶ Play")
+    harness.play_button.description = "⏸ Pause"
+    harness.play_button.button_style = "warning"
+
+    stop_thread = threading.Thread(target=harness._stop_playback)
+    stop_thread.start()
+
+    assert harness.play_button.entered.wait(timeout=1), "_stop_playback never reached the button-reset write"
+
+    click_finished = threading.Event()
+
+    def click():
+        harness._on_play_button_clicked(None)
+        click_finished.set()
+
+    click_thread = threading.Thread(target=click)
+    click_thread.start()
+
+    # If the state lock is still held at this exact write (the fix), the click's own lock
+    # acquisition must still be blocked. If it isn't (the bug), the click can slip in here and
+    # start playback, only to have this call's still-pending button write clobber it right after.
+    assert not click_finished.wait(timeout=0.05), "play click completed while the stop transition was still in progress"
+
+    harness.play_button.release.set()
+    stop_thread.join(timeout=1)
+    click_thread.join(timeout=1)
+
+    assert not stop_thread.is_alive()
+    assert not click_thread.is_alive()
+    assert harness.is_playing is True
+    assert harness.play_button.description == "⏸ Pause"
+    assert harness.play_button.button_style == "warning"
+
+
+def test_playback_loop_stale_slider_write_does_not_clobber_a_concurrent_seek():
+    """The slider write in _playback_loop happens outside the lock and fires _on_frame_changed
+    just like a real seek would. If a genuine seek lands in the gap before that (stale) write
+    executes, the loop's own write must not undo it."""
+    # current_frame=5: what the loop computed under its lock, about to be (belatedly) displayed.
+    harness = _PlaybackHarness(num_frames=1000, playback_fps=10, current_frame=5)
+
+    # A real user seek arrives before the loop gets around to writing frame_to_display=5.
+    harness.frame_slider.value = 7
+    assert harness.current_frame == 7
+
+    # The loop's own (now stale) write happens next, exactly as _playback_loop does it.
+    harness._updating_slider_internally = True
+    try:
+        harness.frame_slider.value = 5
+    finally:
+        harness._updating_slider_internally = False
+
+    assert harness.current_frame == 7  # not clobbered back to the stale value 5
+
+
+def test_on_frame_changed_resets_pacing_reference_for_a_real_seek(monkeypatch):
+    """A user seek during active playback must reset _playback_last_time -- otherwise the next
+    poll counts time elapsed since the last *playback* advance (which predates the seek) and
+    immediately jumps forward again from the newly seeked position."""
+    harness = _PlaybackHarness(num_frames=1000, playback_fps=10, last_time=0.0)
+
+    monkeypatch.setattr("time.monotonic", lambda: 5.0)  # a real seek happens 5s after the last advance
+    harness.frame_slider.value = 42
+
+    assert harness.current_frame == 42
+    assert harness._playback_last_time == pytest.approx(5.0)
+    assert harness.display_calls == 1

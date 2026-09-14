@@ -122,6 +122,10 @@ class ImagingSeriesWidget(BaseWidget):
         self.playback_fps = min(10.0, dp.frame_rate)  # Default playback speed
         self._playback_last_time: float | None = None  # set by _start_playback/_on_fps_changed
         self._playback_timing_lock = threading.RLock()
+        # Set by _playback_loop right before it writes frame_slider.value, so _on_frame_changed
+        # can tell its own programmatic update apart from a genuine user seek -- both fire the
+        # same observer, but only a real seek should reset current_frame/_playback_last_time.
+        self._updating_slider_internally = False
 
         # Sample up to 100 frames to compute a global vmin/vmax for the colormap.
         num_samples = min(100, dp.num_frames)
@@ -372,23 +376,35 @@ class ImagingSeriesWidget(BaseWidget):
         with self._playback_timing_lock:
             self.is_playing = True
             self._playback_last_time = time.monotonic()
+            # Button update shares the lock with the state flag: _stop_playback can otherwise
+            # be called from the worker thread with a gap between setting is_playing and
+            # updating the button, letting a concurrent click observe/overwrite a half-applied
+            # transition (see _stop_playback).
+            self.play_button.description = "⏸ Pause"
+            self.play_button.button_style = "warning"
             if self.play_thread is None or not self.play_thread.is_alive():
                 self.play_thread = threading.Thread(target=self._playback_loop)
                 self.play_thread.daemon = True
                 start_new_thread = True
-        self.play_button.description = "⏸ Pause"
-        self.play_button.button_style = "warning"
 
         if start_new_thread:
             # Start playback thread
             self.play_thread.start()
 
     def _stop_playback(self):
-        """Stop video playback."""
+        """Stop video playback.
+
+        Called both from the play button (already holding the lock, via _on_play_button_clicked
+        -- reentrant since _playback_timing_lock is an RLock) and from _playback_loop itself when
+        it reaches the last frame (not holding the lock). The state flag and button update must
+        stay atomic either way, or a click landing between them could see is_playing already
+        False and start new playback, only for this call's own button update to then overwrite
+        it back to "Play" right after.
+        """
         with self._playback_timing_lock:
             self.is_playing = False
-        self.play_button.description = "▶ Play"
-        self.play_button.button_style = "success"
+            self.play_button.description = "▶ Play"
+            self.play_button.button_style = "success"
 
     def _playback_loop(self):
         """Main playback loop running in separate thread.
@@ -435,8 +451,16 @@ class ImagingSeriesWidget(BaseWidget):
                 else:
                     reached_last_frame = False
             if frame_to_display is not None:
-                # Update slider and display
-                self.frame_slider.value = frame_to_display
+                # Update slider and display. This write is deliberately outside the lock (a
+                # redraw shouldn't block _on_fps_changed/_on_play_button_clicked), but it fires
+                # _on_frame_changed just like a real user drag would -- flag it as internal so
+                # that callback doesn't treat a stale write (one that lands after a genuine seek
+                # already changed current_frame) as a new seek and clobber it.
+                self._updating_slider_internally = True
+                try:
+                    self.frame_slider.value = frame_to_display
+                finally:
+                    self._updating_slider_internally = False
             if reached_last_frame:
                 break
             with self._playback_timing_lock:
@@ -454,8 +478,19 @@ class ImagingSeriesWidget(BaseWidget):
 
     def _on_frame_changed(self, change):
         """Handle frame slider change."""
+        if self._updating_slider_internally:
+            # _playback_loop already set current_frame itself before writing this value; just
+            # redraw, don't touch current_frame/_playback_last_time again (see _playback_loop).
+            self._update_display()
+            return
+        import time
+
         with self._playback_timing_lock:
             self.current_frame = change["new"]
+            # A user seek during active playback must reset the pacing reference too, or the
+            # next poll counts time elapsed since the last *playback* advance (which predates
+            # the seek) and immediately jumps forward again from the newly seeked position.
+            self._playback_last_time = time.monotonic()
         self._update_display()
 
     def _on_fps_changed(self, change):
