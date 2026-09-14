@@ -321,6 +321,25 @@ def test_play_button_reuses_existing_alive_playback_thread(monkeypatch):
     assert existing_thread.started is False
 
 
+def test_start_playback_spawns_and_starts_a_real_thread():
+    """Every other test routes around actually spawning a thread (via stand-ins like
+    _ExistingThread above) to stay fast and deterministic -- this confirms the real path (no
+    existing play_thread) actually works: a genuine threading.Thread gets created and started,
+    running _playback_loop for real."""
+    # Already at the last frame, so the spawned _playback_loop exits (and stops itself)
+    # almost immediately instead of needing to be pieced apart with mocked timing.
+    harness = _PlaybackHarness(num_frames=5, playback_fps=10, current_frame=4)
+
+    harness._start_playback()
+    spawned_thread = harness.play_thread  # captured before the loop clears it on exit, below
+
+    assert isinstance(spawned_thread, threading.Thread)
+    spawned_thread.join(timeout=1)
+    assert not spawned_thread.is_alive()
+    assert harness.play_thread is None  # cleared by the loop's own cleanup on exit
+    assert harness.is_playing is False  # the loop reached the end and stopped itself
+
+
 def test_playback_loop_initializes_missing_last_time(monkeypatch):
     harness = _PlaybackHarness(num_frames=1000, playback_fps=10, last_time=None)
 
@@ -473,35 +492,27 @@ class _BlockingLock:
         self._lock.release()
 
 
-class _TimeAdvancingLock:
-    def __init__(self, fake_time, advanced_to):
-        self._lock = threading.Lock()
-        self.fake_time = fake_time
-        self.advanced_to = advanced_to
-        self.advanced = False
+class _TimeAdvanceThenFpsChangeLock:
+    """Combines two lock-ordering checks in one: advances the fake clock on the very first
+    acquisition (proving _playback_loop samples time.monotonic() only after acquiring the
+    lock, not before), then changes playback_fps on the second acquisition (proving the loop
+    re-reads fps fresh for the sleep duration rather than reusing the value already captured
+    earlier in the same iteration for the elapsed-time computation)."""
 
-    def __enter__(self):
-        self._lock.acquire()
-        if not self.advanced:
-            self.fake_time[0] = self.advanced_to
-            self.advanced = True
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        self._lock.release()
-
-
-class _SleepFpsLock:
-    def __init__(self, harness, updated_fps):
+    def __init__(self, harness, fake_time, advanced_to, updated_fps):
         self._lock = threading.Lock()
         self.harness = harness
+        self.fake_time = fake_time
+        self.advanced_to = advanced_to
         self.updated_fps = updated_fps
         self.enter_count = 0
 
     def __enter__(self):
         self._lock.acquire()
         self.enter_count += 1
-        if self.enter_count == 2:
+        if self.enter_count == 1:
+            self.fake_time[0] = self.advanced_to
+        elif self.enter_count == 2:
             self.harness.playback_fps = self.updated_fps
         return self
 
@@ -534,29 +545,22 @@ class _CleanupSeekLock:
         self._lock.release()
 
 
-def test_playback_loop_samples_time_inside_timing_lock(monkeypatch):
-    """The elapsed-time sample should be taken after the timing lock is acquired."""
+def test_playback_loop_uses_fresh_state_at_each_checkpoint(monkeypatch):
+    """_playback_loop must sample fresh state at each checkpoint under the lock, not a value
+    read before acquiring it or captured earlier in the same iteration:
+
+    - time.monotonic() is sampled only after the lock is acquired -- a lock-triggered clock
+      advance on the very first acquisition should already be visible to that same read.
+    - the fps used for the sleep duration is re-read fresh, not the value already captured
+      earlier in the iteration for the elapsed-time computation -- a lock-triggered fps change
+      partway through should still affect that same iteration's sleep.
+    """
     fake_time = [0.0]
     harness = _PlaybackHarness(num_frames=10_000, playback_fps=10, last_time=0.0)
-    harness._playback_timing_lock = _TimeAdvancingLock(fake_time, advanced_to=0.1)
+    harness._playback_timing_lock = _TimeAdvanceThenFpsChangeLock(harness, fake_time, advanced_to=0.1, updated_fps=20)
 
     monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
-    monkeypatch.setattr("time.sleep", lambda duration: setattr(harness, "is_playing", False))
-
-    harness._playback_loop()
-
-    assert harness.current_frame == 1
-
-
-def test_playback_loop_rechecks_fps_before_sleep(monkeypatch):
-    """A just-applied FPS change should affect the same iteration's sleep pacing."""
-    harness = _PlaybackHarness(num_frames=10_000, playback_fps=10, last_time=0.0)
-    harness._playback_timing_lock = _SleepFpsLock(harness, updated_fps=20)
-
-    fake_time = [0.1]
     sleep_calls = []
-
-    monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
 
     def fake_sleep(duration):
         sleep_calls.append(duration)
@@ -566,8 +570,8 @@ def test_playback_loop_rechecks_fps_before_sleep(monkeypatch):
 
     harness._playback_loop()
 
-    assert harness.current_frame == 1
-    assert sleep_calls == [pytest.approx(0.0125)]
+    assert harness.current_frame == 1  # 0.1s elapsed at the original fps (10) -> 1 frame
+    assert sleep_calls == [pytest.approx(0.0125)]  # 1 / (4 * the new fps, 20)
 
 
 def test_fps_change_waits_for_playback_timing_lock(monkeypatch):
