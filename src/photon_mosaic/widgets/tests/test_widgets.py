@@ -483,6 +483,23 @@ class _SleepFpsLock:
         self._lock.release()
 
 
+class _CleanupSeekLock:
+    def __init__(self, harness):
+        self._lock = threading.RLock()
+        self.harness = harness
+        self.enter_count = 0
+
+    def __enter__(self):
+        self._lock.acquire()
+        self.enter_count += 1
+        if self.enter_count == 4:
+            self.harness.current_frame = 2
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self._lock.release()
+
+
 def test_playback_loop_samples_time_inside_timing_lock(monkeypatch):
     """The elapsed-time sample should be taken after the timing lock is acquired."""
     fake_time = [0.0]
@@ -700,3 +717,33 @@ def test_playback_loop_rechecks_last_frame_after_internal_redraw(monkeypatch):
     assert harness.current_frame == 2
     assert harness.play_button.description == ""
     assert sleep_calls == [pytest.approx(0.025)]
+
+
+def test_playback_loop_revalidates_last_frame_before_cleanup_stop(monkeypatch):
+    harness = _PlaybackHarness(num_frames=10, playback_fps=10, current_frame=8, last_time=0.0)
+    harness.play_thread = threading.current_thread()
+    harness._playback_timing_lock = _CleanupSeekLock(harness)
+
+    fake_time = [0.1]
+    monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
+    monkeypatch.setattr("time.sleep", lambda duration: (_ for _ in ()).throw(AssertionError("unexpected sleep")))
+
+    started_threads = []
+
+    class _StubThread:
+        def __init__(self, target=None, daemon=None):
+            self.target = target
+            self.daemon = daemon
+            self.started = False
+
+        def start(self):
+            self.started = True
+            started_threads.append(self)
+
+    monkeypatch.setattr("threading.Thread", _StubThread)
+
+    harness._playback_loop()
+
+    assert harness.current_frame == 2
+    assert harness.is_playing is True
+    assert len(started_threads) == 1
