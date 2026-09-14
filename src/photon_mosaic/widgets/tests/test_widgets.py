@@ -360,6 +360,29 @@ def test_playback_loop_stops_at_last_frame(monkeypatch):
     assert len(sleep_calls) == 1
 
 
+def test_playback_loop_stops_even_when_no_longer_the_registered_play_thread(monkeypatch):
+    """A worker that reaches the end must still signal a stop even if it's no longer
+    self.play_thread (e.g. superseded by a restart) -- the cleanup block's restart/no-restart
+    decision is scoped to "am I still registered", but reaching the end is a fact about this
+    worker's own progress, not about that registration."""
+    harness = _PlaybackHarness(num_frames=5, playback_fps=10, current_frame=3)
+    harness.play_thread = object()  # anything that isn't threading.current_thread()
+
+    fake_time = [0.0]
+    monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
+
+    def fake_sleep(duration):
+        fake_time[0] += 1.0  # always enough to reach the end in one jump
+
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    harness._playback_loop()
+
+    assert harness.current_frame == 4
+    assert harness.is_playing is False
+    assert harness.play_button.description == "▶ Play"
+
+
 def test_playback_loop_does_not_drift_under_irregular_polling(monkeypatch):
     """Advancing the pacing reference to `now` on every frame-advance (instead of by the
     exact duration of the frames just consumed) discards whatever fraction of a frame period
