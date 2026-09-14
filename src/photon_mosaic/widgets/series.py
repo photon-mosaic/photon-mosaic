@@ -133,6 +133,14 @@ class ImagingSeriesWidget(BaseWidget):
         # can only ever happen on two different threads (the playback worker vs. the kernel
         # thread), so one thread's in-flight publish can never be mistaken for the other's seek.
         self._slider_write_state = threading.local()
+        # Serializes _update_display's actual Matplotlib mutations (set_data/set_title/
+        # draw_idle, ...) across concurrent calls -- e.g. the playback worker's publish-echo
+        # call and a genuine seek's own call (_on_frame_changed) can run concurrently on two
+        # different threads. The (frame, generation) snapshot each call captures keeps *that*
+        # call's own reads consistent, but doesn't stop two calls' writes to the same Axes/
+        # Image objects from interleaving. Deliberately separate from _playback_timing_lock so
+        # a slow render can't block state-changing callbacks (see _update_display).
+        self._render_lock = threading.Lock()
 
         # Sample up to 100 frames to compute a global vmin/vmax for the colormap.
         num_samples = min(100, dp.num_frames)
@@ -331,6 +339,13 @@ class ImagingSeriesWidget(BaseWidget):
         playback advance partway through could otherwise mix pixels from one frame with
         another's title/time text. Converges the same way _publish_current_frame_to_slider
         does: redraws again if the generation moved on while this render was in flight.
+
+        The actual Matplotlib mutations below are serialized by _render_lock, not
+        _playback_timing_lock: two calls capturing different (frame, generation) snapshots --
+        e.g. this call's own publish-echo and a genuine seek's own concurrent call -- would
+        otherwise be free to interleave their set_data/set_title/draw_idle calls on the same
+        Axes/Image objects, drawing a torn frame (one frame's pixels under another's title)
+        before either call's generation-recheck could catch up and correct it.
         """
         while True:
             with self._playback_timing_lock:
@@ -338,37 +353,38 @@ class ImagingSeriesWidget(BaseWidget):
                 generation = self._frame_generation
             dp = to_attr(self.data_plot)
 
-            # Update all views
-            for idx, view_name in enumerate(dp.view_names):
-                imaging = dp.imaging_dict[view_name]
-                ax = self.axes[idx]
-                im = self.images[view_name]
+            with self._render_lock:
+                # Update all views
+                for idx, view_name in enumerate(dp.view_names):
+                    imaging = dp.imaging_dict[view_name]
+                    ax = self.axes[idx]
+                    im = self.images[view_name]
 
-                # Get current frame data
-                frame_data = imaging.get_series(frame, frame + 1, epoch_index=dp.epoch_index)
+                    # Get current frame data
+                    frame_data = imaging.get_series(frame, frame + 1, epoch_index=dp.epoch_index)
 
-                # Use slider values as scaling factors on the global range
-                # This keeps the colorbar fixed but allows user adjustment
-                range_span = self.global_vmax[view_name] - self.global_vmin[view_name]
-                vmin_val = self.global_vmin[view_name] + (self.vmin_slider.value / 100.0) * range_span
-                vmax_val = self.global_vmin[view_name] + (self.vmax_slider.value / 100.0) * range_span
+                    # Use slider values as scaling factors on the global range
+                    # This keeps the colorbar fixed but allows user adjustment
+                    range_span = self.global_vmax[view_name] - self.global_vmin[view_name]
+                    vmin_val = self.global_vmin[view_name] + (self.vmin_slider.value / 100.0) * range_span
+                    vmax_val = self.global_vmin[view_name] + (self.vmax_slider.value / 100.0) * range_span
 
-                # Update the image data and colormap (much faster than recreating)
-                im.set_data(frame_data[0])  # Remove time dimension
-                im.set_cmap(self.colormap_dropdown.value)
-                im.set_clim(vmin=vmin_val, vmax=vmax_val)
+                    # Update the image data and colormap (much faster than recreating)
+                    im.set_data(frame_data[0])  # Remove time dimension
+                    im.set_cmap(self.colormap_dropdown.value)
+                    im.set_clim(vmin=vmin_val, vmax=vmax_val)
 
-                # Update title
-                if dp.is_multi_view:
-                    ax.set_title(f"{view_name}\nFrame {frame} | Time: {dp.times[frame]:.3f}s")
-                else:
-                    ax.set_title(f"Frame {frame} | Time: {dp.times[frame]:.3f}s")
+                    # Update title
+                    if dp.is_multi_view:
+                        ax.set_title(f"{view_name}\nFrame {frame} | Time: {dp.times[frame]:.3f}s")
+                    else:
+                        ax.set_title(f"Frame {frame} | Time: {dp.times[frame]:.3f}s")
 
-            # Update time label
-            self._update_time_label(frame)
+                # Update time label
+                self._update_time_label(frame)
 
-            # Refresh the canvas
-            self.figure.canvas.draw_idle()
+                # Refresh the canvas
+                self.figure.canvas.draw_idle()
 
             with self._playback_timing_lock:
                 if self._frame_generation == generation:

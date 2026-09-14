@@ -244,6 +244,7 @@ class _PlaybackHarness:
         self._playback_timing_lock = threading.RLock()
         self._frame_generation = 0
         self._slider_write_state = threading.local()
+        self._render_lock = threading.Lock()
         self.play_thread = None
         self.display_calls = 0
 
@@ -983,6 +984,7 @@ class _DisplayHarness:
         self.current_frame = current_frame
         self._frame_generation = 0
         self._playback_timing_lock = threading.RLock()
+        self._render_lock = threading.Lock()
 
     _update_display = ImagingSeriesWidget._update_display
     _update_time_label = ImagingSeriesWidget._update_time_label
@@ -999,9 +1001,10 @@ class _FakeAx:
 class _FakeImage:
     def __init__(self):
         self.clim = None
+        self.data = None
 
     def set_data(self, data):
-        pass
+        self.data = data
 
     def set_cmap(self, cmap):
         pass
@@ -1041,3 +1044,64 @@ def test_update_display_does_not_tear_across_a_concurrent_frame_change():
     assert harness.axes[0].title == "Frame 9 | Time: 9.000s"
     assert harness.time_label.value == "Time: 9.000s / 19.00s"
     assert harness.figure.draw_count == 2
+
+
+def test_update_display_does_not_draw_a_torn_frame_from_a_concurrent_render():
+    """The (frame, generation) snapshot at the top of _update_display keeps *one* call's own
+    reads consistent, but that alone does nothing to stop a second, genuinely independent call
+    -- e.g. a real seek's own _update_display() call (see _on_frame_changed), running
+    concurrently with an in-flight render for a frame that's since gone stale -- from
+    interleaving Matplotlib mutations on the same Axes/Image objects. Force that: pause a
+    render right after its own image write (holding _render_lock, if the production code takes
+    it), then start a second, different-frame render on its own thread while the first is still
+    paused. Without a render lock serializing the two, the second call's writes would land in
+    the middle of the first's, so a draw_idle gets reached with one frame's image data under
+    another frame's title; with the lock, the second call blocks until the first (including its
+    own generation-recheck retry) has fully finished."""
+    harness = _DisplayHarness(num_frames=20, current_frame=5)
+    harness.data_plot["imaging_dict"]["v"].get_series = lambda start, end, epoch_index=0: np.full((1, 2, 2), start)
+
+    paused = threading.Event()
+    release = threading.Event()
+    draws = []  # (image data value, title) captured at each draw_idle, in call order
+
+    original_set_data = harness.images["v"].set_data
+    pause_once = [True]  # only the very first call (the render this test forces to stall) pauses
+
+    def pausing_set_data(data):
+        original_set_data(data)
+        if pause_once[0]:
+            pause_once[0] = False
+            paused.set()
+            assert release.wait(timeout=1), "timed out waiting to resume the paused render"
+
+    harness.images["v"].set_data = pausing_set_data
+
+    original_draw_idle = harness.figure.canvas.draw_idle
+
+    def recording_draw_idle():
+        draws.append((harness.images["v"].data.flatten()[0], harness.axes[0].title))
+        original_draw_idle()
+
+    harness.figure.canvas.draw_idle = recording_draw_idle
+
+    first_call = threading.Thread(target=harness._update_display)
+    first_call.start()
+    assert paused.wait(timeout=1), "first render never reached its own image write"
+
+    # A second, independent render for a different frame -- as _on_frame_changed's own real-seek
+    # branch would trigger -- starts on its own thread while the first is still paused mid-render
+    # (with the render lock, it blocks trying to enter until the first call is done).
+    harness.current_frame = 9
+    harness._frame_generation += 1
+    second_call = threading.Thread(target=harness._update_display)
+    second_call.start()
+
+    release.set()
+    first_call.join(timeout=1)
+    second_call.join(timeout=1)
+
+    assert not first_call.is_alive()
+    assert not second_call.is_alive()
+    torn = [(data, title) for data, title in draws if f"Frame {data}" not in title]
+    assert not torn, f"drew a torn frame (image data vs. title mismatch): {torn}"
