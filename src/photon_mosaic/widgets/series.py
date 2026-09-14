@@ -519,14 +519,22 @@ class ImagingSeriesWidget(BaseWidget):
         The write is marked as this thread's own (see self._slider_write_state in __init__) so
         _on_frame_changed treats the resulting observer call as a redraw of state already set
         under lock by the caller, not as an independent new seek.
+
+        If frame_slider.value already equals frame, assigning it is a no-op as far as the
+        underlying trait is concerned -- ipywidgets/traitlets only notifies observers on an
+        actual change, so _on_frame_changed (and the redraw it triggers) would silently never
+        run. Redraw explicitly for that case instead of relying on the observer.
         """
         while True:
             with self._playback_timing_lock:
                 frame = self.current_frame
                 generation = self._frame_generation
+            unchanged = self.frame_slider.value == frame
             self._slider_write_state.publishing = True
             try:
                 self.frame_slider.value = frame
+                if unchanged:
+                    self._update_display()
             finally:
                 self._slider_write_state.publishing = False
             with self._playback_timing_lock:

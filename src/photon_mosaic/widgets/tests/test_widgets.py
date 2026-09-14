@@ -330,8 +330,15 @@ def test_start_playback_spawns_and_starts_a_real_thread():
     # almost immediately instead of needing to be pieced apart with mocked timing.
     harness = _PlaybackHarness(num_frames=5, playback_fps=10, current_frame=4)
 
-    harness._start_playback()
-    spawned_thread = harness.play_thread  # captured before the loop clears it on exit, below
+    # Capture play_thread while still holding the same (reentrant) lock _start_playback uses
+    # internally: the spawned thread's first action is acquiring that same lock, so it can't
+    # reach the end-of-loop cleanup that clears play_thread until this block releases it --
+    # an unsynchronized read right after _start_playback() returns would otherwise race the
+    # spawned thread's cleanup (current_frame is already the last frame, so it can finish
+    # almost immediately).
+    with harness._playback_timing_lock:
+        harness._start_playback()
+        spawned_thread = harness.play_thread
 
     assert isinstance(spawned_thread, threading.Thread)
     spawned_thread.join(timeout=1)
@@ -773,6 +780,19 @@ def test_seek_to_frame_resets_pacing_reference(monkeypatch):
     assert harness.current_frame == 12
     assert harness.frame_slider.value == 12
     assert harness._playback_last_time == pytest.approx(7.5)
+
+
+def test_seek_to_frame_redraws_even_when_already_at_the_target_frame():
+    """Seeking to the frame already shown (frame_slider.value already equals frame_number) must
+    still redraw. Assigning a trait its current value is a no-op in ipywidgets/traitlets -- no
+    observer fires, so _publish_current_frame_to_slider's usual redraw path (_on_frame_changed,
+    triggered by the slider write) never runs unless it's handled explicitly."""
+    harness = _PlaybackHarness(num_frames=1000, playback_fps=10, current_frame=5)
+    assert harness.frame_slider.value == 5  # already at the target -- the write below is a no-op
+
+    harness.seek_to_frame(5)
+
+    assert harness.display_calls == 1
 
 
 class _WorkerAdvanceDuringSeekLock:
