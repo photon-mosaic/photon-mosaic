@@ -507,6 +507,14 @@ class _SleepFpsLock:
 
 
 class _CleanupSeekLock:
+    """Injects a seek exactly as the cleanup section acquires the lock, for the exact harness
+    setup used below (num_frames=10, current_frame=8, fps=10, last_time=0.0, fake_time=0.1).
+    That's acquisition #5 with the current _playback_loop structure: top-of-loop check,
+    should_publish_frame check, the post-write reconcile check, the post-write
+    is_playing/reached_last_frame recheck, then the cleanup section itself -- recount (e.g. via
+    a lock that prints enter_count and the calling line) if _playback_loop's lock usage
+    changes."""
+
     def __init__(self, harness):
         self._lock = threading.RLock()
         self.harness = harness
@@ -515,7 +523,7 @@ class _CleanupSeekLock:
     def __enter__(self):
         self._lock.acquire()
         self.enter_count += 1
-        if self.enter_count == 4:
+        if self.enter_count == 5:
             self.harness.current_frame = 2
         return self
 
@@ -686,6 +694,49 @@ def test_playback_loop_stale_slider_write_does_not_clobber_a_concurrent_seek():
         harness._updating_slider_internally = False
 
     assert harness.current_frame == 7  # not clobbered back to the stale value 5
+
+
+class _SlidersPublishSeekLock:
+    """Injects a real seek exactly as the should_publish_frame check releases the lock -- the
+    gap right before _playback_loop's own (about to become stale) slider write."""
+
+    def __init__(self, harness, seek_to):
+        self._lock = threading.RLock()
+        self.harness = harness
+        self.seek_to = seek_to
+        self.enter_count = 0
+
+    def __enter__(self):
+        self._lock.acquire()
+        self.enter_count += 1
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if self.enter_count == 2:  # the should_publish_frame check
+            self.harness.frame_slider.value = self.seek_to
+        self._lock.release()
+
+
+def test_playback_loop_reconciles_slider_after_a_seek_races_the_write(monkeypatch):
+    """should_publish_frame is checked under the lock, but the actual slider write happens
+    after releasing it -- a real seek can still land in that gap, leaving the slider showing
+    the loop's stale frame while current_frame (and the frame _update_display renders, which
+    reads current_frame fresh) already moved on. _playback_loop must reconcile the slider back
+    to the true current_frame afterward, or the widget visibly shows the wrong frame."""
+    harness = _PlaybackHarness(num_frames=1000, playback_fps=10, current_frame=9, last_time=0.0)
+    harness._playback_timing_lock = _SlidersPublishSeekLock(harness, seek_to=3)
+
+    monkeypatch.setattr("time.monotonic", lambda: 0.1)  # 1 frame elapsed at fps=10
+
+    def fake_sleep(duration):
+        harness.is_playing = False
+
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    harness._playback_loop()
+
+    assert harness.current_frame == 3  # the seek's target, never clobbered
+    assert harness.frame_slider.value == 3  # reconciled -- not left at the stale write (10)
 
 
 def test_on_frame_changed_resets_pacing_reference_for_a_real_seek(monkeypatch):

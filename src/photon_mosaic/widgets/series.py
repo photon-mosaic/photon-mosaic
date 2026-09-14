@@ -463,6 +463,20 @@ class ImagingSeriesWidget(BaseWidget):
                     self.frame_slider.value = frame_to_display
                 finally:
                     self._updating_slider_internally = False
+                # should_publish_frame is a check, not a lock held across this write -- a real
+                # seek can still land in the gap between it and the line above, leaving the
+                # slider showing our stale frame_to_display while current_frame (and the frame
+                # _update_display just rendered, which reads current_frame fresh) already moved
+                # on. Reconcile immediately: if current_frame no longer matches what we just
+                # wrote, resync the slider to it rather than leave the two visibly inconsistent.
+                with self._playback_timing_lock:
+                    actual_frame = self.current_frame
+                if actual_frame != frame_to_display:
+                    self._updating_slider_internally = True
+                    try:
+                        self.frame_slider.value = actual_frame
+                    finally:
+                        self._updating_slider_internally = False
             with self._playback_timing_lock:
                 if not self.is_playing:
                     reached_last_frame = False
