@@ -409,6 +409,7 @@ class ImagingSeriesWidget(BaseWidget):
         time elapsed from that point on rather than retroactively reinterpreting time already
         accrued under the old rate.
         """
+        import threading
         import time
 
         dp = to_attr(self.data_plot)
@@ -441,6 +442,12 @@ class ImagingSeriesWidget(BaseWidget):
             with self._playback_timing_lock:
                 sleep_duration = 1.0 / (4 * self.playback_fps)
             time.sleep(sleep_duration)
+        with self._playback_timing_lock:
+            if self.play_thread is threading.current_thread():
+                self.play_thread = None
+                if self.is_playing and not reached_last_frame and self.current_frame < dp.num_frames - 1:
+                    self.play_thread = threading.Thread(target=self._playback_loop, daemon=True)
+                    self.play_thread.start()
         # Stop when reaching the end
         if reached_last_frame:
             self._stop_playback()
