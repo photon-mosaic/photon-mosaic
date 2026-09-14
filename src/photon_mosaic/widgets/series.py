@@ -122,6 +122,13 @@ class ImagingSeriesWidget(BaseWidget):
         self.playback_fps = min(10.0, dp.frame_rate)  # Default playback speed
         self._playback_last_time: float | None = None  # set by _start_playback/_on_fps_changed
         self._playback_timing_lock = threading.RLock()
+        # Bumped under the lock on every _start_playback() call -- i.e. every fresh user
+        # request to be playing. A worker captures this at its own start and, when it later
+        # decides it reached the end, only honors that decision if no newer start has happened
+        # meanwhile (see _playback_loop's cleanup section); otherwise a pause-then-play landing
+        # in the gap between the worker's publish and its next checkpoint would have its own
+        # stale end-of-playback decision silently cancel the fresh restart.
+        self._playback_start_id = 0
         # Bumped under the lock every time current_frame is authoritatively set (a playback
         # advance, a real seek, or seek_to_frame), so _publish_current_frame_to_slider can tell
         # whether its own in-flight publish has gone stale and needs to republish the latest
@@ -413,6 +420,9 @@ class ImagingSeriesWidget(BaseWidget):
         with self._playback_timing_lock:
             self.is_playing = True
             self._playback_last_time = time.monotonic()
+            # Marks this as a fresh request to be playing -- see _playback_start_id in
+            # __init__ and _playback_loop's cleanup section.
+            self._playback_start_id += 1
             # Button update shares the lock with the state flag: _stop_playback can otherwise
             # be called from the worker thread with a gap between setting is_playing and
             # updating the button, letting a concurrent click observe/overwrite a half-applied
@@ -464,6 +474,9 @@ class ImagingSeriesWidget(BaseWidget):
 
         dp = to_attr(self.data_plot)
 
+        with self._playback_timing_lock:
+            my_start_id = self._playback_start_id
+
         reached_last_frame = False
         while True:
             with self._playback_timing_lock:
@@ -511,7 +524,12 @@ class ImagingSeriesWidget(BaseWidget):
                     self.play_thread.start()
                     should_stop_playback = False
                 elif self.is_playing and reached_last_frame:
-                    should_stop_playback = True
+                    # Only honor this worker's own "reached the end" decision if no newer
+                    # _start_playback() has happened since it began -- otherwise a pause-then-
+                    # play landing in the gap between this worker's publish and this checkpoint
+                    # (reusing this same still-alive worker rather than replacing it) would have
+                    # its fresh restart silently cancelled by a decision made before it happened.
+                    should_stop_playback = self._playback_start_id == my_start_id
             # Stop when reaching the end while still holding the transition lock, so a
             # concurrent pause/play cannot start a replacement worker that this exiting worker
             # immediately stops with a stale end-of-playback decision.

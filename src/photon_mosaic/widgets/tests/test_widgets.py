@@ -242,6 +242,7 @@ class _PlaybackHarness:
         self.play_button = _FakeButton()
         self._playback_last_time = last_time  # normally set by _start_playback/_on_fps_changed
         self._playback_timing_lock = threading.RLock()
+        self._playback_start_id = 0
         self._frame_generation = 0
         self._slider_write_state = threading.local()
         self._render_lock = threading.Lock()
@@ -501,11 +502,12 @@ class _BlockingLock:
 
 
 class _TimeAdvanceThenFpsChangeLock:
-    """Combines two lock-ordering checks in one: advances the fake clock on the very first
-    acquisition (proving _playback_loop samples time.monotonic() only after acquiring the
-    lock, not before), then changes playback_fps on the second acquisition (proving the loop
+    """Combines two lock-ordering checks in one: advances the fake clock on the loop's first
+    checkpoint acquisition (proving _playback_loop samples time.monotonic() only after
+    acquiring the lock, not before), then changes playback_fps on the second (proving the loop
     re-reads fps fresh for the sleep duration rather than reusing the value already captured
-    earlier in the same iteration for the elapsed-time computation)."""
+    earlier in the same iteration for the elapsed-time computation). Acquisition #1 is
+    _playback_loop's own _playback_start_id capture, before the loop's checkpoints begin."""
 
     def __init__(self, harness, fake_time, advanced_to, updated_fps):
         self._lock = threading.Lock()
@@ -518,9 +520,9 @@ class _TimeAdvanceThenFpsChangeLock:
     def __enter__(self):
         self._lock.acquire()
         self.enter_count += 1
-        if self.enter_count == 1:
+        if self.enter_count == 2:
             self.fake_time[0] = self.advanced_to
-        elif self.enter_count == 2:
+        elif self.enter_count == 3:
             self.harness.playback_fps = self.updated_fps
         return self
 
@@ -531,11 +533,11 @@ class _TimeAdvanceThenFpsChangeLock:
 class _CleanupSeekLock:
     """Injects a seek exactly as the cleanup section acquires the lock, for the exact harness
     setup used below (num_frames=10, current_frame=8, fps=10, last_time=0.0, fake_time=0.1).
-    That's acquisition #5 with the current _playback_loop structure: top-of-loop check,
-    should_publish_frame check, the post-write reconcile check, the post-write
-    is_playing/reached_last_frame recheck, then the cleanup section itself -- recount (e.g. via
-    a lock that prints enter_count and the calling line) if _playback_loop's lock usage
-    changes."""
+    That's acquisition #6 with the current _playback_loop structure: the _playback_start_id
+    capture, the top-of-loop check, the publish helper's own capture and recheck (it acquires
+    the same lock twice), the post-write is_playing/reached_last_frame recheck, then the
+    cleanup section itself -- recount (e.g. via a lock that prints enter_count and the calling
+    line) if _playback_loop's or _publish_current_frame_to_slider's lock usage changes."""
 
     def __init__(self, harness):
         self._lock = threading.RLock()
@@ -545,7 +547,7 @@ class _CleanupSeekLock:
     def __enter__(self):
         self._lock.acquire()
         self.enter_count += 1
-        if self.enter_count == 5:
+        if self.enter_count == 6:
             self.harness.current_frame = 2
         return self
 
@@ -946,6 +948,41 @@ def test_playback_loop_revalidates_last_frame_before_cleanup_stop(monkeypatch):
     assert harness.current_frame == 2
     assert harness.is_playing is True
     assert len(started_threads) == 1
+
+
+def test_playback_loop_does_not_cancel_a_restart_that_races_its_own_end_decision(monkeypatch):
+    """The worker can decide it reached the last frame, release the lock to publish, and only
+    then -- before it reaches the cleanup section -- have the user pause and play again. Since
+    the worker is still alive, _start_playback reuses it (no new thread) rather than replacing
+    it. That must not let the worker's now-stale "I reached the end" decision cancel the fresh
+    restart: is_playing must stay True, matching the button the user just clicked, not silently
+    flip back to stopped."""
+    harness = _PlaybackHarness(num_frames=5, playback_fps=10, current_frame=3, last_time=0.0)
+    harness.play_thread = threading.current_thread()  # this call *is* the "spawned" worker
+
+    fake_time = [1.0]  # elapsed=1.0 at fps=10 jumps straight to the last frame in one pass
+    monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
+
+    restarted = [False]
+    original_publish = harness._publish_current_frame_to_slider
+
+    def publish_then_restart():
+        original_publish()
+        if not restarted[0]:
+            restarted[0] = True
+            # A pause-then-play lands in the gap between the worker's publish (outside the
+            # lock) and its next checkpoint -- reusing this same still-alive worker, exactly as
+            # _start_playback's own is_alive() check is meant to.
+            harness._stop_playback()
+            harness._start_playback()
+
+    harness._publish_current_frame_to_slider = publish_then_restart
+
+    harness._playback_loop()
+
+    assert restarted[0], "the simulated restart never ran"
+    assert harness.is_playing is True
+    assert harness.play_button.description == "⏸ Pause"
 
 
 class _FakeImaging:
