@@ -440,12 +440,12 @@ class ImagingSeriesWidget(BaseWidget):
     def _stop_playback(self):
         """Stop video playback.
 
-        Called both from the play button (already holding the lock, via _on_play_button_clicked
-        -- reentrant since _playback_timing_lock is an RLock) and from _playback_loop itself when
-        it reaches the last frame (not holding the lock). The state flag and button update must
-        stay atomic either way, or a click landing between them could see is_playing already
-        False and start new playback, only for this call's own button update to then overwrite
-        it back to "Play" right after.
+        Called both from the play button (via _on_play_button_clicked) and from _playback_loop
+        itself when it reaches the last frame -- both already holding the lock (reentrant,
+        since _playback_timing_lock is an RLock). The state flag and button update must stay
+        atomic either way, or a click landing between them could see is_playing already False
+        and start new playback, only for this call's own button update to then overwrite it
+        back to "Play" right after.
         """
         with self._playback_timing_lock:
             self.is_playing = False
@@ -592,7 +592,14 @@ class ImagingSeriesWidget(BaseWidget):
             # the seek) and immediately jumps forward again from the newly seeked position.
             self._playback_last_time = time.monotonic()
             self._frame_generation += 1
-        self._update_display()
+        # Publish, not a raw redraw -- storing the slider's new value and notifying this
+        # observer aren't one atomic step against another thread. A concurrent publish can
+        # capture the pre-seek state, overwrite the slider back to it, and finish its own
+        # generation recheck entirely inside that gap (this seek's own bump above hasn't
+        # happened yet from its point of view), leaving the slider showing the publish's stale
+        # value. Publishing here reasserts the slider against exactly that, the same way it
+        # already reconciles a publish against a concurrent seek.
+        self._publish_current_frame_to_slider()
 
     def _on_fps_changed(self, change):
         """Handle FPS slider change."""

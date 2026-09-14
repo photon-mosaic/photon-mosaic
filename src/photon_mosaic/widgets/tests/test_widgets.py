@@ -483,16 +483,23 @@ def test_fps_change_clamps_non_positive_values(monkeypatch):
 
 
 class _BlockingLock:
+    """Blocks on the loop's *second* acquisition -- the actual top-of-loop checkpoint (reads
+    fake_time, playback_fps, advances current_frame) -- not the first, which is now
+    _playback_loop's own _playback_start_id capture and does nothing time/fps-related. Blocking
+    on #1 instead would release the real top-of-loop computation into an unforced race against
+    the concurrent fps-change thread, making the test's current_frame/playback_fps assertions
+    scheduler-dependent instead of deterministic."""
+
     def __init__(self):
         self._lock = threading.Lock()
         self.entered = threading.Event()
         self.release = threading.Event()
-        self.block_first_enter = True
+        self.enter_count = 0
 
     def __enter__(self):
         self._lock.acquire()
-        if self.block_first_enter:
-            self.block_first_enter = False
+        self.enter_count += 1
+        if self.enter_count == 2:
             self.entered.set()
             assert self.release.wait(timeout=1), "timed out waiting to release playback timing lock"
         return self
@@ -835,14 +842,17 @@ def test_seek_to_frame_does_not_roll_back_a_concurrent_playback_advance():
 
 
 class _PausingBeforeObserversSlider(_FakeSlider):
-    """Like _FakeSlider, but pauses after storing the new value and before notifying
-    observers -- used to hold a publish's write "in flight" on its own thread so a genuine
-    seek from a different thread can be attempted while it's paused there."""
+    """Like _FakeSlider, but pauses after storing the new value and before notifying observers
+    -- used to hold a write "in flight" on its own thread so something else can be attempted
+    while it's paused there. Only its first real value-change pauses; later writes (e.g. a
+    seek's own reassertion publish, or a second publish) proceed immediately -- otherwise two
+    writes through the same instance would each wait on the same one-shot release."""
 
     def __init__(self, value=0):
         super().__init__(value)
         self.entered = threading.Event()
         self.release = threading.Event()
+        self._paused_once = False
 
     @_FakeSlider.value.setter
     def value(self, new_value):
@@ -850,8 +860,10 @@ class _PausingBeforeObserversSlider(_FakeSlider):
             return
         old_value = self._value
         self._value = new_value
-        self.entered.set()
-        assert self.release.wait(timeout=1), "timed out waiting to release the slider write"
+        if not self._paused_once:
+            self._paused_once = True
+            self.entered.set()
+            assert self.release.wait(timeout=1), "timed out waiting to release the slider write"
         for h in self._observers:
             h({"new": new_value, "old": old_value, "name": "value"})
 
@@ -890,6 +902,34 @@ def test_publishing_flag_is_thread_local_not_a_shared_flag():
     harness.frame_slider.release.set()
     publish_thread.join(timeout=1)
     assert not publish_thread.is_alive()
+
+
+def test_publish_does_not_finalize_stale_state_while_a_seek_is_mid_flight():
+    """A genuine seek's raw value-store and its own observer running (the part that bumps
+    _frame_generation and updates current_frame) aren't one atomic step from another thread's
+    point of view -- ipywidgets/traitlets stores the new value, then notifies observers, as two
+    separate steps. If a publish captures the pre-seek state, overwrites the slider back to it,
+    and finishes its own generation recheck entirely inside that gap, the recheck finds nothing
+    changed (the seek's own bump hasn't run yet) and stops -- leaving the slider showing the
+    publish's stale value even after the seek's observer later runs and updates current_frame
+    correctly."""
+    harness = _PlaybackHarness(num_frames=1000, playback_fps=10, current_frame=5, last_time=0.0)
+    harness.frame_slider = _PausingBeforeObserversSlider(5)
+    harness.frame_slider.observe(harness._on_frame_changed, names="value")
+
+    seek_thread = threading.Thread(target=lambda: setattr(harness.frame_slider, "value", 9))
+    seek_thread.start()
+    assert harness.frame_slider.entered.wait(timeout=1), "seek's slider write never paused"
+
+    # A publish for the pre-seek frame (current_frame is still 5 -- the seek's own observer,
+    # which would update it, hasn't run yet) completes entirely inside that gap.
+    harness._publish_current_frame_to_slider()
+
+    harness.frame_slider.release.set()
+    seek_thread.join(timeout=1)
+
+    assert harness.current_frame == 9
+    assert harness.frame_slider.value == 9, "slider left showing the publish's stale value"
 
 
 def test_playback_loop_rechecks_last_frame_after_internal_redraw(monkeypatch):
