@@ -473,7 +473,6 @@ class ImagingSeriesWidget(BaseWidget):
             with self._playback_timing_lock:
                 sleep_duration = 1.0 / (4 * self.playback_fps)
             time.sleep(sleep_duration)
-        should_stop_playback = reached_last_frame
         with self._playback_timing_lock:
             if self.play_thread is threading.current_thread():
                 self.play_thread = None
@@ -481,12 +480,11 @@ class ImagingSeriesWidget(BaseWidget):
                 if self.is_playing and not reached_last_frame:
                     self.play_thread = threading.Thread(target=self._playback_loop, daemon=True)
                     self.play_thread.start()
-                    should_stop_playback = False
                 elif self.is_playing and reached_last_frame:
-                    should_stop_playback = True
-        # Stop when reaching the end
-        if should_stop_playback:
-            self._stop_playback()
+                    # Stop when reaching the end while still holding the transition lock, so a
+                    # concurrent pause/play cannot start a replacement worker that this exiting
+                    # worker immediately stops with a stale end-of-playback decision.
+                    self._stop_playback()
 
     def _on_frame_changed(self, change):
         """Handle frame slider change."""
