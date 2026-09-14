@@ -441,9 +441,7 @@ class ImagingSeriesWidget(BaseWidget):
         ``self._playback_last_time`` advances by the exact duration of the frames just
         consumed, not to ``now`` -- carrying over any leftover fraction of a frame period
         instead of discarding it, so playback doesn't drift behind the requested rate over a
-        long session. ``_on_fps_changed`` resets it directly, so a rate change only governs
-        time elapsed from that point on rather than retroactively reinterpreting time already
-        accrued under the old rate.
+        long session. ``_on_fps_changed`` resets it on a rate change (see its own comment).
         """
         import threading
         import time
@@ -472,10 +470,7 @@ class ImagingSeriesWidget(BaseWidget):
                 else:
                     reached_last_frame = False
             if frame_to_display is not None:
-                # Publish (not a raw write): current_frame is already authoritative as of the
-                # lock above. _publish_current_frame_to_slider re-reads it fresh and converges
-                # even if a seek or a later loop iteration changes it again while this call is
-                # in flight, so the widget never ends up stuck showing a stale frame_to_display.
+                # Publish, not a raw write -- see _publish_current_frame_to_slider.
                 self._publish_current_frame_to_slider()
             with self._playback_timing_lock:
                 if not self.is_playing:
@@ -589,11 +584,9 @@ class ImagingSeriesWidget(BaseWidget):
                 self._playback_last_time = time.monotonic()
                 self._frame_generation += 1
             if hasattr(self, "frame_slider"):
-                # Publish rather than a raw write: current_frame is already authoritative as of
-                # the lock above, so this is UI sync for a decision already made, not a new
-                # seek -- a raw write here would fire _on_frame_changed as if it were one, and a
-                # concurrent playback advance landing in the gap before this line would then get
-                # rolled back to frame_number by that misattributed "seek".
+                # Publish, not a raw write -- current_frame above is already authoritative, so
+                # this is UI sync for a decision already made, not a new seek (a raw write here
+                # would be treated as one; see _publish_current_frame_to_slider).
                 self._publish_current_frame_to_slider()
             else:
                 self._update_display()
