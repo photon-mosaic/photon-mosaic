@@ -996,12 +996,31 @@ def test_playback_loop_does_not_cancel_a_restart_that_races_its_own_end_decision
     the worker is still alive, _start_playback reuses it (no new thread) rather than replacing
     it. That must not let the worker's now-stale "I reached the end" decision cancel the fresh
     restart: is_playing must stay True, matching the button the user just clicked, not silently
-    flip back to stopped."""
+    flip back to stopped -- and a fresh worker must actually be spawned to re-evaluate with
+    current information, not just left dangling (is_playing True, no worker, playback
+    genuinely stuck) once this stale worker exits."""
     harness = _PlaybackHarness(num_frames=5, playback_fps=10, current_frame=3, last_time=0.0)
     harness.play_thread = threading.current_thread()  # this call *is* the "spawned" worker
 
     fake_time = [1.0]  # elapsed=1.0 at fps=10 jumps straight to the last frame in one pass
     monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
+
+    started_threads = []
+
+    class _StubThread:
+        def __init__(self, target=None, daemon=None):
+            self.target = target
+            self.daemon = daemon
+            self.started = False
+
+        def is_alive(self):
+            return False  # never actually run, so a later is_alive() check finds it dead
+
+        def start(self):
+            self.started = True
+            started_threads.append(self)
+
+    monkeypatch.setattr("threading.Thread", _StubThread)
 
     restarted = [False]
     original_publish = harness._publish_current_frame_to_slider
@@ -1023,6 +1042,12 @@ def test_playback_loop_does_not_cancel_a_restart_that_races_its_own_end_decision
     assert restarted[0], "the simulated restart never ran"
     assert harness.is_playing is True
     assert harness.play_button.description == "⏸ Pause"
+    # Not just the flag/button: a fresh worker must actually be spawned to re-evaluate with
+    # current information -- otherwise is_playing stays True with no worker left to advance
+    # playback (or, from a later state where there's somewhere left to go, to actually get
+    # there), which is just as broken as silently cancelling the restart.
+    assert len(started_threads) == 1
+    assert harness.play_thread is started_threads[0]
 
 
 class _FakeImaging:

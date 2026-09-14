@@ -519,17 +519,20 @@ class ImagingSeriesWidget(BaseWidget):
             if self.play_thread is threading.current_thread():
                 self.play_thread = None
                 reached_last_frame = self.current_frame >= dp.num_frames - 1
-                if self.is_playing and not reached_last_frame:
+                # A newer _start_playback() since this worker began means its "reached the end"
+                # decision below may be stale (a pause-then-play landing in the gap between
+                # this worker's publish and this checkpoint reuses this same still-alive worker
+                # rather than replacing it). Rather than just standing down and leaving
+                # is_playing True with no worker left to act on it, hand off to a fresh worker
+                # that re-evaluates with current information -- same as the "still more to
+                # play" case below, and it settles to stopped itself if there genuinely isn't.
+                newer_start = self._playback_start_id != my_start_id
+                if self.is_playing and (not reached_last_frame or newer_start):
                     self.play_thread = threading.Thread(target=self._playback_loop, daemon=True)
                     self.play_thread.start()
                     should_stop_playback = False
-                elif self.is_playing and reached_last_frame:
-                    # Only honor this worker's own "reached the end" decision if no newer
-                    # _start_playback() has happened since it began -- otherwise a pause-then-
-                    # play landing in the gap between this worker's publish and this checkpoint
-                    # (reusing this same still-alive worker rather than replacing it) would have
-                    # its fresh restart silently cancelled by a decision made before it happened.
-                    should_stop_playback = self._playback_start_id == my_start_id
+                elif self.is_playing:
+                    should_stop_playback = True
             # Stop when reaching the end while still holding the transition lock, so a
             # concurrent pause/play cannot start a replacement worker that this exiting worker
             # immediately stops with a stale end-of-playback decision.
