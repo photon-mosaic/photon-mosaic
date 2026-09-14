@@ -372,7 +372,6 @@ class ImagingSeriesWidget(BaseWidget):
         import threading
         import time
 
-        start_new_thread = False
         with self._playback_timing_lock:
             self.is_playing = True
             self._playback_last_time = time.monotonic()
@@ -385,11 +384,10 @@ class ImagingSeriesWidget(BaseWidget):
             if self.play_thread is None or not self.play_thread.is_alive():
                 self.play_thread = threading.Thread(target=self._playback_loop)
                 self.play_thread.daemon = True
-                start_new_thread = True
-
-        if start_new_thread:
-            # Start playback thread
-            self.play_thread.start()
+                # Start playback thread while still holding the transition lock so a
+                # concurrent start cannot replace self.play_thread in between creation and
+                # start(), which would otherwise race into double-starting the wrong thread.
+                self.play_thread.start()
 
     def _stop_playback(self):
         """Stop video playback.
@@ -451,6 +449,10 @@ class ImagingSeriesWidget(BaseWidget):
                 else:
                     reached_last_frame = False
             if frame_to_display is not None:
+                with self._playback_timing_lock:
+                    should_publish_frame = self.is_playing and self.current_frame == frame_to_display
+                if not should_publish_frame:
+                    continue
                 # Update slider and display. This write is deliberately outside the lock (a
                 # redraw shouldn't block _on_fps_changed/_on_play_button_clicked), but it fires
                 # _on_frame_changed just like a real user drag would -- flag it as internal so
@@ -461,6 +463,11 @@ class ImagingSeriesWidget(BaseWidget):
                     self.frame_slider.value = frame_to_display
                 finally:
                     self._updating_slider_internally = False
+            with self._playback_timing_lock:
+                if not self.is_playing:
+                    reached_last_frame = False
+                    break
+                reached_last_frame = self.current_frame >= dp.num_frames - 1
             if reached_last_frame:
                 break
             with self._playback_timing_lock:
@@ -518,8 +525,11 @@ class ImagingSeriesWidget(BaseWidget):
         """
         dp = to_attr(self.data_plot)
         if 0 <= frame_number < dp.num_frames:
+            import time
+
             with self._playback_timing_lock:
                 self.current_frame = frame_number
+                self._playback_last_time = time.monotonic()
             if hasattr(self, "frame_slider"):
                 self.frame_slider.value = frame_number
             self._update_display()

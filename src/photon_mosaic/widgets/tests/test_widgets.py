@@ -254,6 +254,7 @@ class _PlaybackHarness:
     _stop_playback = ImagingSeriesWidget._stop_playback
     _on_fps_changed = ImagingSeriesWidget._on_fps_changed
     _on_frame_changed = ImagingSeriesWidget._on_frame_changed
+    seek_to_frame = ImagingSeriesWidget.seek_to_frame
 
 
 def test_playback_loop_skips_ahead_after_slow_iteration(monkeypatch):
@@ -659,3 +660,43 @@ def test_on_frame_changed_resets_pacing_reference_for_a_real_seek(monkeypatch):
     assert harness.current_frame == 42
     assert harness._playback_last_time == pytest.approx(5.0)
     assert harness.display_calls == 1
+
+
+def test_seek_to_frame_resets_pacing_reference(monkeypatch):
+    harness = _PlaybackHarness(num_frames=1000, playback_fps=10, last_time=0.0)
+
+    monkeypatch.setattr("time.monotonic", lambda: 7.5)
+
+    harness.seek_to_frame(12)
+
+    assert harness.current_frame == 12
+    assert harness.frame_slider.value == 12
+    assert harness._playback_last_time == pytest.approx(7.5)
+
+
+def test_playback_loop_rechecks_last_frame_after_internal_redraw(monkeypatch):
+    harness = _PlaybackHarness(num_frames=10, playback_fps=10, current_frame=8, last_time=0.0)
+
+    fake_time = [0.1]
+    monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
+
+    sleep_calls = []
+
+    def fake_sleep(duration):
+        sleep_calls.append(duration)
+        harness.is_playing = False
+
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    def simulated_internal_redraw():
+        harness.display_calls += 1
+        with harness._playback_timing_lock:
+            harness.current_frame = 2
+
+    harness._update_display = simulated_internal_redraw
+
+    harness._playback_loop()
+
+    assert harness.current_frame == 2
+    assert harness.play_button.description == ""
+    assert sleep_calls == [pytest.approx(0.025)]
