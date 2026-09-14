@@ -121,7 +121,7 @@ class ImagingSeriesWidget(BaseWidget):
         self.play_thread = None
         self.playback_fps = min(10.0, dp.frame_rate)  # Default playback speed
         self._playback_last_time: float | None = None  # set by _start_playback/_on_fps_changed
-        self._playback_timing_lock = threading.Lock()
+        self._playback_timing_lock = threading.RLock()
 
         # Sample up to 100 frames to compute a global vmin/vmax for the colormap.
         num_samples = min(100, dp.num_frames)
@@ -357,26 +357,31 @@ class ImagingSeriesWidget(BaseWidget):
 
     def _on_play_button_clicked(self, button):
         """Handle play/pause button click."""
-        if self.is_playing:
-            self._stop_playback()
-        else:
-            self._start_playback()
+        with self._playback_timing_lock:
+            if self.is_playing:
+                self._stop_playback()
+            else:
+                self._start_playback()
 
     def _start_playback(self):
         """Start video playback in a separate thread."""
         import threading
         import time
 
+        start_new_thread = False
         with self._playback_timing_lock:
             self.is_playing = True
             self._playback_last_time = time.monotonic()
+            if self.play_thread is None or not self.play_thread.is_alive():
+                self.play_thread = threading.Thread(target=self._playback_loop)
+                self.play_thread.daemon = True
+                start_new_thread = True
         self.play_button.description = "⏸ Pause"
         self.play_button.button_style = "warning"
 
-        # Start playback thread
-        self.play_thread = threading.Thread(target=self._playback_loop)
-        self.play_thread.daemon = True
-        self.play_thread.start()
+        if start_new_thread:
+            # Start playback thread
+            self.play_thread.start()
 
     def _stop_playback(self):
         """Stop video playback."""

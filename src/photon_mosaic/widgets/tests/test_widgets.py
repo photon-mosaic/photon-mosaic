@@ -219,8 +219,11 @@ class _PlaybackHarness:
         self.frame_slider = _FakeSlider(current_frame)
         self.play_button = _FakeButton()
         self._playback_last_time = last_time  # normally set by _start_playback/_on_fps_changed
-        self._playback_timing_lock = threading.Lock()
+        self._playback_timing_lock = threading.RLock()
+        self.play_thread = None
 
+    _on_play_button_clicked = ImagingSeriesWidget._on_play_button_clicked
+    _start_playback = ImagingSeriesWidget._start_playback
     _playback_loop = ImagingSeriesWidget._playback_loop
     _stop_playback = ImagingSeriesWidget._stop_playback
     _on_fps_changed = ImagingSeriesWidget._on_fps_changed
@@ -254,6 +257,34 @@ def test_playback_loop_skips_ahead_after_slow_iteration(monkeypatch):
     assert harness.frame_slider.value == 10
     # poll interval is 1 / (4 * playback_fps)
     assert sleep_calls[0] == pytest.approx(0.025)
+
+
+def test_play_button_reuses_existing_alive_playback_thread(monkeypatch):
+    harness = _PlaybackHarness(num_frames=1000, playback_fps=10)
+    harness.is_playing = False
+
+    class _ExistingThread:
+        def __init__(self):
+            self.started = False
+
+        def is_alive(self):
+            return True
+
+        def start(self):
+            self.started = True
+
+    existing_thread = _ExistingThread()
+    harness.play_thread = existing_thread
+
+    monkeypatch.setattr("time.monotonic", lambda: 1.23)
+    monkeypatch.setattr("threading.Thread", lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("unexpected new playback thread")))
+
+    harness._on_play_button_clicked(None)
+
+    assert harness.is_playing is True
+    assert harness._playback_last_time == pytest.approx(1.23)
+    assert harness.play_thread is existing_thread
+    assert existing_thread.started is False
 
 
 def test_playback_loop_initializes_missing_last_time(monkeypatch):
