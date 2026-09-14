@@ -409,6 +409,10 @@ class ImagingSeriesWidget(BaseWidget):
                 self._playback_last_time += frames_elapsed / self.playback_fps
                 # Update slider and display
                 self.frame_slider.value = self.current_frame
+                if self.current_frame >= dp.num_frames - 1:
+                    # Reached the end -- stop immediately rather than waiting out one more poll
+                    # interval (up to 2.5s at the FPS slider's minimum, 0.1).
+                    break
             time.sleep(1.0 / (4 * self.playback_fps))
         # Stop when reaching the end
         if self.current_frame >= dp.num_frames - 1:

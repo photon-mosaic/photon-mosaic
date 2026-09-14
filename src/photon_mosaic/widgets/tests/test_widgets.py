@@ -273,6 +273,31 @@ def test_playback_loop_stops_at_last_frame(monkeypatch):
     assert harness.play_button.description == "▶ Play"
 
 
+def test_playback_loop_stops_immediately_on_reaching_the_last_frame(monkeypatch):
+    """Reaching the last frame should stop right away rather than waiting out one more poll
+    interval -- at the FPS slider's minimum (0.1), that interval is 2.5s, during which
+    is_playing stays True and the button still shows Pause even though playback has
+    genuinely ended."""
+    harness = _PlaybackHarness(num_frames=5, playback_fps=0.1, current_frame=3)
+
+    fake_time = [0.0]
+    monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
+
+    sleep_calls = []
+
+    def fake_sleep(duration):
+        sleep_calls.append(duration)
+        fake_time[0] += 10.0  # always enough to reach the end in one jump
+
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    harness._playback_loop()
+
+    assert harness.current_frame == 4
+    assert harness.is_playing is False
+    assert sleep_calls == [pytest.approx(2.5)]  # no extra sleep after reaching the end
+
+
 def test_playback_loop_does_not_drift_under_irregular_polling(monkeypatch):
     """Advancing the pacing reference to `now` on every frame-advance (instead of by the
     exact duration of the frames just consumed) discards whatever fraction of a frame period
