@@ -350,22 +350,41 @@ def test_start_playback_spawns_and_starts_a_real_thread():
     assert harness.is_playing is False  # the loop reached the end and stopped itself
 
 
-def test_start_playback_wakes_a_sleeping_worker_promptly(monkeypatch):
-    """A pause-then-play that reuses a still-alive worker (rather than spawning a new one)
-    must wake it promptly if it's currently blocked in its poll wait -- otherwise the button
-    shows Pause immediately but playback stays visibly unresponsive until that wait happens to
-    elapse on its own (up to a full poll interval -- worse at a low fps, where each interval is
-    longer)."""
+_WAKE_A_SLEEPING_WORKER_TRIGGERS = [
+    pytest.param(lambda h: h._start_playback(), True, id="start_playback"),
+    pytest.param(lambda h: h._on_frame_changed({"new": 5, "old": 0}), True, id="on_frame_changed"),
+    pytest.param(lambda h: h.seek_to_frame(5), True, id="seek_to_frame"),
+    pytest.param(lambda h: h._on_fps_changed({"new": 5.0, "old": 0.01}), True, id="on_fps_changed"),
+    pytest.param(lambda h: h._stop_playback(), False, id="stop_playback"),
+]
+
+
+@pytest.mark.parametrize("trigger, worker_keeps_running", _WAKE_A_SLEEPING_WORKER_TRIGGERS)
+def test_wakes_a_sleeping_worker_promptly(monkeypatch, trigger, worker_keeps_running):
+    """Each of these must wake a worker currently blocked in its poll wait immediately, instead
+    of leaving it to notice on its own once that wait happens to elapse (up to a full poll
+    interval -- 25s at the extreme fps used here, to make a missed wake-up an obvious hang
+    rather than a flaky race):
+
+    - start_playback: a pause-then-play reusing a still-alive worker must resume it promptly.
+    - on_frame_changed: a real seek (e.g. dragging onto the last frame, which should stop
+      playback immediately) during active playback.
+    - seek_to_frame: the same missed-wakeup risk for a programmatic seek.
+    - on_fps_changed: raising the fps must take effect immediately -- not only once the old,
+      slower interval the worker is already waiting on happens to elapse.
+    - stop_playback: pausing must make the worker actually exit promptly, instead of the
+      button already showing "Play" while the thread (and play_thread) stays alive regardless.
+    """
     import time
 
     harness = _PlaybackHarness(num_frames=10_000, playback_fps=0.01, current_frame=0, last_time=0.0)
-    # 1 / (4 * 0.01) = 25s poll interval -- if a resume had to wait that out, this test would
-    # time out; the wake mechanism should make it return almost immediately instead.
+    # 1 / (4 * 0.01) = 25s poll interval -- if the trigger had to wait that out, this test would
+    # time out; the wake mechanism should make it react almost immediately instead.
     monkeypatch.setattr("time.monotonic", lambda: 0.0)  # elapsed always 0 -> loop always waits
 
     # Count the worker's own poll-wait calls directly (not e.g. time.monotonic() calls, which
-    # _start_playback also makes itself for an unrelated reason -- resetting the pacing
-    # reference -- and would otherwise be indistinguishable from the worker actually reacting).
+    # some triggers make themselves for an unrelated reason -- resetting the pacing reference --
+    # and would otherwise be indistinguishable from the worker actually reacting).
     wait_calls = []
     original_wait = harness._playback_wake_event.wait
 
@@ -390,205 +409,37 @@ def test_start_playback_wakes_a_sleeping_worker_promptly(monkeypatch):
     assert len(wait_calls) == calls_before, "worker should still be in its poll wait, not looping"
     assert worker.is_alive()
 
-    harness._start_playback()
+    trigger(harness)
 
-    # The worker should react almost immediately -- well under the 25s poll interval -- not
-    # need to wait out the rest of it, i.e. return from its current wait and start a new one.
-    deadline = time.perf_counter() + 1.0
-    while len(wait_calls) == calls_before and time.perf_counter() < deadline:
-        time.sleep(0.01)
-    assert len(wait_calls) > calls_before, "worker never woke from its poll wait"
+    if worker_keeps_running:
+        # The worker should react almost immediately -- well under the 25s poll interval -- not
+        # need to wait out the rest of it, i.e. return from its current wait and start a new one.
+        deadline = time.perf_counter() + 1.0
+        while len(wait_calls) == calls_before and time.perf_counter() < deadline:
+            time.sleep(0.01)
+        assert len(wait_calls) > calls_before, "worker never woke from its poll wait"
+        # Let the worker actually stop instead of looping forever in the background.
+        harness.is_playing = False
+        harness._playback_wake_event.set()
 
-    # Let the worker actually stop instead of looping forever in the background.
-    harness.is_playing = False
-    harness._playback_wake_event.set()
+    # A stop trigger should need none of the above: the worker should exit on its own, almost
+    # immediately -- well under the 25s poll interval -- not need to wait out the rest of it.
     worker.join(timeout=1)
-    assert not worker.is_alive()
+    assert not worker.is_alive(), "worker never woke from its poll wait"
 
 
-def test_on_frame_changed_wakes_a_sleeping_worker_promptly(monkeypatch):
-    """A real seek during active playback (e.g. dragging the frame slider onto the last frame,
-    which should stop playback immediately) must wake a worker that's currently sleeping
-    between polls -- otherwise it won't notice until that sleep happens to elapse on its own."""
-    import time
+class _InjectDuringPreSleepGapLock:
+    """Simulates some concurrent operation landing in the gap between the post-publish recheck
+    and the sleep-decision checkpoint -- acquisition #3 with the harness setup used below
+    (fps=10, fake time constant so no frame ever advances and no publish call happens each
+    iteration, keeping the per-iteration acquisition count at exactly 3: top-of-loop,
+    post-publish recheck, sleep-decision). `inject` performs that operation's own state
+    mutation plus the wake_event.set() it would really make."""
 
-    harness = _PlaybackHarness(num_frames=10_000, playback_fps=0.01, current_frame=0, last_time=0.0)
-    monkeypatch.setattr("time.monotonic", lambda: 0.0)  # elapsed always 0 -> loop always waits
-
-    wait_calls = []
-    original_wait = harness._playback_wake_event.wait
-
-    def counting_wait(timeout=None):
-        wait_calls.append(timeout)
-        return original_wait(timeout=timeout)
-
-    harness._playback_wake_event.wait = counting_wait
-
-    worker = threading.Thread(target=harness._playback_loop, daemon=True)
-    harness.play_thread = worker
-    worker.start()
-
-    deadline = time.perf_counter() + 1.0
-    while len(wait_calls) < 1 and time.perf_counter() < deadline:
-        time.sleep(0.01)
-    calls_before = len(wait_calls)
-    time.sleep(0.1)
-    assert len(wait_calls) == calls_before, "worker should still be in its poll wait, not looping"
-    assert worker.is_alive()
-
-    harness._on_frame_changed({"new": 5, "old": 0})
-
-    deadline = time.perf_counter() + 1.0
-    while len(wait_calls) == calls_before and time.perf_counter() < deadline:
-        time.sleep(0.01)
-    assert len(wait_calls) > calls_before, "worker never woke from its poll wait"
-
-    harness.is_playing = False
-    harness._playback_wake_event.set()
-    worker.join(timeout=1)
-    assert not worker.is_alive()
-
-
-def test_seek_to_frame_wakes_a_sleeping_worker_promptly(monkeypatch):
-    """Same missed-wakeup risk as a real slider seek: a programmatic seek during active
-    playback must wake a worker that's currently sleeping between polls."""
-    import time
-
-    harness = _PlaybackHarness(num_frames=10_000, playback_fps=0.01, current_frame=0, last_time=0.0)
-    monkeypatch.setattr("time.monotonic", lambda: 0.0)  # elapsed always 0 -> loop always waits
-
-    wait_calls = []
-    original_wait = harness._playback_wake_event.wait
-
-    def counting_wait(timeout=None):
-        wait_calls.append(timeout)
-        return original_wait(timeout=timeout)
-
-    harness._playback_wake_event.wait = counting_wait
-
-    worker = threading.Thread(target=harness._playback_loop, daemon=True)
-    harness.play_thread = worker
-    worker.start()
-
-    deadline = time.perf_counter() + 1.0
-    while len(wait_calls) < 1 and time.perf_counter() < deadline:
-        time.sleep(0.01)
-    calls_before = len(wait_calls)
-    time.sleep(0.1)
-    assert len(wait_calls) == calls_before, "worker should still be in its poll wait, not looping"
-    assert worker.is_alive()
-
-    harness.seek_to_frame(5)
-
-    deadline = time.perf_counter() + 1.0
-    while len(wait_calls) == calls_before and time.perf_counter() < deadline:
-        time.sleep(0.01)
-    assert len(wait_calls) > calls_before, "worker never woke from its poll wait"
-
-    harness.is_playing = False
-    harness._playback_wake_event.set()
-    worker.join(timeout=1)
-    assert not worker.is_alive()
-
-
-def test_on_fps_changed_wakes_a_sleeping_worker_promptly(monkeypatch):
-    """Raising the FPS while the worker is asleep in its poll wait must take effect
-    immediately -- otherwise the worker keeps waiting out the *old*, slower interval it's
-    already blocked in, and the new rate doesn't apply until that old wait happens to elapse
-    on its own (up to a full poll interval, worse at a low fps)."""
-    import time
-
-    harness = _PlaybackHarness(num_frames=10_000, playback_fps=0.01, current_frame=0, last_time=0.0)
-    # 1 / (4 * 0.01) = 25s poll interval -- if the fps bump had to wait that out, this test
-    # would time out; the wake mechanism should make it return almost immediately instead.
-    monkeypatch.setattr("time.monotonic", lambda: 0.0)  # elapsed always 0 -> loop always waits
-
-    wait_calls = []
-    original_wait = harness._playback_wake_event.wait
-
-    def counting_wait(timeout=None):
-        wait_calls.append(timeout)
-        return original_wait(timeout=timeout)
-
-    harness._playback_wake_event.wait = counting_wait
-
-    worker = threading.Thread(target=harness._playback_loop, daemon=True)
-    harness.play_thread = worker
-    worker.start()
-
-    deadline = time.perf_counter() + 1.0
-    while len(wait_calls) < 1 and time.perf_counter() < deadline:
-        time.sleep(0.01)
-    calls_before = len(wait_calls)
-    time.sleep(0.1)
-    assert len(wait_calls) == calls_before, "worker should still be in its poll wait, not looping"
-    assert worker.is_alive()
-
-    harness._on_fps_changed({"new": 5.0, "old": 0.01})
-
-    deadline = time.perf_counter() + 1.0
-    while len(wait_calls) == calls_before and time.perf_counter() < deadline:
-        time.sleep(0.01)
-    assert len(wait_calls) > calls_before, "worker never woke from its poll wait"
-
-    harness.is_playing = False
-    harness._playback_wake_event.set()
-    worker.join(timeout=1)
-    assert not worker.is_alive()
-
-
-def test_stop_playback_wakes_a_sleeping_worker_promptly(monkeypatch):
-    """Pausing while the worker is asleep in its poll wait must take effect immediately --
-    otherwise the button already shows "Play" but the worker thread stays alive (and
-    play_thread still points at it) until that wait happens to elapse on its own (up to a full
-    poll interval, worse at a low fps), instead of the worker noticing is_playing is False and
-    exiting right away."""
-    import time
-
-    harness = _PlaybackHarness(num_frames=10_000, playback_fps=0.01, current_frame=0, last_time=0.0)
-    # 1 / (4 * 0.01) = 25s poll interval -- if stopping had to wait that out, this test would
-    # time out; the wake mechanism should make the worker exit almost immediately instead.
-    monkeypatch.setattr("time.monotonic", lambda: 0.0)  # elapsed always 0 -> loop always waits
-
-    wait_calls = []
-    original_wait = harness._playback_wake_event.wait
-
-    def counting_wait(timeout=None):
-        wait_calls.append(timeout)
-        return original_wait(timeout=timeout)
-
-    harness._playback_wake_event.wait = counting_wait
-
-    worker = threading.Thread(target=harness._playback_loop, daemon=True)
-    harness.play_thread = worker
-    worker.start()
-
-    deadline = time.perf_counter() + 1.0
-    while len(wait_calls) < 1 and time.perf_counter() < deadline:
-        time.sleep(0.01)
-    calls_before = len(wait_calls)
-    time.sleep(0.1)
-    assert len(wait_calls) == calls_before, "worker should still be in its poll wait, not looping"
-    assert worker.is_alive()
-
-    harness._stop_playback()
-
-    # The worker should exit almost immediately -- well under the 25s poll interval -- not
-    # need to wait out the rest of it.
-    worker.join(timeout=1)
-    assert not worker.is_alive(), "worker never woke from its poll wait to notice the stop"
-
-
-class _StartPlaybackDuringPreSleepGapLock:
-    """Simulates a concurrent _start_playback() landing in the gap between the post-publish
-    recheck and the sleep-decision checkpoint -- acquisition #3 with the harness setup used
-    below (fps=10, fake time constant so no frame ever advances and no publish call happens
-    each iteration, keeping the per-iteration acquisition count at exactly 3: top-of-loop,
-    post-publish recheck, sleep-decision)."""
-
-    def __init__(self, harness):
+    def __init__(self, harness, inject):
         self._lock = threading.RLock()
         self.harness = harness
+        self.inject = inject
         self.enter_count = 0
         self.injected = False
 
@@ -600,21 +451,51 @@ class _StartPlaybackDuringPreSleepGapLock:
     def __exit__(self, exc_type, exc, tb):
         if self.enter_count == 3 and not self.injected:
             self.injected = True
-            self.harness._playback_start_id += 1
-            self.harness._playback_wake_event.set()
+            self.inject(self.harness)
         self._lock.release()
 
 
-def test_playback_loop_skips_the_wait_when_a_restart_lands_just_before_it(monkeypatch):
-    """A _start_playback() landing in the gap between the post-publish recheck and the
-    sleep-decision checkpoint already set the wake event and moved the start id on -- but the
-    worker isn't asleep yet at that point, so there's nothing for that set() to interrupt, and
-    the clear() right before waiting would otherwise wipe it for nothing. The sleep-decision
-    checkpoint must notice the start id changed and skip the wait entirely instead, looping
-    back to reprocess with fresh state rather than sleeping through a restart that just
-    happened."""
+def _inject_restart(harness):
+    harness._playback_start_id += 1
+    harness._playback_wake_event.set()
+
+
+def _inject_seek(harness):
+    harness._frame_generation += 1
+    harness._playback_wake_event.set()
+
+
+def _inject_stop(harness):
+    harness.is_playing = False
+    harness._playback_wake_event.set()
+
+
+@pytest.mark.parametrize(
+    "inject, expect_wait_call",
+    [
+        pytest.param(_inject_restart, True, id="restart"),
+        pytest.param(_inject_seek, True, id="seek"),
+        pytest.param(_inject_stop, False, id="stop"),
+    ],
+)
+def test_playback_loop_skips_the_wait_when_something_lands_just_before_it(monkeypatch, inject, expect_wait_call):
+    """A restart (_start_playback), a seek (_on_frame_changed / seek_to_frame), or a stop
+    (_stop_playback) landing in the gap between the post-publish recheck and the sleep-decision
+    checkpoint already set the wake event -- but the worker isn't asleep yet at that point, so
+    there's nothing for that set() to interrupt, and the clear() right before waiting would
+    otherwise wipe it for nothing. A restart bumps _playback_start_id; a seek bumps
+    _frame_generation instead (not _playback_start_id, since it isn't a restart); a stop touches
+    neither, only is_playing. The sleep-decision checkpoint must notice any of the three and
+    skip the wait entirely:
+
+    - restart/seek: loops back to reprocess with fresh state, reaching the *next* pass's
+      sleep-decision checkpoint (acquisition 7) instead of sleeping through what just happened
+      (e.g. a seek onto the last frame would otherwise leave playback looking active that long).
+    - stop: is_playing is already False by then, so the top-of-loop check on that very next pass
+      breaks immediately -- wait() is never reached at all.
+    """
     harness = _PlaybackHarness(num_frames=10_000, playback_fps=10, current_frame=0, last_time=0.0)
-    lock = _StartPlaybackDuringPreSleepGapLock(harness)
+    lock = _InjectDuringPreSleepGapLock(harness, inject)
     harness._playback_timing_lock = lock
     monkeypatch.setattr("time.monotonic", lambda: 0.0)  # no advance -> no publish call
 
@@ -624,135 +505,27 @@ def test_playback_loop_skips_the_wait_when_a_restart_lands_just_before_it(monkey
     def fake_wait(timeout=None):
         wait_calls.append(timeout)
         enter_count_at_wait.append(lock.enter_count)
-        harness.is_playing = False  # stop right after the first real wait
+        harness.is_playing = False  # stop right after the first real wait, if one is reached
 
     harness._playback_wake_event.wait = fake_wait
 
     harness._playback_loop()
 
-    # Not just "one wait call" -- that alone can't tell a skipped-then-waited pass apart from
-    # an immediate one, since either way the loop stops right after the first real wait. The
-    # lock's own acquisition count at that moment does: reaching the wait after skipping one
-    # full pass (top-of-loop, post-publish recheck, sleep-decision) takes 6 more acquisitions
-    # than the initial start-id capture (7 total); reaching it on the very first pass -- the
-    # restart's wake-up silently lost -- would take only 3 (4 total).
-    assert len(wait_calls) == 1
-    assert enter_count_at_wait == [7], "did not skip the pass where the restart landed"
-
-
-class _SeekDuringPreSleepGapLock:
-    """Simulates a concurrent seek (_on_frame_changed / seek_to_frame) landing in the gap
-    between the post-publish recheck and the sleep-decision checkpoint -- acquisition #3 with
-    the harness setup used below, same as _StartPlaybackDuringPreSleepGapLock. A seek bumps
-    _frame_generation, not _playback_start_id -- exercising the branch of the skip-the-wait
-    check that a pure restart injection can't."""
-
-    def __init__(self, harness):
-        self._lock = threading.RLock()
-        self.harness = harness
-        self.enter_count = 0
-        self.injected = False
-
-    def __enter__(self):
-        self._lock.acquire()
-        self.enter_count += 1
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        if self.enter_count == 3 and not self.injected:
-            self.injected = True
-            self.harness._frame_generation += 1
-            self.harness._playback_wake_event.set()
-        self._lock.release()
-
-
-def test_playback_loop_skips_the_wait_when_a_seek_lands_just_before_it(monkeypatch):
-    """A seek landing in the gap between the post-publish recheck and the sleep-decision
-    checkpoint already set the wake event and bumped _frame_generation -- but not
-    _playback_start_id, since it isn't a restart. The sleep-decision checkpoint must notice
-    _frame_generation changed (not just _playback_start_id) and skip the wait entirely,
-    looping back to reprocess with fresh state instead of sleeping through the seek for a full
-    poll interval (e.g. a seek onto the last frame would otherwise leave playback looking
-    active for that long)."""
-    harness = _PlaybackHarness(num_frames=10_000, playback_fps=10, current_frame=0, last_time=0.0)
-    lock = _SeekDuringPreSleepGapLock(harness)
-    harness._playback_timing_lock = lock
-    monkeypatch.setattr("time.monotonic", lambda: 0.0)  # no advance -> no publish call
-
-    wait_calls = []
-    enter_count_at_wait = []
-
-    def fake_wait(timeout=None):
-        wait_calls.append(timeout)
-        enter_count_at_wait.append(lock.enter_count)
-        harness.is_playing = False  # stop right after the first real wait
-
-    harness._playback_wake_event.wait = fake_wait
-
-    harness._playback_loop()
-
-    # Same reasoning as the restart test: reaching the wait after skipping one full pass takes
-    # 6 more acquisitions than the initial capture (7 total); reaching it on the very first
-    # pass -- the seek's wake-up silently lost -- would take only 3 (4 total).
-    assert len(wait_calls) == 1
-    assert enter_count_at_wait == [7], "did not skip the pass where the seek landed"
-
-
-class _StopPlaybackDuringPreSleepGapLock:
-    """Simulates a concurrent _stop_playback() landing in the gap between the post-publish
-    recheck and the sleep-decision checkpoint -- acquisition #3 with the harness setup used
-    below, same as _StartPlaybackDuringPreSleepGapLock. A stop touches neither
-    _playback_start_id nor _frame_generation, only is_playing -- exercising the branch of the
-    skip-the-wait check that neither of those other two injections can."""
-
-    def __init__(self, harness):
-        self._lock = threading.RLock()
-        self.harness = harness
-        self.enter_count = 0
-        self.injected = False
-
-    def __enter__(self):
-        self._lock.acquire()
-        self.enter_count += 1
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        if self.enter_count == 3 and not self.injected:
-            self.injected = True
-            self.harness.is_playing = False
-            self.harness._playback_wake_event.set()
-        self._lock.release()
-
-
-def test_playback_loop_skips_the_wait_when_a_stop_lands_just_before_it(monkeypatch):
-    """A _stop_playback() landing in the gap between the post-publish recheck and the
-    sleep-decision checkpoint already cleared is_playing and set the wake event -- but the
-    worker isn't asleep yet at that point, so there's nothing for that set() to interrupt, and
-    the clear() right before waiting would otherwise wipe it for nothing, leaving the worker to
-    sleep out a full poll interval before ever noticing the stop. The sleep-decision checkpoint
-    must notice is_playing went False (not just the start id or frame generation, which a stop
-    touches neither of) and skip the wait entirely -- looping back to the top-of-loop check,
-    which then breaks immediately instead of ever calling wait() at all."""
-    harness = _PlaybackHarness(num_frames=10_000, playback_fps=10, current_frame=0, last_time=0.0)
-    lock = _StopPlaybackDuringPreSleepGapLock(harness)
-    harness._playback_timing_lock = lock
-    monkeypatch.setattr("time.monotonic", lambda: 0.0)  # no advance -> no publish call
-
-    wait_calls = []
-
-    def fake_wait(timeout=None):
-        wait_calls.append(timeout)
-
-    harness._playback_wake_event.wait = fake_wait
-
-    harness._playback_loop()
-
-    # Correctly noticing the stop before ever sleeping means wait() is never called at all --
-    # the loop breaks out via the top-of-loop check on its very next pass instead. Code that
-    # only checks start id/frame generation would call wait() once, right at the sleep-decision
-    # checkpoint's first pass (enter_count 4), oblivious to the stop that just landed.
-    assert wait_calls == [], "worker waited instead of noticing the stop landed just before it"
-    assert not harness.is_playing
+    if expect_wait_call:
+        # Not just "one wait call" -- that alone can't tell a skipped-then-waited pass apart
+        # from an immediate one, since either way the loop stops right after the first real
+        # wait. The lock's own acquisition count at that moment does: reaching the wait after
+        # skipping one full pass (top-of-loop, post-publish recheck, sleep-decision) takes 6
+        # more acquisitions than the initial start-id capture (7 total); reaching it on the very
+        # first pass -- the injected wake-up silently lost -- would take only 3 (4 total).
+        assert enter_count_at_wait == [7], "did not skip the pass where the injected change landed"
+    else:
+        # Correctly noticing the stop before ever sleeping means wait() is never called at all
+        # -- the loop breaks out via the top-of-loop check on its very next pass instead. Code
+        # that only checks start id/frame generation would call wait() once, right at the
+        # sleep-decision checkpoint's first pass (enter_count 4), oblivious to the stop.
+        assert wait_calls == [], "worker waited instead of noticing the stop landed just before it"
+        assert not harness.is_playing
 
 
 def test_playback_loop_clears_wake_event_before_waiting_not_after(monkeypatch):
