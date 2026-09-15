@@ -389,27 +389,36 @@ class ImagingSeriesWidget(BaseWidget):
                 view_updates.append((idx, frame_data[0], title))
 
             with self._render_lock:
+                # Read once for this whole call, under the same lock that serializes against
+                # _on_display_changed's own render -- not gathered above with frame_data, even
+                # though they're cheap (no I/O) like it. Snapshotting them earlier (before
+                # _render_lock) would open a gap for a concurrent contrast/colormap change to
+                # render its newer settings, only for this call's stale ones to overwrite them
+                # right after -- invisible to the generation recheck below, since display
+                # settings don't bump _frame_generation. And they must be read only *once*
+                # here, not per view below: ipywidgets updates a slider/dropdown's .value
+                # before notifying observers, with no lock of its own, so a change landing
+                # between two views' iterations would otherwise still get seen by this same
+                # call -- mutating an earlier view with the old setting and a later one with
+                # the new, presenting one mixed, inconsistent render.
+                vmin_fraction = self.vmin_slider.value / 100.0
+                vmax_fraction = self.vmax_slider.value / 100.0
+                colormap = self.colormap_dropdown.value
+
                 for idx, image_data, title in view_updates:
                     view_name = dp.view_names[idx]
                     ax = self.axes[idx]
                     im = self.images[view_name]
 
-                    # vmin/vmax are read here, under the same lock that serializes against
-                    # _on_display_changed's own render -- not gathered above with frame_data,
-                    # even though they're cheap (no I/O) like it. Snapshotting them early
-                    # instead would open a gap for a concurrent contrast/colormap change to
-                    # render its newer settings, only for this call's stale ones to overwrite
-                    # them right after -- invisible to the generation recheck below, since
-                    # display settings don't bump _frame_generation.
                     # Use slider values as scaling factors on the global range
                     # This keeps the colorbar fixed but allows user adjustment
                     range_span = self.global_vmax[view_name] - self.global_vmin[view_name]
-                    vmin_val = self.global_vmin[view_name] + (self.vmin_slider.value / 100.0) * range_span
-                    vmax_val = self.global_vmin[view_name] + (self.vmax_slider.value / 100.0) * range_span
+                    vmin_val = self.global_vmin[view_name] + vmin_fraction * range_span
+                    vmax_val = self.global_vmin[view_name] + vmax_fraction * range_span
 
                     # Update the image data and colormap (much faster than recreating)
                     im.set_data(image_data)  # Remove time dimension
-                    im.set_cmap(self.colormap_dropdown.value)
+                    im.set_cmap(colormap)
                     im.set_clim(vmin=vmin_val, vmax=vmax_val)
 
                     # Update title
@@ -552,20 +561,22 @@ class ImagingSeriesWidget(BaseWidget):
                 break
             with self._playback_timing_lock:
                 if (
-                    self._playback_start_id != pre_sleep_start_id
+                    not self.is_playing
+                    or self._playback_start_id != pre_sleep_start_id
                     or self._frame_generation != pre_sleep_frame_generation
                 ):
-                    # A _start_playback() *or* a seek (_on_frame_changed / seek_to_frame)
-                    # landed in the gap between the checkpoint above and here -- either one
-                    # already set the wake event, but the clear() below would wipe that out
-                    # before we ever start waiting on it (we're not asleep yet, so there's
-                    # nothing for that set() to interrupt). A restart bumps
-                    # _playback_start_id; a seek bumps _frame_generation instead (it doesn't
-                    # touch _playback_start_id), so both must be checked -- otherwise a seek
-                    # landing here (e.g. onto the last frame) would have its wake-up silently
-                    # consumed and playback would stay visibly active for a full poll
-                    # interval before this loop noticed. Skip the wait entirely and loop back
-                    # to reprocess with fresh state instead of sleeping through it.
+                    # A _start_playback(), a seek (_on_frame_changed / seek_to_frame), or a
+                    # _stop_playback() landed in the gap between the checkpoint above and here
+                    # -- each already set the wake event, but the clear() below would wipe
+                    # that out before we ever start waiting on it (we're not asleep yet, so
+                    # there's nothing for that set() to interrupt). A restart bumps
+                    # _playback_start_id; a seek bumps _frame_generation instead; a stop
+                    # touches neither, only is_playing -- so all three must be checked, or
+                    # whichever one landed here would have its wake-up silently consumed and
+                    # this loop would stay asleep (or, for a stop, stay alive with a stale
+                    # is_playing read) for a full poll interval before noticing. Skip the wait
+                    # entirely and loop back to reprocess with fresh state instead of sleeping
+                    # through it -- the top-of-loop check will pick up the stop correctly.
                     continue
                 sleep_duration = 1.0 / (4 * self.playback_fps)
                 # Cleared here, under the same lock _start_playback sets it under, right

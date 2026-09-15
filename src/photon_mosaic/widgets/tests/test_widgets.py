@@ -698,6 +698,63 @@ def test_playback_loop_skips_the_wait_when_a_seek_lands_just_before_it(monkeypat
     assert enter_count_at_wait == [7], "did not skip the pass where the seek landed"
 
 
+class _StopPlaybackDuringPreSleepGapLock:
+    """Simulates a concurrent _stop_playback() landing in the gap between the post-publish
+    recheck and the sleep-decision checkpoint -- acquisition #3 with the harness setup used
+    below, same as _StartPlaybackDuringPreSleepGapLock. A stop touches neither
+    _playback_start_id nor _frame_generation, only is_playing -- exercising the branch of the
+    skip-the-wait check that neither of those other two injections can."""
+
+    def __init__(self, harness):
+        self._lock = threading.RLock()
+        self.harness = harness
+        self.enter_count = 0
+        self.injected = False
+
+    def __enter__(self):
+        self._lock.acquire()
+        self.enter_count += 1
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if self.enter_count == 3 and not self.injected:
+            self.injected = True
+            self.harness.is_playing = False
+            self.harness._playback_wake_event.set()
+        self._lock.release()
+
+
+def test_playback_loop_skips_the_wait_when_a_stop_lands_just_before_it(monkeypatch):
+    """A _stop_playback() landing in the gap between the post-publish recheck and the
+    sleep-decision checkpoint already cleared is_playing and set the wake event -- but the
+    worker isn't asleep yet at that point, so there's nothing for that set() to interrupt, and
+    the clear() right before waiting would otherwise wipe it for nothing, leaving the worker to
+    sleep out a full poll interval before ever noticing the stop. The sleep-decision checkpoint
+    must notice is_playing went False (not just the start id or frame generation, which a stop
+    touches neither of) and skip the wait entirely -- looping back to the top-of-loop check,
+    which then breaks immediately instead of ever calling wait() at all."""
+    harness = _PlaybackHarness(num_frames=10_000, playback_fps=10, current_frame=0, last_time=0.0)
+    lock = _StopPlaybackDuringPreSleepGapLock(harness)
+    harness._playback_timing_lock = lock
+    monkeypatch.setattr("time.monotonic", lambda: 0.0)  # no advance -> no publish call
+
+    wait_calls = []
+
+    def fake_wait(timeout=None):
+        wait_calls.append(timeout)
+
+    harness._playback_wake_event.wait = fake_wait
+
+    harness._playback_loop()
+
+    # Correctly noticing the stop before ever sleeping means wait() is never called at all --
+    # the loop breaks out via the top-of-loop check on its very next pass instead. Code that
+    # only checks start id/frame generation would call wait() once, right at the sleep-decision
+    # checkpoint's first pass (enter_count 4), oblivious to the stop that just landed.
+    assert wait_calls == [], "worker waited instead of noticing the stop landed just before it"
+    assert not harness.is_playing
+
+
 def test_playback_loop_clears_wake_event_before_waiting_not_after(monkeypatch):
     """The wake event must be cleared before the wait begins, not after the wait returns.
     Clearing it afterward would let a _start_playback() landing in the gap between a timed-out
@@ -1451,19 +1508,18 @@ class _FakeImaging:
 class _DisplayHarness:
     """Minimal stand-in exposing exactly what _update_display touches."""
 
-    def __init__(self, num_frames, current_frame, on_get_series=None):
-        imaging = _FakeImaging(on_get_series)
+    def __init__(self, num_frames, current_frame, on_get_series=None, view_names=("v",)):
         self.data_plot = {
-            "view_names": ["v"],
-            "imaging_dict": {"v": imaging},
-            "is_multi_view": False,
+            "view_names": list(view_names),
+            "imaging_dict": {name: _FakeImaging(on_get_series) for name in view_names},
+            "is_multi_view": len(view_names) > 1,
             "times": np.arange(num_frames, dtype=float),
             "epoch_index": 0,
         }
-        self.axes = [_FakeAx()]
-        self.images = {"v": _FakeImage()}
-        self.global_vmin = {"v": 0.0}
-        self.global_vmax = {"v": 1.0}
+        self.axes = [_FakeAx() for _ in view_names]
+        self.images = {name: _FakeImage() for name in view_names}
+        self.global_vmin = dict.fromkeys(view_names, 0.0)
+        self.global_vmax = dict.fromkeys(view_names, 1.0)
         self.vmin_slider = SimpleNamespace(value=0.0)
         self.vmax_slider = SimpleNamespace(value=100.0)
         self.colormap_dropdown = SimpleNamespace(value="gray")
@@ -1490,12 +1546,13 @@ class _FakeImage:
     def __init__(self):
         self.clim = None
         self.data = None
+        self.cmap_calls = []
 
     def set_data(self, data):
         self.data = data
 
     def set_cmap(self, cmap):
-        pass
+        self.cmap_calls.append(cmap)
 
     def set_clim(self, vmin, vmax):
         self.clim = (vmin, vmax)
@@ -1588,6 +1645,54 @@ def test_update_display_reads_display_settings_while_holding_the_render_lock():
 
     assert harness.vmin_slider.lock_held_on_read == [True]
     assert harness.vmax_slider.lock_held_on_read == [True]
+
+
+class _ChangingValueControl:
+    """Like SimpleNamespace(value=...), but switches to a different value the instant it's
+    read -- simulating a concurrent UI change landing right after this call's own snapshot.
+    Used to prove a multi-view _update_display call reads each display control exactly once
+    per call, not once per view: reading it again for a later view would pick up the changed
+    value, letting one view render with the old setting and another with the new."""
+
+    def __init__(self, value, next_value):
+        self._value = value
+        self._next_value = next_value
+        self.read_count = 0
+
+    @property
+    def value(self):
+        self.read_count += 1
+        current = self._value
+        self._value = self._next_value
+        return current
+
+    @value.setter
+    def value(self, new_value):
+        self._value = new_value
+
+
+def test_update_display_reads_display_settings_once_per_call_not_once_per_view():
+    """A multi-view render must snapshot vmin/vmax/colormap exactly once per _update_display
+    call and reuse that one snapshot for every view -- not re-read them once per view. Re-
+    reading per view isn't made atomic by _render_lock: ipywidgets updates a slider/dropdown's
+    .value before notifying observers, with no lock of its own, so a change landing between two
+    views' iterations of the *same* call would still be visible to it -- mutating an earlier
+    view with the old setting and a later one with the new, drawing one render in a mixed,
+    inconsistent configuration."""
+    harness = _DisplayHarness(num_frames=20, current_frame=5, view_names=("v0", "v1"))
+    harness.vmin_slider = _ChangingValueControl(0.0, 50.0)
+    harness.vmax_slider = _ChangingValueControl(100.0, 80.0)
+    harness.colormap_dropdown = _ChangingValueControl("gray", "viridis")
+
+    harness._update_display()
+
+    assert harness.vmin_slider.read_count == 1, "vmin was read more than once for a single call"
+    assert harness.vmax_slider.read_count == 1, "vmax was read more than once for a single call"
+    assert harness.colormap_dropdown.read_count == 1, "colormap was read more than once for a single call"
+    # Both views must reflect the one snapshot taken -- not a mix of the old and new settings.
+    assert harness.images["v0"].cmap_calls == ["gray"]
+    assert harness.images["v1"].cmap_calls == ["gray"]
+    assert harness.images["v0"].clim == harness.images["v1"].clim
 
 
 def test_update_display_does_not_draw_a_torn_frame_from_a_concurrent_render():
