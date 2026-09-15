@@ -246,6 +246,7 @@ class _PlaybackHarness:
         self._frame_generation = 0
         self._slider_write_state = threading.local()
         self._render_lock = threading.Lock()
+        self._playback_wake_event = threading.Event()
         self.play_thread = None
         self.display_calls = 0
 
@@ -274,14 +275,14 @@ def test_playback_loop_skips_ahead_after_slow_iteration(monkeypatch):
 
     sleep_calls = []
 
-    def fake_sleep(duration):
-        sleep_calls.append(duration)
+    def fake_wait(timeout=None):
+        sleep_calls.append(timeout)
         if len(sleep_calls) == 1:
             fake_time[0] += 1.0  # simulate one slow redraw stalling a full second
         else:
             harness.is_playing = False  # stop right after observing the post-stall frame
 
-    monkeypatch.setattr("time.sleep", fake_sleep)
+    monkeypatch.setattr(harness._playback_wake_event, "wait", fake_wait)
 
     harness._playback_loop()
 
@@ -349,6 +350,62 @@ def test_start_playback_spawns_and_starts_a_real_thread():
     assert harness.is_playing is False  # the loop reached the end and stopped itself
 
 
+def test_start_playback_wakes_a_sleeping_worker_promptly(monkeypatch):
+    """A pause-then-play that reuses a still-alive worker (rather than spawning a new one)
+    must wake it promptly if it's currently blocked in its poll wait -- otherwise the button
+    shows Pause immediately but playback stays visibly unresponsive until that wait happens to
+    elapse on its own (up to a full poll interval -- worse at a low fps, where each interval is
+    longer)."""
+    import time
+
+    harness = _PlaybackHarness(num_frames=10_000, playback_fps=0.01, current_frame=0, last_time=0.0)
+    # 1 / (4 * 0.01) = 25s poll interval -- if a resume had to wait that out, this test would
+    # time out; the wake mechanism should make it return almost immediately instead.
+    monkeypatch.setattr("time.monotonic", lambda: 0.0)  # elapsed always 0 -> loop always waits
+
+    # Count the worker's own poll-wait calls directly (not e.g. time.monotonic() calls, which
+    # _start_playback also makes itself for an unrelated reason -- resetting the pacing
+    # reference -- and would otherwise be indistinguishable from the worker actually reacting).
+    wait_calls = []
+    original_wait = harness._playback_wake_event.wait
+
+    def counting_wait(timeout=None):
+        wait_calls.append(timeout)
+        return original_wait(timeout=timeout)
+
+    harness._playback_wake_event.wait = counting_wait
+
+    worker = threading.Thread(target=harness._playback_loop, daemon=True)
+    harness.play_thread = worker
+    worker.start()
+
+    # Let it settle into its poll wait, then confirm it's genuinely stuck there for a while --
+    # not just about to check in again on its own -- well under the 25s it would otherwise be
+    # blocked for.
+    deadline = time.perf_counter() + 1.0
+    while len(wait_calls) < 1 and time.perf_counter() < deadline:
+        time.sleep(0.01)
+    calls_before = len(wait_calls)
+    time.sleep(0.1)
+    assert len(wait_calls) == calls_before, "worker should still be in its poll wait, not looping"
+    assert worker.is_alive()
+
+    harness._start_playback()
+
+    # The worker should react almost immediately -- well under the 25s poll interval -- not
+    # need to wait out the rest of it, i.e. return from its current wait and start a new one.
+    deadline = time.perf_counter() + 1.0
+    while len(wait_calls) == calls_before and time.perf_counter() < deadline:
+        time.sleep(0.01)
+    assert len(wait_calls) > calls_before, "worker never woke from its poll wait"
+
+    # Let the worker actually stop instead of looping forever in the background.
+    harness.is_playing = False
+    harness._playback_wake_event.set()
+    worker.join(timeout=1)
+    assert not worker.is_alive()
+
+
 def test_playback_loop_initializes_missing_last_time(monkeypatch):
     harness = _PlaybackHarness(num_frames=1000, playback_fps=10, last_time=None)
 
@@ -356,11 +413,11 @@ def test_playback_loop_initializes_missing_last_time(monkeypatch):
     sleep_calls = []
     monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
 
-    def fake_sleep(duration):
-        sleep_calls.append(duration)
+    def fake_wait(timeout=None):
+        sleep_calls.append(timeout)
         harness.is_playing = False
 
-    monkeypatch.setattr("time.sleep", fake_sleep)
+    monkeypatch.setattr(harness._playback_wake_event, "wait", fake_wait)
 
     harness._playback_loop()
 
@@ -377,11 +434,11 @@ def test_playback_loop_stops_at_last_frame(monkeypatch):
     monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
     sleep_calls = []
 
-    def fake_sleep(duration):
-        sleep_calls.append(duration)
+    def fake_wait(timeout=None):
+        sleep_calls.append(timeout)
         fake_time[0] += 1.0  # always enough to reach the end in one jump
 
-    monkeypatch.setattr("time.sleep", fake_sleep)
+    monkeypatch.setattr(harness._playback_wake_event, "wait", fake_wait)
 
     harness._playback_loop()
 
@@ -402,10 +459,10 @@ def test_playback_loop_stops_even_when_no_longer_the_registered_play_thread(monk
     fake_time = [0.0]
     monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
 
-    def fake_sleep(duration):
+    def fake_wait(timeout=None):
         fake_time[0] += 1.0  # always enough to reach the end in one jump
 
-    monkeypatch.setattr("time.sleep", fake_sleep)
+    monkeypatch.setattr(harness._playback_wake_event, "wait", fake_wait)
 
     harness._playback_loop()
 
@@ -431,13 +488,13 @@ def test_playback_loop_does_not_drift_under_irregular_polling(monkeypatch):
 
     calls = []
 
-    def fake_sleep(duration):
-        calls.append(duration)
+    def fake_wait(timeout=None):
+        calls.append(timeout)
         fake_time[0] += poll_step
         if len(calls) >= num_polls:
             harness.is_playing = False
 
-    monkeypatch.setattr("time.sleep", fake_sleep)
+    monkeypatch.setattr(harness._playback_wake_event, "wait", fake_wait)
 
     harness._playback_loop()
 
@@ -459,11 +516,11 @@ def test_fps_change_does_not_retroactively_apply_to_elapsed_time(monkeypatch):
 
     calls = []
 
-    def fake_sleep(duration):
-        calls.append(duration)
+    def fake_wait(timeout=None):
+        calls.append(timeout)
         harness.is_playing = False  # stop right after the first check
 
-    monkeypatch.setattr("time.sleep", fake_sleep)
+    monkeypatch.setattr(harness._playback_wake_event, "wait", fake_wait)
 
     harness._playback_loop()
 
@@ -579,11 +636,11 @@ def test_playback_loop_uses_fresh_state_at_each_checkpoint(monkeypatch):
     monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
     sleep_calls = []
 
-    def fake_sleep(duration):
-        sleep_calls.append(duration)
+    def fake_wait(timeout=None):
+        sleep_calls.append(timeout)
         harness.is_playing = False
 
-    monkeypatch.setattr("time.sleep", fake_sleep)
+    monkeypatch.setattr(harness._playback_wake_event, "wait", fake_wait)
 
     harness._playback_loop()
 
@@ -598,7 +655,9 @@ def test_fps_change_waits_for_playback_timing_lock(monkeypatch):
 
     fake_time = [0.1]
     monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
-    monkeypatch.setattr("time.sleep", lambda duration: setattr(harness, "is_playing", False))
+    monkeypatch.setattr(
+        harness._playback_wake_event, "wait", lambda timeout=None: setattr(harness, "is_playing", False)
+    )
 
     playback_thread = threading.Thread(target=harness._playback_loop)
     playback_thread.start()
@@ -726,7 +785,9 @@ def test_publish_current_frame_write_does_not_clobber_a_concurrent_seek():
 class _SlidersPublishSeekLock:
     """Injects a real seek exactly as _publish_current_frame_to_slider captures its
     frame/generation snapshot -- the gap right before its own (about to become stale) slider
-    write."""
+    write. That's acquisition #3 with the current _playback_loop structure: the
+    _playback_start_id capture, the top-of-loop check, then the publish helper's own capture --
+    recount (e.g. via a lock that prints enter_count) if that structure changes."""
 
     def __init__(self, harness, seek_to):
         self._lock = threading.RLock()
@@ -740,7 +801,7 @@ class _SlidersPublishSeekLock:
         return self
 
     def __exit__(self, exc_type, exc, tb):
-        if self.enter_count == 2:  # right after the publish call's frame/generation snapshot
+        if self.enter_count == 3:  # right after the publish call's frame/generation snapshot
             self.harness.frame_slider.value = self.seek_to
         self._lock.release()
 
@@ -755,10 +816,10 @@ def test_playback_loop_converges_slider_after_a_seek_races_the_write(monkeypatch
 
     monkeypatch.setattr("time.monotonic", lambda: 0.1)  # 1 frame elapsed at fps=10
 
-    def fake_sleep(duration):
+    def fake_wait(timeout=None):
         harness.is_playing = False
 
-    monkeypatch.setattr("time.sleep", fake_sleep)
+    monkeypatch.setattr(harness._playback_wake_event, "wait", fake_wait)
 
     harness._playback_loop()
 
@@ -940,11 +1001,11 @@ def test_playback_loop_rechecks_last_frame_after_internal_redraw(monkeypatch):
 
     sleep_calls = []
 
-    def fake_sleep(duration):
-        sleep_calls.append(duration)
+    def fake_wait(timeout=None):
+        sleep_calls.append(timeout)
         harness.is_playing = False
 
-    monkeypatch.setattr("time.sleep", fake_sleep)
+    monkeypatch.setattr(harness._playback_wake_event, "wait", fake_wait)
 
     def simulated_internal_redraw():
         harness.display_calls += 1
@@ -967,7 +1028,11 @@ def test_playback_loop_revalidates_last_frame_before_cleanup_stop(monkeypatch):
 
     fake_time = [0.1]
     monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
-    monkeypatch.setattr("time.sleep", lambda duration: (_ for _ in ()).throw(AssertionError("unexpected sleep")))
+    monkeypatch.setattr(
+        harness._playback_wake_event,
+        "wait",
+        lambda timeout=None: (_ for _ in ()).throw(AssertionError("unexpected wait")),
+    )
 
     started_threads = []
 
@@ -1153,13 +1218,19 @@ def test_update_display_does_not_draw_a_torn_frame_from_a_concurrent_render():
     reads consistent, but that alone does nothing to stop a second, genuinely independent call
     -- e.g. a real seek's own _update_display() call (see _on_frame_changed), running
     concurrently with an in-flight render for a frame that's since gone stale -- from
-    interleaving Matplotlib mutations on the same Axes/Image objects. Force that: pause a
-    render right after its own image write (holding _render_lock, if the production code takes
-    it), then start a second, different-frame render on its own thread while the first is still
-    paused. Without a render lock serializing the two, the second call's writes would land in
-    the middle of the first's, so a draw_idle gets reached with one frame's image data under
-    another frame's title; with the lock, the second call blocks until the first (including its
-    own generation-recheck retry) has fully finished."""
+    interleaving Matplotlib mutations on the same Axes/Image objects.
+
+    Starting a second render and immediately releasing the first isn't enough to prove
+    anything by itself -- the scheduler could just as easily let the first finish before the
+    second gets any CPU time at all, in which case the two never actually overlap and the
+    "no torn frame" assertion would pass without having exercised the interleaving it's meant
+    to catch. So this proves serialization directly and deterministically instead of inferring
+    it from an absence of tearing: while the first render is paused mid-write (confirmed via
+    _render_lock.locked(), not assumed), the second is started and proven genuinely unable to
+    finish for a bounded wait -- it can only be blocked trying to acquire the still-held lock,
+    since nothing else in it can pause. Only after that positive proof of mutual exclusion does
+    the test release the first, join both, and check the final render settled on the latest
+    frame -- never a mix of one frame's pixels and another's title."""
     harness = _DisplayHarness(num_frames=20, current_frame=5)
     harness.data_plot["imaging_dict"]["v"].get_series = lambda start, end, epoch_index=0: np.full((1, 2, 2), start)
 
@@ -1190,14 +1261,26 @@ def test_update_display_does_not_draw_a_torn_frame_from_a_concurrent_render():
     first_call = threading.Thread(target=harness._update_display)
     first_call.start()
     assert paused.wait(timeout=1), "first render never reached its own image write"
+    assert harness._render_lock.locked(), "paused render should still be holding the render lock"
 
     # A second, independent render for a different frame -- as _on_frame_changed's own real-seek
-    # branch would trigger -- starts on its own thread while the first is still paused mid-render
-    # (with the render lock, it blocks trying to enter until the first call is done).
+    # branch would trigger -- starts on its own thread while the first is still paused mid-render.
     harness.current_frame = 9
     harness._frame_generation += 1
-    second_call = threading.Thread(target=harness._update_display)
+    second_finished = threading.Event()
+
+    def run_second():
+        harness._update_display()
+        second_finished.set()
+
+    second_call = threading.Thread(target=run_second)
     second_call.start()
+
+    # Deterministic proof of serialization, not an inference from a lucky (or unlucky)
+    # schedule: the second render has no pause of its own, so if it finishes this quickly it
+    # can only be because it ran to completion unblocked -- exactly what the lock must prevent
+    # while the first is still holding it.
+    assert not second_finished.wait(timeout=0.2), "second render proceeded while the lock was held"
 
     release.set()
     first_call.join(timeout=1)

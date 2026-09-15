@@ -148,6 +148,12 @@ class ImagingSeriesWidget(BaseWidget):
         # Image objects from interleaving. Deliberately separate from _playback_timing_lock so
         # a slow render can't block state-changing callbacks (see _update_display).
         self._render_lock = threading.Lock()
+        # _playback_loop waits on this between polls instead of a plain time.sleep(), so
+        # _start_playback can wake a reused, still-sleeping worker immediately -- otherwise a
+        # pause-then-play would show the Pause button right away but leave playback visibly
+        # unresponsive until that poll happens to elapse on its own (up to a full poll
+        # interval: 2.5s at the FPS slider's minimum, 0.1).
+        self._playback_wake_event = threading.Event()
 
         # Sample up to 100 frames to compute a global vmin/vmax for the colormap.
         num_samples = min(100, dp.num_frames)
@@ -423,6 +429,11 @@ class ImagingSeriesWidget(BaseWidget):
             # Marks this as a fresh request to be playing -- see _playback_start_id in
             # __init__ and _playback_loop's cleanup section.
             self._playback_start_id += 1
+            # Wake a reused, still-sleeping worker immediately -- see _playback_wake_event in
+            # __init__ and the poll wait in _playback_loop. Harmless if the worker isn't
+            # currently waiting on it (a freshly spawned one below never has been yet): the
+            # first wait it does reach afterward just clears it away as normal.
+            self._playback_wake_event.set()
             # Button update shares the lock with the state flag: _stop_playback can otherwise
             # be called from the worker thread with a gap between setting is_playing and
             # updating the button, letting a concurrent click observe/overwrite a half-applied
@@ -510,7 +521,11 @@ class ImagingSeriesWidget(BaseWidget):
                 break
             with self._playback_timing_lock:
                 sleep_duration = 1.0 / (4 * self.playback_fps)
-            time.sleep(sleep_duration)
+            # An interruptible wait, not a plain time.sleep(): _start_playback sets this event
+            # to wake a reused, still-sleeping worker immediately (see its own comment) instead
+            # of leaving it to notice on its own once this poll interval happens to elapse.
+            self._playback_wake_event.wait(timeout=sleep_duration)
+            self._playback_wake_event.clear()
         # Defaults to the loop's own reached_last_frame: even a worker that's no longer the
         # registered play_thread below (e.g. superseded by a restart) must still signal a stop
         # if it genuinely reached the end from its own perspective.
