@@ -491,6 +491,52 @@ def test_seek_to_frame_wakes_a_sleeping_worker_promptly(monkeypatch):
     assert not worker.is_alive()
 
 
+def test_on_fps_changed_wakes_a_sleeping_worker_promptly(monkeypatch):
+    """Raising the FPS while the worker is asleep in its poll wait must take effect
+    immediately -- otherwise the worker keeps waiting out the *old*, slower interval it's
+    already blocked in, and the new rate doesn't apply until that old wait happens to elapse
+    on its own (up to a full poll interval, worse at a low fps)."""
+    import time
+
+    harness = _PlaybackHarness(num_frames=10_000, playback_fps=0.01, current_frame=0, last_time=0.0)
+    # 1 / (4 * 0.01) = 25s poll interval -- if the fps bump had to wait that out, this test
+    # would time out; the wake mechanism should make it return almost immediately instead.
+    monkeypatch.setattr("time.monotonic", lambda: 0.0)  # elapsed always 0 -> loop always waits
+
+    wait_calls = []
+    original_wait = harness._playback_wake_event.wait
+
+    def counting_wait(timeout=None):
+        wait_calls.append(timeout)
+        return original_wait(timeout=timeout)
+
+    harness._playback_wake_event.wait = counting_wait
+
+    worker = threading.Thread(target=harness._playback_loop, daemon=True)
+    harness.play_thread = worker
+    worker.start()
+
+    deadline = time.perf_counter() + 1.0
+    while len(wait_calls) < 1 and time.perf_counter() < deadline:
+        time.sleep(0.01)
+    calls_before = len(wait_calls)
+    time.sleep(0.1)
+    assert len(wait_calls) == calls_before, "worker should still be in its poll wait, not looping"
+    assert worker.is_alive()
+
+    harness._on_fps_changed({"new": 5.0, "old": 0.01})
+
+    deadline = time.perf_counter() + 1.0
+    while len(wait_calls) == calls_before and time.perf_counter() < deadline:
+        time.sleep(0.01)
+    assert len(wait_calls) > calls_before, "worker never woke from its poll wait"
+
+    harness.is_playing = False
+    harness._playback_wake_event.set()
+    worker.join(timeout=1)
+    assert not worker.is_alive()
+
+
 class _StartPlaybackDuringPreSleepGapLock:
     """Simulates a concurrent _start_playback() landing in the gap between the post-publish
     recheck and the sleep-decision checkpoint -- acquisition #3 with the harness setup used

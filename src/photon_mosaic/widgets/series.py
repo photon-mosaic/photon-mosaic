@@ -681,6 +681,11 @@ class ImagingSeriesWidget(BaseWidget):
             # otherwise _playback_loop would apply it to time that already elapsed under the old rate,
             # producing an incorrect frame jump right at the moment of the change.
             self._playback_last_time = time.monotonic()
+            # If the worker is currently asleep in its poll wait, it's waiting out the *old*
+            # fps's (longer) interval -- wake it so the new rate takes effect immediately
+            # instead of only once that old interval happens to elapse on its own (up to 2.5s
+            # at the slider's minimum fps). Same missed-wakeup risk _start_playback/seeks have.
+            self._playback_wake_event.set()
 
     def _on_display_changed(self, change):
         """Handle display parameter changes (colormap, contrast)."""
