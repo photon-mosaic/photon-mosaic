@@ -406,6 +406,152 @@ def test_start_playback_wakes_a_sleeping_worker_promptly(monkeypatch):
     assert not worker.is_alive()
 
 
+def test_on_frame_changed_wakes_a_sleeping_worker_promptly(monkeypatch):
+    """A real seek during active playback (e.g. dragging the frame slider onto the last frame,
+    which should stop playback immediately) must wake a worker that's currently sleeping
+    between polls -- otherwise it won't notice until that sleep happens to elapse on its own."""
+    import time
+
+    harness = _PlaybackHarness(num_frames=10_000, playback_fps=0.01, current_frame=0, last_time=0.0)
+    monkeypatch.setattr("time.monotonic", lambda: 0.0)  # elapsed always 0 -> loop always waits
+
+    wait_calls = []
+    original_wait = harness._playback_wake_event.wait
+
+    def counting_wait(timeout=None):
+        wait_calls.append(timeout)
+        return original_wait(timeout=timeout)
+
+    harness._playback_wake_event.wait = counting_wait
+
+    worker = threading.Thread(target=harness._playback_loop, daemon=True)
+    harness.play_thread = worker
+    worker.start()
+
+    deadline = time.perf_counter() + 1.0
+    while len(wait_calls) < 1 and time.perf_counter() < deadline:
+        time.sleep(0.01)
+    calls_before = len(wait_calls)
+    time.sleep(0.1)
+    assert len(wait_calls) == calls_before, "worker should still be in its poll wait, not looping"
+    assert worker.is_alive()
+
+    harness._on_frame_changed({"new": 5, "old": 0})
+
+    deadline = time.perf_counter() + 1.0
+    while len(wait_calls) == calls_before and time.perf_counter() < deadline:
+        time.sleep(0.01)
+    assert len(wait_calls) > calls_before, "worker never woke from its poll wait"
+
+    harness.is_playing = False
+    harness._playback_wake_event.set()
+    worker.join(timeout=1)
+    assert not worker.is_alive()
+
+
+def test_seek_to_frame_wakes_a_sleeping_worker_promptly(monkeypatch):
+    """Same missed-wakeup risk as a real slider seek: a programmatic seek during active
+    playback must wake a worker that's currently sleeping between polls."""
+    import time
+
+    harness = _PlaybackHarness(num_frames=10_000, playback_fps=0.01, current_frame=0, last_time=0.0)
+    monkeypatch.setattr("time.monotonic", lambda: 0.0)  # elapsed always 0 -> loop always waits
+
+    wait_calls = []
+    original_wait = harness._playback_wake_event.wait
+
+    def counting_wait(timeout=None):
+        wait_calls.append(timeout)
+        return original_wait(timeout=timeout)
+
+    harness._playback_wake_event.wait = counting_wait
+
+    worker = threading.Thread(target=harness._playback_loop, daemon=True)
+    harness.play_thread = worker
+    worker.start()
+
+    deadline = time.perf_counter() + 1.0
+    while len(wait_calls) < 1 and time.perf_counter() < deadline:
+        time.sleep(0.01)
+    calls_before = len(wait_calls)
+    time.sleep(0.1)
+    assert len(wait_calls) == calls_before, "worker should still be in its poll wait, not looping"
+    assert worker.is_alive()
+
+    harness.seek_to_frame(5)
+
+    deadline = time.perf_counter() + 1.0
+    while len(wait_calls) == calls_before and time.perf_counter() < deadline:
+        time.sleep(0.01)
+    assert len(wait_calls) > calls_before, "worker never woke from its poll wait"
+
+    harness.is_playing = False
+    harness._playback_wake_event.set()
+    worker.join(timeout=1)
+    assert not worker.is_alive()
+
+
+class _StartPlaybackDuringPreSleepGapLock:
+    """Simulates a concurrent _start_playback() landing in the gap between the post-publish
+    recheck and the sleep-decision checkpoint -- acquisition #3 with the harness setup used
+    below (fps=10, fake time constant so no frame ever advances and no publish call happens
+    each iteration, keeping the per-iteration acquisition count at exactly 3: top-of-loop,
+    post-publish recheck, sleep-decision)."""
+
+    def __init__(self, harness):
+        self._lock = threading.RLock()
+        self.harness = harness
+        self.enter_count = 0
+        self.injected = False
+
+    def __enter__(self):
+        self._lock.acquire()
+        self.enter_count += 1
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if self.enter_count == 3 and not self.injected:
+            self.injected = True
+            self.harness._playback_start_id += 1
+            self.harness._playback_wake_event.set()
+        self._lock.release()
+
+
+def test_playback_loop_skips_the_wait_when_a_restart_lands_just_before_it(monkeypatch):
+    """A _start_playback() landing in the gap between the post-publish recheck and the
+    sleep-decision checkpoint already set the wake event and moved the start id on -- but the
+    worker isn't asleep yet at that point, so there's nothing for that set() to interrupt, and
+    the clear() right before waiting would otherwise wipe it for nothing. The sleep-decision
+    checkpoint must notice the start id changed and skip the wait entirely instead, looping
+    back to reprocess with fresh state rather than sleeping through a restart that just
+    happened."""
+    harness = _PlaybackHarness(num_frames=10_000, playback_fps=10, current_frame=0, last_time=0.0)
+    lock = _StartPlaybackDuringPreSleepGapLock(harness)
+    harness._playback_timing_lock = lock
+    monkeypatch.setattr("time.monotonic", lambda: 0.0)  # no advance -> no publish call
+
+    wait_calls = []
+    enter_count_at_wait = []
+
+    def fake_wait(timeout=None):
+        wait_calls.append(timeout)
+        enter_count_at_wait.append(lock.enter_count)
+        harness.is_playing = False  # stop right after the first real wait
+
+    harness._playback_wake_event.wait = fake_wait
+
+    harness._playback_loop()
+
+    # Not just "one wait call" -- that alone can't tell a skipped-then-waited pass apart from
+    # an immediate one, since either way the loop stops right after the first real wait. The
+    # lock's own acquisition count at that moment does: reaching the wait after skipping one
+    # full pass (top-of-loop, post-publish recheck, sleep-decision) takes 6 more acquisitions
+    # than the initial start-id capture (7 total); reaching it on the very first pass -- the
+    # restart's wake-up silently lost -- would take only 3 (4 total).
+    assert len(wait_calls) == 1
+    assert enter_count_at_wait == [7], "did not skip the pass where the restart landed"
+
+
 def test_playback_loop_clears_wake_event_before_waiting_not_after(monkeypatch):
     """The wake event must be cleared before the wait begins, not after the wait returns.
     Clearing it afterward would let a _start_playback() landing in the gap between a timed-out
@@ -1257,6 +1403,45 @@ def test_update_display_does_not_hold_render_lock_during_frame_fetch():
     harness._update_display()
 
     assert lock_states_during_fetch == [False], "render lock was held during the frame fetch"
+
+
+class _LockStateCheckingSlider:
+    """Like SimpleNamespace(value=...), but records whether _render_lock was held every time
+    .value is read -- used to prove display settings are read while genuinely holding the
+    lock, not snapshotted earlier and merely applied under it."""
+
+    def __init__(self, value, render_lock):
+        self._value = value
+        self._render_lock = render_lock
+        self.lock_held_on_read = []
+
+    @property
+    def value(self):
+        self.lock_held_on_read.append(self._render_lock.locked())
+        return self._value
+
+    @value.setter
+    def value(self, new_value):
+        self._value = new_value
+
+
+def test_update_display_reads_display_settings_while_holding_the_render_lock():
+    """vmin/vmax must be read at mutation time, while genuinely holding _render_lock -- not
+    snapshotted during the frame-data gather phase alongside frame_data, even though they're
+    cheap synchronous reads like it (no I/O). Snapshotting them early would open a gap for a
+    concurrent _on_display_changed render to apply newer settings, only for this call's stale
+    snapshot to overwrite them right after -- invisible to the generation recheck, since
+    display settings don't bump _frame_generation the way current_frame does. Reading them
+    while the lock is held rules that out structurally: a concurrent render can't be in its own
+    mutation phase at the same time, full stop."""
+    harness = _DisplayHarness(num_frames=20, current_frame=5)
+    harness.vmin_slider = _LockStateCheckingSlider(0.0, harness._render_lock)
+    harness.vmax_slider = _LockStateCheckingSlider(100.0, harness._render_lock)
+
+    harness._update_display()
+
+    assert harness.vmin_slider.lock_held_on_read == [True]
+    assert harness.vmax_slider.lock_held_on_read == [True]
 
 
 def test_update_display_does_not_draw_a_torn_frame_from_a_concurrent_render():

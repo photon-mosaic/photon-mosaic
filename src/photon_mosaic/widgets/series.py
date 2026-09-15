@@ -377,26 +377,35 @@ class ImagingSeriesWidget(BaseWidget):
             for idx, view_name in enumerate(dp.view_names):
                 imaging = dp.imaging_dict[view_name]
 
-                # Get current frame data
+                # Get current frame data -- the only part of gathering that's genuinely slow
+                # (disk/network I/O), hence the only part done before the render lock.
                 frame_data = imaging.get_series(frame, frame + 1, epoch_index=dp.epoch_index)
-
-                # Use slider values as scaling factors on the global range
-                # This keeps the colorbar fixed but allows user adjustment
-                range_span = self.global_vmax[view_name] - self.global_vmin[view_name]
-                vmin_val = self.global_vmin[view_name] + (self.vmin_slider.value / 100.0) * range_span
-                vmax_val = self.global_vmin[view_name] + (self.vmax_slider.value / 100.0) * range_span
 
                 if dp.is_multi_view:
                     title = f"{view_name}\nFrame {frame} | Time: {dp.times[frame]:.3f}s"
                 else:
                     title = f"Frame {frame} | Time: {dp.times[frame]:.3f}s"
 
-                view_updates.append((idx, frame_data[0], vmin_val, vmax_val, title))
+                view_updates.append((idx, frame_data[0], title))
 
             with self._render_lock:
-                for idx, image_data, vmin_val, vmax_val, title in view_updates:
+                for idx, image_data, title in view_updates:
+                    view_name = dp.view_names[idx]
                     ax = self.axes[idx]
-                    im = self.images[dp.view_names[idx]]
+                    im = self.images[view_name]
+
+                    # vmin/vmax are read here, under the same lock that serializes against
+                    # _on_display_changed's own render -- not gathered above with frame_data,
+                    # even though they're cheap (no I/O) like it. Snapshotting them early
+                    # instead would open a gap for a concurrent contrast/colormap change to
+                    # render its newer settings, only for this call's stale ones to overwrite
+                    # them right after -- invisible to the generation recheck below, since
+                    # display settings don't bump _frame_generation.
+                    # Use slider values as scaling factors on the global range
+                    # This keeps the colorbar fixed but allows user adjustment
+                    range_span = self.global_vmax[view_name] - self.global_vmin[view_name]
+                    vmin_val = self.global_vmin[view_name] + (self.vmin_slider.value / 100.0) * range_span
+                    vmax_val = self.global_vmin[view_name] + (self.vmax_slider.value / 100.0) * range_span
 
                     # Update the image data and colormap (much faster than recreating)
                     im.set_data(image_data)  # Remove time dimension
@@ -530,9 +539,18 @@ class ImagingSeriesWidget(BaseWidget):
                     reached_last_frame = False
                     break
                 reached_last_frame = self.current_frame >= dp.num_frames - 1
+                pre_sleep_start_id = self._playback_start_id
             if reached_last_frame:
                 break
             with self._playback_timing_lock:
+                if self._playback_start_id != pre_sleep_start_id:
+                    # A _start_playback() landed in the gap between the checkpoint above and
+                    # here -- it already set the wake event, but the clear() below would wipe
+                    # that out before we ever start waiting on it (we're not asleep yet, so
+                    # there's nothing for that set() to interrupt). Skip the wait entirely and
+                    # loop back to reprocess with fresh state instead of sleeping through a
+                    # restart that just happened.
+                    continue
                 sleep_duration = 1.0 / (4 * self.playback_fps)
                 # Cleared here, under the same lock _start_playback sets it under, right
                 # before the wait begins -- not after the wait returns. Otherwise a
@@ -629,6 +647,11 @@ class ImagingSeriesWidget(BaseWidget):
             # the seek) and immediately jumps forward again from the newly seeked position.
             self._playback_last_time = time.monotonic()
             self._frame_generation += 1
+            # Wake a worker that's currently sleeping between polls -- otherwise it won't
+            # notice this seek (e.g. one landing on the last frame, which should stop playback
+            # immediately) until that sleep happens to elapse on its own (see _start_playback's
+            # own comment on this same event).
+            self._playback_wake_event.set()
         # Publish, not a raw redraw -- storing the slider's new value and notifying this
         # observer aren't one atomic step against another thread. A concurrent publish can
         # capture the pre-seek state, overwrite the slider back to it, and finish its own
@@ -669,6 +692,10 @@ class ImagingSeriesWidget(BaseWidget):
                 self.current_frame = frame_number
                 self._playback_last_time = time.monotonic()
                 self._frame_generation += 1
+                # Same missed-wakeup risk as a real slider seek (see _on_frame_changed): wake a
+                # worker that's currently sleeping between polls, so it notices this seek (e.g.
+                # onto the last frame, which should stop playback immediately) right away.
+                self._playback_wake_event.set()
             if hasattr(self, "frame_slider"):
                 # Publish, not a raw write -- current_frame above is already authoritative, so
                 # this is UI sync for a decision already made, not a new seek (a raw write here
