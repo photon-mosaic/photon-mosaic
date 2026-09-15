@@ -484,6 +484,13 @@ class ImagingSeriesWidget(BaseWidget):
             self.is_playing = False
             self.play_button.description = "▶ Play"
             self.play_button.button_style = "success"
+            # Wake a worker currently blocked in its poll wait -- see _playback_wake_event in
+            # __init__ -- so it notices is_playing is now False promptly instead of only once
+            # that wait happens to elapse on its own (up to a full poll interval: 2.5s at the
+            # slider's minimum fps), during which the thread stays alive and play_thread still
+            # points at it even though the button already shows "Play". Harmless when called
+            # from the worker's own thread (it isn't asleep on this event right now).
+            self._playback_wake_event.set()
 
     def _playback_loop(self):
         """Main playback loop running in separate thread.

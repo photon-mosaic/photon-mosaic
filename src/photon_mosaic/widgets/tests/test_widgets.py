@@ -537,6 +537,48 @@ def test_on_fps_changed_wakes_a_sleeping_worker_promptly(monkeypatch):
     assert not worker.is_alive()
 
 
+def test_stop_playback_wakes_a_sleeping_worker_promptly(monkeypatch):
+    """Pausing while the worker is asleep in its poll wait must take effect immediately --
+    otherwise the button already shows "Play" but the worker thread stays alive (and
+    play_thread still points at it) until that wait happens to elapse on its own (up to a full
+    poll interval, worse at a low fps), instead of the worker noticing is_playing is False and
+    exiting right away."""
+    import time
+
+    harness = _PlaybackHarness(num_frames=10_000, playback_fps=0.01, current_frame=0, last_time=0.0)
+    # 1 / (4 * 0.01) = 25s poll interval -- if stopping had to wait that out, this test would
+    # time out; the wake mechanism should make the worker exit almost immediately instead.
+    monkeypatch.setattr("time.monotonic", lambda: 0.0)  # elapsed always 0 -> loop always waits
+
+    wait_calls = []
+    original_wait = harness._playback_wake_event.wait
+
+    def counting_wait(timeout=None):
+        wait_calls.append(timeout)
+        return original_wait(timeout=timeout)
+
+    harness._playback_wake_event.wait = counting_wait
+
+    worker = threading.Thread(target=harness._playback_loop, daemon=True)
+    harness.play_thread = worker
+    worker.start()
+
+    deadline = time.perf_counter() + 1.0
+    while len(wait_calls) < 1 and time.perf_counter() < deadline:
+        time.sleep(0.01)
+    calls_before = len(wait_calls)
+    time.sleep(0.1)
+    assert len(wait_calls) == calls_before, "worker should still be in its poll wait, not looping"
+    assert worker.is_alive()
+
+    harness._stop_playback()
+
+    # The worker should exit almost immediately -- well under the 25s poll interval -- not
+    # need to wait out the rest of it.
+    worker.join(timeout=1)
+    assert not worker.is_alive(), "worker never woke from its poll wait to notice the stop"
+
+
 class _StartPlaybackDuringPreSleepGapLock:
     """Simulates a concurrent _start_playback() landing in the gap between the post-publish
     recheck and the sleep-decision checkpoint -- acquisition #3 with the harness setup used
