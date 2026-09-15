@@ -1750,6 +1750,22 @@ def test_update_display_does_not_draw_a_torn_frame_from_a_concurrent_render():
     harness.current_frame = 9
     harness._frame_generation += 1
     second_finished = threading.Event()
+    second_reached_lock_attempt = threading.Event()
+    original_get_series = harness.data_plot["imaging_dict"]["v"].get_series
+
+    def get_series_signaling_second_render(start, end, epoch_index=0):
+        result = original_get_series(start, end, epoch_index=epoch_index)
+        if start == 9:
+            # Confirms the second render has actually run, finished its (unblocked) gather
+            # phase, and is about to attempt _render_lock -- not merely that it hasn't been
+            # scheduled by the OS yet. Without this, a bounded wait().timeout() below proves
+            # nothing: the second thread could just as easily still be sitting unscheduled,
+            # never having reached the lock at all, and the assertion would pass without ever
+            # exercising the mutual exclusion it's meant to catch.
+            second_reached_lock_attempt.set()
+        return result
+
+    harness.data_plot["imaging_dict"]["v"].get_series = get_series_signaling_second_render
 
     def run_second():
         harness._update_display()
@@ -1758,10 +1774,13 @@ def test_update_display_does_not_draw_a_torn_frame_from_a_concurrent_render():
     second_call = threading.Thread(target=run_second)
     second_call.start()
 
+    assert second_reached_lock_attempt.wait(timeout=1), "second render never reached its lock attempt"
+
     # Deterministic proof of serialization, not an inference from a lucky (or unlucky)
-    # schedule: the second render has no pause of its own, so if it finishes this quickly it
-    # can only be because it ran to completion unblocked -- exactly what the lock must prevent
-    # while the first is still holding it.
+    # schedule: the second render is confirmed to be genuinely running and on the verge of
+    # acquiring _render_lock (above), has no pause of its own, so if it finishes this quickly
+    # it can only be because it ran to completion unblocked -- exactly what the lock must
+    # prevent while the first is still holding it.
     assert not second_finished.wait(timeout=0.2), "second render proceeded while the lock was held"
 
     release.set()
