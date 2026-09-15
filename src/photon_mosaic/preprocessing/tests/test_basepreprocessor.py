@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from photon_mosaic.core import generate_random_imaging
+from photon_mosaic.core.baseimaging import BaseImaging
 from photon_mosaic.preprocessing.basepreprocessor import (
     BasePreprocessor,
     BasePreprocessorEpoch,
@@ -36,6 +37,24 @@ class TestBasePreprocessor:
     def test_init_custom_dtype(self, imaging):
         # Verify construction succeeds with an explicit dtype
         BasePreprocessor(imaging, dtype=np.float32)
+
+    def test_get_dtype_returns_custom_dtype(self, imaging):
+        # Verify that the custom dtype is correctly returned by get_dtype()
+        reg = BasePreprocessor(imaging, dtype=np.float32)
+        assert reg.get_dtype() == np.dtype(np.float32)
+
+    def test_get_dtype_defaults_to_parent_dtype(self, imaging):
+        # Verify that the default dtype is inherited from the parent imaging object
+        reg = BasePreprocessor(imaging)
+        assert reg.get_dtype() == imaging.get_dtype()
+
+    def test_get_dtype_with_explicit_dtype_does_not_sample_parent_data(self):
+        # An imaging object with no epochs has no data to sample. If get_dtype()
+        # tried to infer the dtype from data, this would raise; an explicit
+        # dtype should be answerable from the stored value alone.
+        empty_imaging = BaseImaging(sampling_frequency=30.0, shape=(8, 9))
+        reg = BasePreprocessor(empty_imaging, dtype=np.float32)
+        assert reg.get_dtype() == np.dtype(np.float32)
 
     def test_init_rejects_non_imaging(self):
         with pytest.raises(AssertionError, match="must be a BaseImaging"):
