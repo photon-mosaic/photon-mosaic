@@ -263,6 +263,24 @@ class _PlaybackHarness:
     seek_to_frame = ImagingSeriesWidget.seek_to_frame
 
 
+class _StubThread:
+    """Stands in for threading.Thread where a test needs to observe *that* a fresh worker was
+    spawned (and with what target) without it actually running -- e.g. _playback_loop's
+    cleanup section deciding to respawn. is_alive() always reports dead, since this stub never
+    really starts anything, matching what a later is_alive() check on it should find."""
+
+    def __init__(self, target=None, daemon=None):
+        self.target = target
+        self.daemon = daemon
+        self.started = False
+
+    def is_alive(self):
+        return False
+
+    def start(self):
+        self.started = True
+
+
 def test_playback_loop_skips_ahead_after_slow_iteration(monkeypatch):
     """A slow redraw (simulated by a big wall-clock jump between poll ticks) should make the
     loop jump straight to the frame matching elapsed time, not silently fall one frame at a
@@ -1184,26 +1202,16 @@ def test_playback_loop_revalidates_last_frame_before_cleanup_stop(monkeypatch):
         "wait",
         lambda timeout=None: (_ for _ in ()).throw(AssertionError("unexpected wait")),
     )
-
-    started_threads = []
-
-    class _StubThread:
-        def __init__(self, target=None, daemon=None):
-            self.target = target
-            self.daemon = daemon
-            self.started = False
-
-        def start(self):
-            self.started = True
-            started_threads.append(self)
-
     monkeypatch.setattr("threading.Thread", _StubThread)
 
     harness._playback_loop()
 
     assert harness.current_frame == 2
     assert harness.is_playing is True
-    assert len(started_threads) == 1
+    # The cleanup section's respawn branch only ever runs once per _playback_loop() call --
+    # play_thread being this stub, started, is proof a fresh worker was spawned there.
+    assert isinstance(harness.play_thread, _StubThread)
+    assert harness.play_thread.started
 
 
 def test_playback_loop_does_not_cancel_a_restart_that_races_its_own_end_decision(monkeypatch):
@@ -1220,22 +1228,6 @@ def test_playback_loop_does_not_cancel_a_restart_that_races_its_own_end_decision
 
     fake_time = [1.0]  # elapsed=1.0 at fps=10 jumps straight to the last frame in one pass
     monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
-
-    started_threads = []
-
-    class _StubThread:
-        def __init__(self, target=None, daemon=None):
-            self.target = target
-            self.daemon = daemon
-            self.started = False
-
-        def is_alive(self):
-            return False  # never actually run, so a later is_alive() check finds it dead
-
-        def start(self):
-            self.started = True
-            started_threads.append(self)
-
     monkeypatch.setattr("threading.Thread", _StubThread)
 
     restarted = [False]
@@ -1262,8 +1254,8 @@ def test_playback_loop_does_not_cancel_a_restart_that_races_its_own_end_decision
     # current information -- otherwise is_playing stays True with no worker left to advance
     # playback (or, from a later state where there's somewhere left to go, to actually get
     # there), which is just as broken as silently cancelling the restart.
-    assert len(started_threads) == 1
-    assert harness.play_thread is started_threads[0]
+    assert isinstance(harness.play_thread, _StubThread)
+    assert harness.play_thread.started
 
 
 class _FakeImaging:
