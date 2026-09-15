@@ -19,7 +19,7 @@ class BaseImaging(BaseExtractor, TimeSeries):
     The `_main_ids` attribute is used here for multi-plane imaging objects.
     """
 
-    def __init__(self, sampling_frequency: float, shape: tuple | list | ArrayLike, dtype: DTypeLike | None = None):
+    def __init__(self, sampling_frequency: float, shape: tuple | list | ArrayLike, dtype: DTypeLike):
         # Should we allow users to provide 2D shape (H, W) for single plane imaging?
         if len(shape) == 2:
             shape = (shape[0], shape[1], 1)
