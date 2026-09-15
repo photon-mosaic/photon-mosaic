@@ -552,6 +552,64 @@ def test_playback_loop_skips_the_wait_when_a_restart_lands_just_before_it(monkey
     assert enter_count_at_wait == [7], "did not skip the pass where the restart landed"
 
 
+class _SeekDuringPreSleepGapLock:
+    """Simulates a concurrent seek (_on_frame_changed / seek_to_frame) landing in the gap
+    between the post-publish recheck and the sleep-decision checkpoint -- acquisition #3 with
+    the harness setup used below, same as _StartPlaybackDuringPreSleepGapLock. A seek bumps
+    _frame_generation, not _playback_start_id -- exercising the branch of the skip-the-wait
+    check that a pure restart injection can't."""
+
+    def __init__(self, harness):
+        self._lock = threading.RLock()
+        self.harness = harness
+        self.enter_count = 0
+        self.injected = False
+
+    def __enter__(self):
+        self._lock.acquire()
+        self.enter_count += 1
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        if self.enter_count == 3 and not self.injected:
+            self.injected = True
+            self.harness._frame_generation += 1
+            self.harness._playback_wake_event.set()
+        self._lock.release()
+
+
+def test_playback_loop_skips_the_wait_when_a_seek_lands_just_before_it(monkeypatch):
+    """A seek landing in the gap between the post-publish recheck and the sleep-decision
+    checkpoint already set the wake event and bumped _frame_generation -- but not
+    _playback_start_id, since it isn't a restart. The sleep-decision checkpoint must notice
+    _frame_generation changed (not just _playback_start_id) and skip the wait entirely,
+    looping back to reprocess with fresh state instead of sleeping through the seek for a full
+    poll interval (e.g. a seek onto the last frame would otherwise leave playback looking
+    active for that long)."""
+    harness = _PlaybackHarness(num_frames=10_000, playback_fps=10, current_frame=0, last_time=0.0)
+    lock = _SeekDuringPreSleepGapLock(harness)
+    harness._playback_timing_lock = lock
+    monkeypatch.setattr("time.monotonic", lambda: 0.0)  # no advance -> no publish call
+
+    wait_calls = []
+    enter_count_at_wait = []
+
+    def fake_wait(timeout=None):
+        wait_calls.append(timeout)
+        enter_count_at_wait.append(lock.enter_count)
+        harness.is_playing = False  # stop right after the first real wait
+
+    harness._playback_wake_event.wait = fake_wait
+
+    harness._playback_loop()
+
+    # Same reasoning as the restart test: reaching the wait after skipping one full pass takes
+    # 6 more acquisitions than the initial capture (7 total); reaching it on the very first
+    # pass -- the seek's wake-up silently lost -- would take only 3 (4 total).
+    assert len(wait_calls) == 1
+    assert enter_count_at_wait == [7], "did not skip the pass where the seek landed"
+
+
 def test_playback_loop_clears_wake_event_before_waiting_not_after(monkeypatch):
     """The wake event must be cleared before the wait begins, not after the wait returns.
     Clearing it afterward would let a _start_playback() landing in the gap between a timed-out

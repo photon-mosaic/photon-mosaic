@@ -540,16 +540,25 @@ class ImagingSeriesWidget(BaseWidget):
                     break
                 reached_last_frame = self.current_frame >= dp.num_frames - 1
                 pre_sleep_start_id = self._playback_start_id
+                pre_sleep_frame_generation = self._frame_generation
             if reached_last_frame:
                 break
             with self._playback_timing_lock:
-                if self._playback_start_id != pre_sleep_start_id:
-                    # A _start_playback() landed in the gap between the checkpoint above and
-                    # here -- it already set the wake event, but the clear() below would wipe
-                    # that out before we ever start waiting on it (we're not asleep yet, so
-                    # there's nothing for that set() to interrupt). Skip the wait entirely and
-                    # loop back to reprocess with fresh state instead of sleeping through a
-                    # restart that just happened.
+                if (
+                    self._playback_start_id != pre_sleep_start_id
+                    or self._frame_generation != pre_sleep_frame_generation
+                ):
+                    # A _start_playback() *or* a seek (_on_frame_changed / seek_to_frame)
+                    # landed in the gap between the checkpoint above and here -- either one
+                    # already set the wake event, but the clear() below would wipe that out
+                    # before we ever start waiting on it (we're not asleep yet, so there's
+                    # nothing for that set() to interrupt). A restart bumps
+                    # _playback_start_id; a seek bumps _frame_generation instead (it doesn't
+                    # touch _playback_start_id), so both must be checked -- otherwise a seek
+                    # landing here (e.g. onto the last frame) would have its wake-up silently
+                    # consumed and playback would stay visibly active for a full poll
+                    # interval before this loop noticed. Skip the wait entirely and loop back
+                    # to reprocess with fresh state instead of sleeping through it.
                     continue
                 sleep_duration = 1.0 / (4 * self.playback_fps)
                 # Cleared here, under the same lock _start_playback sets it under, right
