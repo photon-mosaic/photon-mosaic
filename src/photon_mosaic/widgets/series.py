@@ -358,7 +358,10 @@ class ImagingSeriesWidget(BaseWidget):
         e.g. this call's own publish-echo and a genuine seek's own concurrent call -- would
         otherwise be free to interleave their set_data/set_title/draw_idle calls on the same
         Axes/Image objects, drawing a torn frame (one frame's pixels under another's title)
-        before either call's generation-recheck could catch up and correct it.
+        before either call's generation-recheck could catch up and correct it. Frame data is
+        fetched (imaging.get_series, potentially slow disk/network I/O) before the lock is
+        taken, not inside it, so a stale render can't block a concurrent one for the fetch's
+        duration -- only for the brief mutation-and-draw that actually needs serializing.
         """
         while True:
             with self._playback_timing_lock:
@@ -366,32 +369,42 @@ class ImagingSeriesWidget(BaseWidget):
                 generation = self._frame_generation
             dp = to_attr(self.data_plot)
 
+            # Fetch everything needed per view before taking the render lock -- imaging.get_series
+            # can be slow (disk/network I/O), and the lock must only ever guard the actual
+            # Matplotlib mutations below, not this fetch, or a stale render would block a
+            # concurrent one for the full I/O duration instead of just the brief mutation+draw.
+            view_updates = []
+            for idx, view_name in enumerate(dp.view_names):
+                imaging = dp.imaging_dict[view_name]
+
+                # Get current frame data
+                frame_data = imaging.get_series(frame, frame + 1, epoch_index=dp.epoch_index)
+
+                # Use slider values as scaling factors on the global range
+                # This keeps the colorbar fixed but allows user adjustment
+                range_span = self.global_vmax[view_name] - self.global_vmin[view_name]
+                vmin_val = self.global_vmin[view_name] + (self.vmin_slider.value / 100.0) * range_span
+                vmax_val = self.global_vmin[view_name] + (self.vmax_slider.value / 100.0) * range_span
+
+                if dp.is_multi_view:
+                    title = f"{view_name}\nFrame {frame} | Time: {dp.times[frame]:.3f}s"
+                else:
+                    title = f"Frame {frame} | Time: {dp.times[frame]:.3f}s"
+
+                view_updates.append((idx, frame_data[0], vmin_val, vmax_val, title))
+
             with self._render_lock:
-                # Update all views
-                for idx, view_name in enumerate(dp.view_names):
-                    imaging = dp.imaging_dict[view_name]
+                for idx, image_data, vmin_val, vmax_val, title in view_updates:
                     ax = self.axes[idx]
-                    im = self.images[view_name]
-
-                    # Get current frame data
-                    frame_data = imaging.get_series(frame, frame + 1, epoch_index=dp.epoch_index)
-
-                    # Use slider values as scaling factors on the global range
-                    # This keeps the colorbar fixed but allows user adjustment
-                    range_span = self.global_vmax[view_name] - self.global_vmin[view_name]
-                    vmin_val = self.global_vmin[view_name] + (self.vmin_slider.value / 100.0) * range_span
-                    vmax_val = self.global_vmin[view_name] + (self.vmax_slider.value / 100.0) * range_span
+                    im = self.images[dp.view_names[idx]]
 
                     # Update the image data and colormap (much faster than recreating)
-                    im.set_data(frame_data[0])  # Remove time dimension
+                    im.set_data(image_data)  # Remove time dimension
                     im.set_cmap(self.colormap_dropdown.value)
                     im.set_clim(vmin=vmin_val, vmax=vmax_val)
 
                     # Update title
-                    if dp.is_multi_view:
-                        ax.set_title(f"{view_name}\nFrame {frame} | Time: {dp.times[frame]:.3f}s")
-                    else:
-                        ax.set_title(f"Frame {frame} | Time: {dp.times[frame]:.3f}s")
+                    ax.set_title(title)
 
                 # Update time label
                 self._update_time_label(frame)
@@ -521,11 +534,17 @@ class ImagingSeriesWidget(BaseWidget):
                 break
             with self._playback_timing_lock:
                 sleep_duration = 1.0 / (4 * self.playback_fps)
+                # Cleared here, under the same lock _start_playback sets it under, right
+                # before the wait begins -- not after the wait returns. Otherwise a
+                # _start_playback() landing in the gap between this wait timing out and a
+                # trailing clear() would have its wake-up silently consumed by that clear
+                # instead of arming the *next* wait, delaying the restart for a full poll
+                # interval anyway (the bug this event exists to avoid).
+                self._playback_wake_event.clear()
             # An interruptible wait, not a plain time.sleep(): _start_playback sets this event
             # to wake a reused, still-sleeping worker immediately (see its own comment) instead
             # of leaving it to notice on its own once this poll interval happens to elapse.
             self._playback_wake_event.wait(timeout=sleep_duration)
-            self._playback_wake_event.clear()
         # Defaults to the loop's own reached_last_frame: even a worker that's no longer the
         # registered play_thread below (e.g. superseded by a restart) must still signal a stop
         # if it genuinely reached the end from its own perspective.

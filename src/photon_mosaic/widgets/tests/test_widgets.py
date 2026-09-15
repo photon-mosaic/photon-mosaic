@@ -406,6 +406,35 @@ def test_start_playback_wakes_a_sleeping_worker_promptly(monkeypatch):
     assert not worker.is_alive()
 
 
+def test_playback_loop_clears_wake_event_before_waiting_not_after(monkeypatch):
+    """The wake event must be cleared before the wait begins, not after the wait returns.
+    Clearing it afterward would let a _start_playback() landing in the gap between a timed-out
+    wait and that trailing clear() have its wake-up silently consumed by the clear instead of
+    arming the *next* wait -- delaying the restart for a full poll interval anyway, exactly the
+    unresponsiveness this event exists to avoid."""
+    harness = _PlaybackHarness(num_frames=10_000, playback_fps=10, current_frame=0, last_time=0.0)
+    monkeypatch.setattr("time.monotonic", lambda: 0.0)  # elapsed always 0 -> loop always waits
+
+    call_order = []
+    original_clear = harness._playback_wake_event.clear
+
+    def recording_clear():
+        call_order.append("clear")
+        original_clear()
+
+    def recording_wait(timeout=None):
+        call_order.append("wait")
+        harness.is_playing = False  # stop right after the first wait, don't actually block
+        return True
+
+    harness._playback_wake_event.clear = recording_clear
+    harness._playback_wake_event.wait = recording_wait
+
+    harness._playback_loop()
+
+    assert call_order == ["clear", "wait"]
+
+
 def test_playback_loop_initializes_missing_last_time(monkeypatch):
     harness = _PlaybackHarness(num_frames=1000, playback_fps=10, last_time=None)
 
@@ -1211,6 +1240,23 @@ def test_update_display_does_not_tear_across_a_concurrent_frame_change():
     assert harness.axes[0].title == "Frame 9 | Time: 9.000s"
     assert harness.time_label.value == "Time: 9.000s / 19.00s"
     assert harness.figure.draw_count == 2
+
+
+def test_update_display_does_not_hold_render_lock_during_frame_fetch():
+    """imaging.get_series can be slow (disk/network I/O). _render_lock must only guard the
+    actual Matplotlib mutations that follow it, not this fetch -- otherwise a stale render
+    would block a concurrent one (or any other _render_lock holder) for the full I/O duration
+    instead of just the brief mutation-and-draw that actually needs serializing."""
+    lock_states_during_fetch = []
+
+    def on_get_series(start):
+        lock_states_during_fetch.append(harness._render_lock.locked())
+
+    harness = _DisplayHarness(num_frames=20, current_frame=5, on_get_series=on_get_series)
+
+    harness._update_display()
+
+    assert lock_states_during_fetch == [False], "render lock was held during the frame fetch"
 
 
 def test_update_display_does_not_draw_a_torn_frame_from_a_concurrent_render():
