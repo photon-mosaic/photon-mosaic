@@ -510,14 +510,18 @@ def test_generate_imaging_with_rois_diffuse_is_a_spatially_varying_mixture():
     # assertion doesn't depend on two particular pixels happening to share a source by chance.
     rng = np.random.default_rng(0)
     correlations = []
-    for _ in range(10):
+    for _ in range(30):
         y1, x1 = rng.integers(0, 64, size=2)
         y2, x2 = rng.integers(0, 64, size=2)
         if abs(y1 - y2) + abs(x1 - x2) < 40:  # only count genuinely distant pairs
             continue
         t1, t2 = video[:, y1, x1, 0], video[:, y2, x2, 0]
-        if t1.std() > 0 and t2.std() > 0:
-            correlations.append(np.corrcoef(t1, t2)[0, 1])
+        if t1.std() == 0 or t2.std() == 0:  # either pixel is reached by no diffuse source
+            continue
+        with np.errstate(invalid="ignore"):
+            corr = np.corrcoef(t1, t2)[0, 1]
+        if not np.isnan(corr):
+            correlations.append(corr)
     assert correlations, "no distant, fluctuating pixel pairs sampled -- widen the search"
     assert np.median(np.abs(correlations)) < 0.5
 

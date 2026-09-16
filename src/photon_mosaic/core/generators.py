@@ -172,7 +172,8 @@ def generate_rois(
 _VIGNETTE_FALLOFF = 0.7  # fraction of center brightness lost at the frame corners
 _NEUROPIL_TAU_SECONDS = 5.0  # OU mean-reversion timescale -- slow drift, not frame-to-frame noise
 _DIFFUSE_DENSITY = 8  # diffuse sources per ROI
-_DIFFUSE_RADIUS_FRACTION = (0.2, 0.4)  # of min(height, width)
+# Relative to ROI radius -- Zhou et al. 2018 (CNMF-E) simulate background footprints ~5x neuron width.
+_DIFFUSE_RADIUS_MULTIPLIER = 5.0
 
 
 def _generate_vignette_profile(height: int, width: int, num_planes: int = 1) -> np.ndarray:
@@ -389,8 +390,11 @@ def generate_imaging_with_rois(
           by its own position.
         - ``"diffuse"``: many (``8 * num_rois``) broad, overlapping, independently-fluctuating
           sources mixed together, so nearby background pixels are correlated but distant ones
-          aren't -- a spatially-varying mixture rather than one shared signal. Also carries the
-          same vignette falloff as ``"vignette"``.
+          aren't -- a spatially-varying mixture rather than one shared signal. Each source's
+          radius is drawn from `radius_range` scaled by 5 (Zhou et al. 2018's CNMF-E
+          simulations use the same ratio between background and neuron footprint size), so it
+          scales with ROI size rather than frame size. Also carries the same vignette falloff
+          as ``"vignette"``.
 
         Both new models are normalized to preserve `background`'s mean-photon-count semantics
         (see `background` above); only their *spatial and temporal structure* differs from
@@ -474,8 +478,10 @@ def generate_imaging_with_rois(
         ).reshape(-1)
     elif neuropil_model == "diffuse":
         n_sources = max(1, round(_DIFFUSE_DENSITY * num_rois))
-        min_dim = min(height, width)
-        diffuse_radius_range = (_DIFFUSE_RADIUS_FRACTION[0] * min_dim, _DIFFUSE_RADIUS_FRACTION[1] * min_dim)
+        diffuse_radius_range = (
+            radius_range[0] * _DIFFUSE_RADIUS_MULTIPLIER,
+            radius_range[1] * _DIFFUSE_RADIUS_MULTIPLIER,
+        )
         footprints = _generate_diffuse_footprints(
             n_sources, height, width, num_planes, diffuse_radius_range, neuropil_rng
         )
