@@ -23,7 +23,7 @@ class FluorescenceExtension(AnalyzerExtension):
     def get_optional_dependencies(cls, **params):
         return ["neuropil"]
 
-    def _set_params(self, use_neuropil=True, neuropil_weight=1.0):
+    def _set_params(self, use_neuropil=True, neuropil_weight=0.7):
         return dict(use_neuropil=use_neuropil, neuropil_weight=neuropil_weight)
 
     def _run(self, verbose=False, **job_kwargs):
