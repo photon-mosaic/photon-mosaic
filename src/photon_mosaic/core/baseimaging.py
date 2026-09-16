@@ -19,7 +19,12 @@ class BaseImaging(BaseExtractor, TimeSeries):
     The `_main_ids` attribute is used here for multi-plane imaging objects.
     """
 
-    def __init__(self, sampling_frequency: float, shape: tuple | list | ArrayLike):
+    def __init__(
+        self,
+        sampling_frequency: float,
+        shape: tuple | list | ArrayLike,
+        is_registered: bool = False,
+    ):
         # Should we allow users to provide 2D shape (H, W) for single plane imaging?
         if len(shape) == 2:
             shape = (shape[0], shape[1], 1)
@@ -29,6 +34,9 @@ class BaseImaging(BaseExtractor, TimeSeries):
         self._sampling_frequency = float(sampling_frequency)
         self._shape = tuple(shape)  # Image is intended as a volume (H, W, planes)
         self._average_image = None
+        # Stored as an annotation so that copy_metadata propagates it to proxy/preprocessor
+        # views (epoch selection, splitting, plane concatenation) without extra wiring.
+        self.set_annotation("is_registered", bool(is_registered), overwrite=True)
 
     def _repr_header(self, display_name=True):
         """Generate text representation of the BaseImaging object."""
@@ -120,6 +128,25 @@ class BaseImaging(BaseExtractor, TimeSeries):
             The shape of the images as (height, width).
         """
         return self._shape
+
+    @property
+    def is_registered(self) -> bool:
+        """Whether this imaging holds motion-corrected (registered) data.
+
+        ``False`` by default. Set to ``True`` when the movie is loaded from a
+        suite2p output (already registered) or produced by photon-mosaic's own
+        registration. Propagated to proxy/preprocessor views via copy_metadata.
+
+        Returns
+        -------
+        bool
+            True if the underlying movie is registered.
+        """
+        return bool(self._annotations.get("is_registered", False))
+
+    @is_registered.setter
+    def is_registered(self, value: bool) -> None:
+        self.set_annotation("is_registered", bool(value), overwrite=True)
 
     @property
     def plane_ids(self):
