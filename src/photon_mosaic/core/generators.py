@@ -169,11 +169,13 @@ def generate_rois(
 
 
 # Internal constants for the "vignette"/"diffuse" neuropil models (see `generate_imaging_with_rois`).
-_VIGNETTE_FALLOFF = 0.7  # fraction of center brightness lost at the frame corners
+_VIGNETTE_FALLOFF = 0.25  # fraction of center brightness lost at the frame corners
 _NEUROPIL_TAU_SECONDS = 5.0  # OU mean-reversion timescale -- slow drift, not frame-to-frame noise
 _DIFFUSE_DENSITY = 8  # diffuse sources per ROI
 # Relative to ROI radius -- Zhou et al. 2018 (CNMF-E) simulate background footprints ~5x neuron width.
 _DIFFUSE_RADIUS_MULTIPLIER = 5.0
+# Converts a cone-style radius to a Gaussian sigma with the same FWHM: 1 / (2 * sqrt(2 * ln(2))).
+_DIFFUSE_SIGMA_TO_RADIUS = 0.4247
 
 
 def _generate_vignette_profile(height: int, width: int, num_planes: int = 1) -> np.ndarray:
@@ -257,13 +259,16 @@ def _generate_diffuse_footprints(
 ) -> np.ndarray:
     """Broad, overlapping, low-amplitude spatial footprints for the "diffuse" neuropil model.
 
-    Same linear radial-falloff shape as `generate_rois`'s weighted masks (``1 -
-    distance/radius``, clipped to ``[0, 1]``), but centers are unconstrained by frame edges
-    (these blobs are meant to be broad relative to the frame, unlike per-cell ROIs) and returned
-    as a plain array rather than a `BaseRois` -- these aren't ROIs, and `generate_rois`'s
-    edge-margin ``assert`` would otherwise reject radii this large relative to typical frame
-    sizes. Each source spans a single plane (drawn uniformly) rather than `generate_rois`'
-    ellipsoidal 3D masks.
+    2D Gaussian, matching the standard Gaussian-beam approximation for a microscope's
+    out-of-focus point-spread function (unlike `generate_rois`'s weighted masks, which
+    represent cell shape rather than optical blur, so their linear cone doesn't apply here).
+    Centers are unconstrained by frame edges (these blobs are meant to be broad relative to the
+    frame, unlike per-cell ROIs) and returned as a plain array rather than a `BaseRois` -- these
+    aren't ROIs, and `generate_rois`'s edge-margin ``assert`` would otherwise reject radii this
+    large relative to typical frame sizes. Each source spans a single plane (drawn uniformly)
+    rather than `generate_rois`' ellipsoidal 3D masks. Not truncated: a real PSF has no hard
+    edge either, and every pixel already gets its own dense array regardless (`np.ogrid` over
+    the full frame), so truncating would only add an artificial cutoff without saving any work.
 
     Parameters
     ----------
@@ -274,7 +279,9 @@ def _generate_diffuse_footprints(
     num_planes : int
         Number of imaging planes.
     radius_range : tuple[float, float]
-        Range of radii (pixels) from which each source's radius is drawn uniformly.
+        Range of radii (pixels) from which each source's radius is drawn uniformly; converted
+        to a Gaussian sigma via `_DIFFUSE_SIGMA_TO_RADIUS` so the Gaussian's FWHM matches that
+        radius.
     rng : np.random.Generator
         Source of randomness.
 
@@ -282,7 +289,7 @@ def _generate_diffuse_footprints(
     -------
     np.ndarray
         ``(n_sources, height, width)`` or ``(n_sources, height, width, num_planes)``, float32,
-        each source's own footprint in ``[0, 1]``.
+        each source's own footprint, peak 1.0 at its center.
     """
     y, x = np.ogrid[:height, :width]
     shape = (n_sources, height, width) if num_planes == 1 else (n_sources, height, width, num_planes)
@@ -290,10 +297,11 @@ def _generate_diffuse_footprints(
     centers_x = rng.uniform(0, width, size=n_sources)
     centers_y = rng.uniform(0, height, size=n_sources)
     radii = rng.uniform(radius_range[0], radius_range[1], size=n_sources)
+    sigmas = radii * _DIFFUSE_SIGMA_TO_RADIUS
     planes = rng.integers(0, num_planes, size=n_sources) if num_planes > 1 else None
     for k in range(n_sources):
-        distance = np.sqrt((x - centers_x[k]) ** 2 + (y - centers_y[k]) ** 2)
-        footprint = np.clip(1.0 - distance / radii[k], 0.0, 1.0)
+        distance_sq = (x - centers_x[k]) ** 2 + (y - centers_y[k]) ** 2
+        footprint = np.exp(-distance_sq / (2.0 * sigmas[k] ** 2))
         if num_planes == 1:
             footprints[k] = footprint
         else:
@@ -389,12 +397,12 @@ def generate_imaging_with_rois(
           real 2P vignetting). Every background pixel shares the same fluctuation, just scaled
           by its own position.
         - ``"diffuse"``: many (``8 * num_rois``) broad, overlapping, independently-fluctuating
-          sources mixed together, so nearby background pixels are correlated but distant ones
-          aren't -- a spatially-varying mixture rather than one shared signal. Each source's
-          radius is drawn from `radius_range` scaled by 5 (Zhou et al. 2018's CNMF-E
-          simulations use the same ratio between background and neuron footprint size), so it
-          scales with ROI size rather than frame size. Also carries the same vignette falloff
-          as ``"vignette"``.
+          Gaussian sources mixed together, so nearby background pixels are correlated but
+          distant ones aren't -- a spatially-varying mixture rather than one shared signal.
+          Each source's width is drawn from `radius_range` scaled by 5 (Zhou et al. 2018's
+          CNMF-E simulations use the same ratio between background and neuron footprint size),
+          so it scales with ROI size rather than frame size. Also carries the same vignette
+          falloff as ``"vignette"``.
 
         Both new models are normalized to preserve `background`'s mean-photon-count semantics
         (see `background` above); only their *spatial and temporal structure* differs from
