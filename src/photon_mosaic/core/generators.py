@@ -169,12 +169,9 @@ def generate_rois(
 
 
 # Internal constants for the "vignette"/"diffuse" neuropil models (see `generate_imaging_with_rois`).
-# Not exposed as parameters -- #142 asks for "just enough realism ... keep both models simple",
-# so only `neuropil_fluctuation_std` (the one lever that controls how much subtraction ends up
-# mattering) is user-facing; everything else here is a fixed, documented modeling choice.
 _VIGNETTE_FALLOFF = 0.7  # fraction of center brightness lost at the frame corners
 _NEUROPIL_TAU_SECONDS = 5.0  # OU mean-reversion timescale -- slow drift, not frame-to-frame noise
-_DIFFUSE_DENSITY = 8  # diffuse sources per ROI (middle of the issue's "5-10x" range)
+_DIFFUSE_DENSITY = 8  # diffuse sources per ROI
 _DIFFUSE_RADIUS_FRACTION = (0.2, 0.4)  # of min(height, width)
 
 
@@ -182,9 +179,9 @@ def _generate_vignette_profile(height: int, width: int, num_planes: int = 1) -> 
     """Static radial illumination falloff, brighter at the frame center than the edges.
 
     Simple linear falloff from the frame center -- real 2P vignetting (Gaussian beam, finite-NA
-    lens falloff) isn't modeled exactly; this is "just enough realism" per #142. Renormalized to
-    spatial mean 1, so multiplying it into `background` preserves that parameter's "mean photon
-    count per pixel per frame" semantics regardless of `neuropil_model`.
+    lens falloff) isn't modeled exactly. Renormalized to spatial mean 1, so multiplying it into
+    `background` preserves that parameter's "mean photon count per pixel per frame" semantics
+    regardless of `neuropil_model`.
 
     Parameters
     ----------
@@ -265,7 +262,7 @@ def _generate_diffuse_footprints(
     as a plain array rather than a `BaseRois` -- these aren't ROIs, and `generate_rois`'s
     edge-margin ``assert`` would otherwise reject radii this large relative to typical frame
     sizes. Each source spans a single plane (drawn uniformly) rather than `generate_rois`'
-    ellipsoidal 3D masks -- kept simple per #142's scope.
+    ellipsoidal 3D masks.
 
     Parameters
     ----------
@@ -383,9 +380,9 @@ def generate_imaging_with_rois(
     neuropil_model : {"constant", "vignette", "diffuse"}, default: "constant"
         How `background` varies over space and time:
 
-        - ``"constant"``: spatially uniform, no fluctuation beyond `bleaching_time` decay
-          (the only model prior to #142). Neuropil subtraction only ever corrects this
-          constant attenuation, never a genuine fluctuation.
+        - ``"constant"``: spatially uniform, no fluctuation beyond `bleaching_time` decay.
+          Neuropil subtraction only ever corrects this constant attenuation, never a genuine
+          fluctuation.
         - ``"vignette"``: one shared Ornstein-Uhlenbeck-like fluctuation (slow, ~5s timescale)
           modulated by a static radial illumination falloff (brighter center, dimmer edges --
           real 2P vignetting). Every background pixel shares the same fluctuation, just scaled

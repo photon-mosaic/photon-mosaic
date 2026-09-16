@@ -403,7 +403,7 @@ def test_generate_imaging_with_rois_decay_affects_trace():
     assert im_long.get_series().max() > 1.0
 
 
-# ── generate_imaging_with_rois neuropil_model tests (#142) ──
+# ── generate_imaging_with_rois neuropil_model tests ──
 
 
 def test_generate_imaging_with_rois_neuropil_model_constant_is_default_and_unchanged():
@@ -542,10 +542,10 @@ def test_generate_imaging_with_rois_neuropil_model_does_not_perturb_rois_or_fluo
 
 
 def test_generate_imaging_with_rois_vignette_neuropil_subtraction_recovers_dff_better_than_constant():
-    """The whole motivation for #142: under "constant", neuropil subtraction barely helps
-    (there's no genuine fluctuation to remove, only a constant offset already washed out by
-    dF/F normalization); under "vignette", subtraction should visibly improve recovered dF/F's
-    correlation with ground truth, since it removes a real, shared fluctuation."""
+    """Under "constant", neuropil subtraction barely helps (there's no genuine fluctuation to
+    remove, only a constant offset already washed out by dF/F normalization); under "vignette",
+    subtraction should visibly improve recovered dF/F's correlation with ground truth, since it
+    removes a real, shared fluctuation."""
     from photon_mosaic.core import create_roi_analyzer
 
     def corr_with_and_without_subtraction(neuropil_model):
