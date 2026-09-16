@@ -172,7 +172,8 @@ def generate_rois(
 _VIGNETTE_FALLOFF = 0.25  # fraction of center brightness lost at the frame corners
 _NEUROPIL_TAU_SECONDS = 5.0  # OU mean-reversion timescale -- slow drift, not frame-to-frame noise
 _DIFFUSE_DENSITY = 8  # diffuse sources per ROI
-# Relative to ROI radius -- Zhou et al. 2018 (CNMF-E) simulate background footprints ~5x neuron width.
+# Relative to ROI radius -- an illustrative, not measured, choice; Zhou et al. 2018 (CNMF-E)
+# independently used the same ratio in one of their own synthetic robustness tests.
 _DIFFUSE_RADIUS_MULTIPLIER = 5.0
 # Converts a cone-style radius to a Gaussian sigma with the same FWHM: 1 / (2 * sqrt(2 * ln(2))).
 _DIFFUSE_SIGMA_TO_RADIUS = 0.4247
@@ -399,9 +400,11 @@ def generate_imaging_with_rois(
         - ``"diffuse"``: many (``8 * num_rois``) broad, overlapping, independently-fluctuating
           Gaussian sources mixed together, so nearby background pixels are correlated but
           distant ones aren't -- a spatially-varying mixture rather than one shared signal.
-          Each source's width is drawn from `radius_range` scaled by 5 (Zhou et al. 2018's
-          CNMF-E simulations use the same ratio between background and neuron footprint size),
-          so it scales with ROI size rather than frame size. Also carries the same vignette
+          Each source's width is drawn from `radius_range` scaled by 5 -- the same
+          background-to-neuron footprint-size ratio used in one of Zhou et al. 2018's (CNMF-E)
+          own synthetic robustness tests, not a measured biological or optical quantity, but a
+          second, independent illustrative choice at the same order of magnitude -- so it
+          scales with ROI size rather than frame size. Also carries the same vignette
           falloff as ``"vignette"``.
 
         Both new models are normalized to preserve `background`'s mean-photon-count semantics
