@@ -188,3 +188,150 @@ class TestImagingSeriesWidgetInit:
                 ImagingSeriesWidget(tiny, immediate_plot=True)
 
         assert captured == [10], f"expected widget to clamp end_frame to num_frames=10; calls were {captured}"
+
+
+# ---------------------------------------------------------------------------
+# ImagingSeriesWidget -- playback loop pacing
+# ---------------------------------------------------------------------------
+
+
+class _FakeButton:
+    def __init__(self):
+        self.description = ""
+        self.button_style = ""
+
+
+class _FakeSlider:
+    def __init__(self, value=0):
+        self.value = value
+
+
+class _PlaybackHarness:
+    """Minimal stand-in exposing exactly what _playback_loop/_stop_playback touch, so the
+    pacing logic can be exercised without going through __init__/plot_ipywidgets at all."""
+
+    def __init__(self, num_frames, playback_fps, current_frame=0, last_time=0.0):
+        self.data_plot = {"num_frames": num_frames}
+        self.playback_fps = playback_fps
+        self.current_frame = current_frame
+        self.is_playing = True
+        self.frame_slider = _FakeSlider(current_frame)
+        self.play_button = _FakeButton()
+        self._playback_last_time = last_time  # normally set by _start_playback/_on_fps_changed
+
+    _playback_loop = ImagingSeriesWidget._playback_loop
+    _stop_playback = ImagingSeriesWidget._stop_playback
+    _on_fps_changed = ImagingSeriesWidget._on_fps_changed
+
+
+def test_playback_loop_skips_ahead_after_slow_iteration(monkeypatch):
+    """A slow redraw (simulated by a big wall-clock jump between poll ticks) should make the
+    loop jump straight to the frame matching elapsed time, not silently fall one frame at a
+    time -- see _playback_loop's docstring for why a naive `current_frame += 1` on a fixed
+    timer drops frames unpredictably instead."""
+    harness = _PlaybackHarness(num_frames=1000, playback_fps=10)
+
+    fake_time = [0.0]
+    monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
+
+    sleep_calls = []
+
+    def fake_sleep(duration):
+        sleep_calls.append(duration)
+        if len(sleep_calls) == 1:
+            fake_time[0] += 1.0  # simulate one slow redraw stalling a full second
+        else:
+            harness.is_playing = False  # stop right after observing the post-stall frame
+
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    harness._playback_loop()
+
+    # at playback_fps=10, a 1s stall should skip straight to frame 10, not crawl to frame 1
+    assert harness.current_frame == 10
+    assert harness.frame_slider.value == 10
+    # poll interval is 1 / (4 * playback_fps)
+    assert sleep_calls[0] == pytest.approx(0.025)
+
+
+def test_playback_loop_stops_immediately_on_reaching_the_last_frame(monkeypatch):
+    """Reaching the last frame should stop right away -- button reset, is_playing cleared --
+    rather than waiting out one more poll interval; at the FPS slider's minimum (0.1), that
+    interval is 2.5s, during which the button would otherwise still show Pause even though
+    playback has genuinely ended."""
+    harness = _PlaybackHarness(num_frames=5, playback_fps=0.1, current_frame=3)
+
+    fake_time = [0.0]
+    monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
+
+    sleep_calls = []
+
+    def fake_sleep(duration):
+        sleep_calls.append(duration)
+        fake_time[0] += 10.0  # always enough to reach the end in one jump
+
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    harness._playback_loop()
+
+    assert harness.current_frame == 4  # num_frames - 1
+    assert harness.is_playing is False
+    assert harness.play_button.description == "▶ Play"
+    assert sleep_calls == [pytest.approx(2.5)]  # no extra sleep after reaching the end
+
+
+def test_playback_loop_does_not_drift_under_irregular_polling(monkeypatch):
+    """Advancing the pacing reference to `now` on every frame-advance (instead of by the
+    exact duration of the frames just consumed) discards whatever fraction of a frame period
+    was left over -- silently running playback slower than the requested fps, with the gap
+    growing the longer it plays. A poll interval that doesn't evenly divide the frame period
+    (mirroring irregular real-world redraw timing) exposes this: fails against the pre-fix
+    code (lands on frame 99, not 101)."""
+    fps = 10
+    poll_step = 0.017  # deliberately does not evenly divide the frame period (0.1s)
+    num_polls = 600
+    harness = _PlaybackHarness(num_frames=10_000, playback_fps=fps)
+
+    fake_time = [0.0]
+    monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
+
+    calls = []
+
+    def fake_sleep(duration):
+        calls.append(duration)
+        fake_time[0] += poll_step
+        if len(calls) >= num_polls:
+            harness.is_playing = False
+
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    harness._playback_loop()
+
+    assert harness.current_frame == 101
+
+
+def test_fps_change_does_not_retroactively_apply_to_elapsed_time(monkeypatch):
+    """_on_fps_changed must reset the pacing reference; otherwise real time that already
+    elapsed under the old fps gets reinterpreted under the new one on the next _playback_loop
+    check, producing an incorrect frame jump right at the moment of the change (e.g. 0.1s
+    accrued at 10 fps, worth 1 frame, becomes worth 2 frames if read back at 20 fps)."""
+    harness = _PlaybackHarness(num_frames=10_000, playback_fps=10)
+
+    fake_time = [0.0]
+    monkeypatch.setattr("time.monotonic", lambda: fake_time[0])
+
+    fake_time[0] = 0.1  # 0.1s accrued under the old fps=10 (exactly 1 frame's worth)
+    harness._on_fps_changed({"new": 20})
+
+    calls = []
+
+    def fake_sleep(duration):
+        calls.append(duration)
+        harness.is_playing = False  # stop right after the first check
+
+    monkeypatch.setattr("time.sleep", fake_sleep)
+
+    harness._playback_loop()
+
+    # without the reset, this would advance by int(0.1 * 20) = 2 frames instead of 0
+    assert harness.current_frame == 0
