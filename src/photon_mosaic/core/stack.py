@@ -166,6 +166,9 @@ class StackPlanesImaging(BaseImaging):
         total_planes = sum(planes_per_parent)
         BaseImaging.__init__(self, sampling_frequency=fs, shape=(height, width, total_planes))
 
+        # The stacked volume is registered only if every input is.
+        self.is_registered = all(im.is_registered for im in imagings)
+
         for epoch_index in range(num_epochs):
             parent_epochs = [im.epochs[epoch_index] for im in imagings]
             self.add_epoch(_StackedPlanesEpoch(parent_epochs, height, width, planes_per_parent, dtype))
