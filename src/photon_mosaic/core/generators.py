@@ -22,11 +22,19 @@ class FluorescenceData(NamedTuple):
         Binary spike trains ``(num_frames, num_rois)``, float32.
     clean_traces : np.ndarray
         Convolved traces before bleaching and noise ``(num_frames, num_rois)``, float32.
+    neuropil : np.ndarray | None
+        True background/neuropil level at each ROI's own mask (mask-weighted mean over the
+        ROI's own pixels, before noise), ``(num_frames, num_rois)``, float32. Only populated by
+        :func:`generate_imaging_with_rois` (:func:`generate_fluorescence` alone has no
+        background to report); ``None`` otherwise. Lets a `NeuropilExtension` surround-based
+        estimate be checked against the true *local* contamination, rather than only the end
+        effect on recovered dF/F.
     """
 
     traces: np.ndarray
     spikes: np.ndarray
     clean_traces: np.ndarray
+    neuropil: np.ndarray | None = None
 
 
 def generate_random_imaging(
@@ -432,9 +440,10 @@ def generate_imaging_with_rois(
     imaging : NumpyImaging
         The imaging data with injected fluorescence activity.
     fluorescence : FluorescenceData
-        The ground-truth fluorescence (traces, spikes, clean_traces) injected
-        into the video, e.g. for comparison against values recovered from
-        `imaging` via an :class:`~photon_mosaic.core.roianalyzer.RoiAnalyzer`.
+        The ground-truth fluorescence (traces, spikes, clean_traces) injected into the video,
+        plus `neuropil` (unlike bare :func:`generate_fluorescence`, which leaves it ``None``) --
+        e.g. for comparison against values recovered from `imaging` via an
+        :class:`~photon_mosaic.core.roianalyzer.RoiAnalyzer`.
     """
     rng = np.random.default_rng(seed)
     imaging_seed = int(rng.integers(0, 2**31))
@@ -512,6 +521,24 @@ def generate_imaging_with_rois(
         typical_variance = (footprints_flat**2).sum(axis=0).mean()
         modulation_scale = 1.0 / np.sqrt(max(typical_variance, 1e-12))
         ou_traces = _generate_ou_process(num_frames, sampling_frequency, neuropil_rng, num_traces=n_sources)
+
+    # True background level under each ROI's own mask (mask-weighted mean, before noise) --
+    # cheap ((num_frames, num_rois), not (num_frames, H*W*P)) since it only needs each ROI's
+    # own mask, not the full pixel grid. Mirrors the same matmul-compositing pattern used above.
+    mask_sums = masks_flat.sum(axis=1)
+    if neuropil_model == "constant":
+        neuropil = np.broadcast_to((background * bleach)[:, np.newaxis], (num_frames, num_rois)).copy()
+    elif neuropil_model == "vignette":
+        roi_profile_avg = (masks_flat * profile_flat[np.newaxis, :]).sum(axis=1) / mask_sums
+        neuropil = (background * bleach * fluctuation)[:, np.newaxis] * roi_profile_avg[np.newaxis, :]
+    else:  # "diffuse"
+        weighted_profile_masks = masks_flat * profile_flat[np.newaxis, :]
+        roi_profile_avg = weighted_profile_masks.sum(axis=1) / mask_sums
+        roi_modulation = (ou_traces @ (footprints_flat @ weighted_profile_masks.T)) * modulation_scale / mask_sums
+        neuropil = (background * bleach)[:, np.newaxis] * (
+            roi_profile_avg[np.newaxis, :] + neuropil_fluctuation_std * roi_modulation
+        )
+    fluorescence = fluorescence._replace(neuropil=neuropil.astype(np.float32))
 
     noise_rng = np.random.default_rng(noise_seed)
     slab_size = 256

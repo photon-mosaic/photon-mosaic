@@ -583,3 +583,33 @@ def test_generate_imaging_with_rois_vignette_neuropil_subtraction_recovers_dff_b
     gain_constant = corr_with_and_without_subtraction("constant")
     gain_vignette = corr_with_and_without_subtraction("vignette")
     assert gain_vignette > gain_constant + 0.05
+
+
+def test_generate_fluorescence_leaves_neuropil_none():
+    """`generate_fluorescence` alone has no concept of background, so it shouldn't fabricate one."""
+    fluorescence = generate_fluorescence(num_frames=50, num_rois=2, seed=0)
+    assert fluorescence.neuropil is None
+
+
+@pytest.mark.parametrize("neuropil_model", ["constant", "vignette", "diffuse"])
+def test_generate_imaging_with_rois_neuropil_matches_actual_background(neuropil_model):
+    """`neuropil` should exactly match the true, mask-weighted mean background level actually
+    present in the video, isolated from ROI signal (zero baseline) and noise."""
+    rois, imaging, fluorescence = generate_imaging_with_rois(
+        num_frames=500,
+        height=40,
+        width=40,
+        num_rois=3,
+        radius_range=(3, 5),
+        weighted_rois=True,
+        baseline_range=(0.0, 0.0),  # zero-signal control -- only background is present
+        noise_std=0.0,
+        neuropil_model=neuropil_model,
+        neuropil_fluctuation_std=0.5,
+        seed=7,
+    )
+    video_flat = imaging.get_series().reshape(500, -1).astype(np.float64)
+    masks_flat = rois.get_roi_image_masks().reshape(rois.get_num_rois(), -1).astype(np.float64)
+    actual = (video_flat @ masks_flat.T) / masks_flat.sum(axis=1)
+
+    np.testing.assert_allclose(fluorescence.neuropil, actual, rtol=1e-4, atol=1e-5)
