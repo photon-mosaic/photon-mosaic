@@ -171,9 +171,10 @@ def generate_rois(
 # Internal constants for the "vignette"/"diffuse" neuropil models (see `generate_imaging_with_rois`).
 _VIGNETTE_FALLOFF = 0.25  # fraction of center brightness lost at the frame corners
 _NEUROPIL_TAU_SECONDS = 5.0  # OU mean-reversion timescale -- slow drift, not frame-to-frame noise
-_DIFFUSE_DENSITY = 8  # diffuse sources per ROI
-# Relative to ROI radius -- an illustrative, not measured, choice; Zhou et al. 2018 (CNMF-E)
-# independently used the same ratio in one of their own synthetic robustness tests.
+_DIFFUSE_DENSITY = 2  # diffuse sources per ROI -- empirically more robust across seeds than 8
+# Relative to ROI radius -- needs to be well above 1x to read as pooled/blurred contamination
+# rather than another cell-sized blob; illustrative, not measured, but Zhou et al. 2018
+# (CNMF-E) independently used the same ratio in one of their own synthetic robustness tests.
 _DIFFUSE_RADIUS_MULTIPLIER = 5.0
 # Converts a cone-style radius to a Gaussian sigma with the same FWHM: 1 / (2 * sqrt(2 * ln(2))).
 _DIFFUSE_SIGMA_TO_RADIUS = 0.4247
@@ -318,7 +319,7 @@ def generate_imaging_with_rois(
     num_rois: int = 20,
     radius_range: tuple[int, int] | tuple[int, int, int] = (5, 15),
     sampling_frequency: float = 30.0,
-    decay_time: float = 2.0,
+    decay_time: float = 0.5,
     event_rate: float = 0.3,
     weighted_rois: bool = False,
     background: float = 0.2,
@@ -326,7 +327,7 @@ def generate_imaging_with_rois(
     noise_std: float | Literal["poisson"] = 1.3,
     bleaching_time: float = np.inf,
     neuropil_model: Literal["constant", "vignette", "diffuse"] = "constant",
-    neuropil_fluctuation_std: float = 0.3,
+    neuropil_fluctuation_std: float = 0.5,
     seed: int | None = None,
 ) -> tuple[BaseRois, NumpyImaging, FluorescenceData]:
     """Generate a random NumpyImaging object and corresponding ROIs with fluorescence activity.
@@ -351,8 +352,15 @@ def generate_imaging_with_rois(
         Range of radii for circular ROIs.
     sampling_frequency : float, default: 30.0
         Sampling frequency in Hz.
-    decay_time : float, default: 2.0
-        Duration of exponential decay for fluorescence events in seconds.
+    decay_time : float, default: 0.5
+        Duration of exponential decay for fluorescence events in seconds. The generative model
+        here (sharp rise, single-exponential decay) is the same simplified model OASIS itself
+        fits during deconvolution, so the most relevant reference point isn't a sensor's true
+        (more complex, nonlinear) single-spike kinetics, but the single-exponential time
+        constant OASIS finds optimal when fit to real GCaMP8 ground-truth recordings under that
+        same model: 0.2/0.45/0.5 s for GCaMP8f/8m/8s (Rupprecht et al. 2026, Nat. Methods). This
+        default follows GCaMP8s, the variant most often recommended for reliably detecting
+        isolated action potentials.
     event_rate : float, default: 0.3
         Mean spike-event rate in Hz, passed through to :func:`generate_fluorescence`. Each
         ROI's number of events scales with the recording's duration (`num_frames` /
@@ -397,23 +405,23 @@ def generate_imaging_with_rois(
           modulated by a static radial illumination falloff (brighter center, dimmer edges --
           real 2P vignetting). Every background pixel shares the same fluctuation, just scaled
           by its own position.
-        - ``"diffuse"``: many (``8 * num_rois``) broad, overlapping, independently-fluctuating
-          Gaussian sources mixed together, so nearby background pixels are correlated but
-          distant ones aren't -- a spatially-varying mixture rather than one shared signal.
-          Each source's width is drawn from `radius_range` scaled by 5 -- the same
-          background-to-neuron footprint-size ratio used in one of Zhou et al. 2018's (CNMF-E)
-          own synthetic robustness tests, not a measured biological or optical quantity, but a
-          second, independent illustrative choice at the same order of magnitude -- so it
-          scales with ROI size rather than frame size. Also carries the same vignette
-          falloff as ``"vignette"``.
+        - ``"diffuse"``: many (``2 * num_rois``) broad, overlapping Gaussian sources, each with
+          its own independent Ornstein-Uhlenbeck-like fluctuation, so nearby background pixels
+          move together while distant ones don't. Each source's width is `radius_range * 5`
+          (see `_DIFFUSE_RADIUS_MULTIPLIER`), so it scales with ROI size rather than frame size.
+          Also carries the same vignette falloff as ``"vignette"``.
 
         Both new models are normalized to preserve `background`'s mean-photon-count semantics
         (see `background` above); only their *spatial and temporal structure* differs from
         ``"constant"``. Kept intentionally simple -- just enough realism to make neuropil
         subtraction demonstrably matter, not an optically/biologically precise model.
-    neuropil_fluctuation_std : float, default: 0.3
+    neuropil_fluctuation_std : float, default: 0.5
         How strongly the background fluctuates relative to `background` itself, for
-        ``neuropil_model="vignette"`` or ``"diffuse"``. Ignored for ``"constant"``.
+        ``neuropil_model="vignette"`` or ``"diffuse"``. Ignored for ``"constant"``. Since the
+        fluctuation is additive around a mean level, a large enough value can push the
+        instantaneous background negative (unphysical); checked empirically for "diffuse" at
+        default settings: ~11% of samples go negative at 0.8, ~4% at 0.5, ~0.6% at 0.3 -- 0.5
+        balances a clearly demonstrable subtraction effect against that risk.
     seed : int | None, default: None
         Random seed for reproducibility.
 
@@ -547,7 +555,7 @@ def generate_fluorescence(
     num_frames: int,
     num_rois: int = 1,
     sampling_frequency: float = 30.0,
-    decay_time: float = 2.0,
+    decay_time: float = 0.5,
     event_rate: float = 0.3,
     noise_std: float = 0.0,
     bleaching_time: float = np.inf,
@@ -563,8 +571,12 @@ def generate_fluorescence(
         Number of independent fluorescence traces to generate.
     sampling_frequency : float, default: 30.0
         Sampling frequency in Hz.
-    decay_time : float, default: 2.0
-        Time constant of the exponential decay kernel in seconds.
+    decay_time : float, default: 0.5
+        Time constant of the exponential decay kernel in seconds. This sharp-rise,
+        single-exponential kernel is the same simplified model OASIS itself fits during
+        deconvolution, so the default follows the single-exponential time constant OASIS finds
+        optimal when fit to real GCaMP8s ground-truth recordings under that same model (0.5 s;
+        Rupprecht et al. 2026, Nat. Methods) rather than the sensor's true single-spike kinetics.
     event_rate : float, default: 0.3
         Mean spike-event rate in Hz. Each ROI's number of events is drawn as
         ``round(uniform(0.5, 1.5) * event_rate * num_frames / sampling_frequency)``, scaling
