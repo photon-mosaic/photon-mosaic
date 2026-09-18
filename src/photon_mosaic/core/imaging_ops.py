@@ -141,6 +141,89 @@ def split_epoch_at_frames(
     return SplitEpochAtFramesImaging(imaging=imaging, epoch_index=epoch_index, frame_boundaries=frame_boundaries)
 
 
+class FrameSliceImaging(BaseImaging):
+    """Imaging proxy exposing one contiguous frame range of a parent epoch.
+
+    The imaging counterpart of SpikeInterface's ``FrameSliceRecording``: the way
+    to cut a short stub out of a long video, whether for a test fixture, a quick
+    look, or to hand something small to code that would choke on the whole
+    recording. Pixels are pulled lazily from the parent.
+
+    The result has exactly one epoch. ``t_start`` stays on the parent's
+    timeline rather than being re-referenced to zero, so the stub keeps its
+    place in the original recording.
+
+    Parameters
+    ----------
+    parent_imaging : BaseImaging
+        The imaging object to slice.
+    start_frame : int | None, default: None
+        First included frame, or 0 if None.
+    end_frame : int | None, default: None
+        End frame, excluded as in ordinary python slicing; the parent epoch's
+        frame count if None.
+    epoch_index : int, default: 0
+        Which epoch of the parent to slice. SpikeInterface refuses a
+        multi-segment parent; here the epoch is named instead, since imaging
+        objects carry several epochs as a matter of course.
+    """
+
+    def __init__(
+        self,
+        parent_imaging: BaseImaging,
+        start_frame: int | None = None,
+        end_frame: int | None = None,
+        epoch_index: int = 0,
+    ):
+        num_epochs = parent_imaging.get_num_epochs()
+        if not isinstance(epoch_index, int) or isinstance(epoch_index, bool):
+            raise TypeError("epoch_index must be an int")
+        if not 0 <= epoch_index < num_epochs:
+            raise IndexError(f"Epoch index {epoch_index} out of range for imaging with {num_epochs} epochs")
+
+        parent_epoch = parent_imaging.epochs[epoch_index]
+        parent_size = parent_epoch.get_num_samples()
+
+        start_frame = 0 if start_frame is None else int(start_frame)
+        end_frame = parent_size if end_frame is None else int(end_frame)
+        if not 0 <= start_frame < parent_size:
+            raise ValueError(f"start_frame must be within [0, {parent_size}); got {start_frame}")
+        if not 0 < end_frame <= parent_size:
+            raise ValueError(f"end_frame must be within (0, {parent_size}]; got {end_frame}")
+        if end_frame <= start_frame:
+            raise ValueError(f"start_frame must be smaller than end_frame; got {start_frame} and {end_frame}")
+
+        BaseImaging.__init__(self, sampling_frequency=parent_imaging.sampling_frequency, shape=parent_imaging.shape)
+        parent_imaging.copy_metadata(self)
+        self.add_epoch(_FrameRangeEpoch(parent_epoch, start_frame, end_frame))
+
+        self._parent = parent_imaging
+        self._kwargs = {
+            "parent_imaging": parent_imaging,
+            "start_frame": start_frame,
+            "end_frame": end_frame,
+            "epoch_index": epoch_index,
+        }
+
+
+def frame_slice(
+    parent_imaging: BaseImaging,
+    start_frame: int | None = None,
+    end_frame: int | None = None,
+    epoch_index: int = 0,
+) -> FrameSliceImaging:
+    """Return a single-epoch proxy over ``[start_frame, end_frame)`` of one parent epoch.
+
+    Convenience wrapper for :class:`FrameSliceImaging`.
+    """
+    return FrameSliceImaging(
+        parent_imaging=parent_imaging,
+        start_frame=start_frame,
+        end_frame=end_frame,
+        epoch_index=epoch_index,
+    )
+
+
 class _StackedPlanesEpoch(BaseImagingEpoch):
     """Lazy epoch whose planes are gathered from several parent epochs.
 

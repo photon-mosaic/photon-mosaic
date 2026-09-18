@@ -3,9 +3,11 @@ import pytest
 
 from photon_mosaic.core.generators import generate_random_imaging
 from photon_mosaic.core.imaging_ops import (
+    FrameSliceImaging,
     SelectEpochImaging,
     SplitEpochAtFramesImaging,
     StackPlanesImaging,
+    frame_slice,
     split_epoch_at_frames,
     split_epochs,
     stack_planes,
@@ -81,6 +83,112 @@ def test_split_epoch_at_frames_validates_boundaries():
         _ = split_epoch_at_frames(imaging, 0, [5, 5])
     with pytest.raises(ValueError):
         _ = split_epoch_at_frames(imaging, 0, [5, 3])
+
+
+def test_frame_slice_returns_the_requested_frames():
+    imaging = generate_random_imaging(num_frames=(20,), height=4, width=5, sampling_frequency=10.0, seed=40)
+    full = imaging.get_series(epoch_index=0)
+
+    stub = frame_slice(imaging, 6, 14)
+
+    assert isinstance(stub, FrameSliceImaging)
+    assert stub.get_num_epochs() == 1
+    assert stub.get_num_samples() == 8
+    np.testing.assert_array_equal(stub.get_series(), full[6:14])
+
+
+def test_frame_slice_defaults_to_the_whole_epoch():
+    """``None`` bounds mean 0 and the frame count, as in ordinary python slicing."""
+    imaging = generate_random_imaging(num_frames=(12,), height=3, width=4, sampling_frequency=10.0, seed=41)
+    full = imaging.get_series(epoch_index=0)
+
+    np.testing.assert_array_equal(frame_slice(imaging).get_series(), full)
+    np.testing.assert_array_equal(frame_slice(imaging, start_frame=5).get_series(), full[5:])
+    np.testing.assert_array_equal(frame_slice(imaging, end_frame=5).get_series(), full[:5])
+
+
+def test_frame_slice_keeps_the_parent_timeline():
+    """The stub keeps its place in the parent recording; it is not re-referenced to zero."""
+    imaging = generate_random_imaging(num_frames=(20,), height=3, width=3, sampling_frequency=10.0, seed=42)
+
+    # a parent with no t_start is treated as starting at zero
+    assert frame_slice(imaging, 5, 10).epochs[0].t_start == pytest.approx(0.5)
+
+    imaging.epochs[0].t_start = 100.0
+    assert frame_slice(imaging, 5, 10).epochs[0].t_start == pytest.approx(100.5)
+
+
+def test_frame_slice_can_name_an_epoch_of_a_multi_epoch_parent():
+    imaging = generate_random_imaging(num_frames=(6, 15), height=3, width=4, sampling_frequency=10.0, seed=43)
+    second = imaging.get_series(epoch_index=1)
+
+    stub = frame_slice(imaging, 2, 9, epoch_index=1)
+
+    assert stub.get_num_epochs() == 1
+    np.testing.assert_array_equal(stub.get_series(), second[2:9])
+
+
+def test_frame_slice_preserves_planes():
+    imaging = generate_random_imaging(
+        num_frames=(10,), height=4, width=5, num_planes=3, sampling_frequency=10.0, seed=44
+    )
+    full = imaging.get_series(epoch_index=0)
+
+    stub = frame_slice(imaging, 3, 7)
+
+    assert stub.get_num_planes() == 3
+    assert tuple(stub.shape) == tuple(imaging.shape)
+    np.testing.assert_array_equal(stub.get_series(), full[3:7])
+    np.testing.assert_array_equal(stub.get_series(plane_ids=[2]), full[3:7, ..., [2]])
+
+
+def test_frame_slice_is_lazy():
+    """Construction must not pull any pixels out of the parent."""
+    imaging = generate_random_imaging(num_frames=(20,), height=3, width=3, sampling_frequency=10.0, seed=45)
+
+    reads = []
+    original = imaging.epochs[0].get_series
+
+    def spy(start, end, plane_indices=None):
+        reads.append((start, end))
+        return original(start, end, plane_indices)
+
+    imaging.epochs[0].get_series = spy
+
+    stub = frame_slice(imaging, 4, 9)
+    assert reads == []
+
+    _ = stub.get_series()
+    assert reads == [(4, 9)]
+
+
+def test_frame_slice_round_trips_through_a_dict():
+    """``_kwargs`` keys must match the constructor, or serialisation breaks."""
+    imaging = generate_random_imaging(num_frames=(6, 20), height=3, width=3, sampling_frequency=10.0, seed=47)
+
+    stub = frame_slice(imaging, 5, 12, epoch_index=1)
+    restored = stub.from_dict(stub.to_dict())
+
+    np.testing.assert_array_equal(restored.get_series(), stub.get_series())
+
+
+def test_frame_slice_validates_its_bounds():
+    imaging = generate_random_imaging(num_frames=(10, 4), height=3, width=3, sampling_frequency=10.0, seed=46)
+
+    with pytest.raises(ValueError):
+        _ = frame_slice(imaging, -1, 5)
+    with pytest.raises(ValueError):
+        _ = frame_slice(imaging, 10, 12)
+    with pytest.raises(ValueError):
+        _ = frame_slice(imaging, 0, 11)
+    with pytest.raises(ValueError):
+        _ = frame_slice(imaging, 0, 0)
+    with pytest.raises(ValueError):
+        _ = frame_slice(imaging, 7, 3)
+    with pytest.raises(IndexError):
+        _ = frame_slice(imaging, 0, 3, epoch_index=2)
+    with pytest.raises(TypeError):
+        _ = frame_slice(imaging, 0, 3, epoch_index=True)
 
 
 def _imaging(num_frames, planes, seed):

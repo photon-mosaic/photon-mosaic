@@ -4,9 +4,11 @@ from .binaryimaging import BinaryImaging, read_binary
 from .binaryrois import BinaryFolderRois, BinaryRois
 from .generators import generate_fluorescence, generate_imaging_with_rois, generate_random_imaging, generate_rois
 from .imaging_ops import (
+    FrameSliceImaging,
     SelectEpochImaging,
     SplitEpochAtFramesImaging,
     StackPlanesImaging,
+    frame_slice,
     split_epoch_at_frames,
     split_epochs,
     stack_planes,
