@@ -4,7 +4,7 @@ from .binaryimaging import BinaryImaging, read_binary
 from .binaryrois import BinaryFolderRois, BinaryRois
 from .generators import generate_fluorescence, generate_imaging_with_rois, generate_random_imaging, generate_rois
 from .loading import load
-from .motion import Motion
+from .motion import Motion, coerce_settings, compute_motion, register_motion_class
 from .numpyimaging import NumpyImaging
 from .roianalyzer import (
     AnalyzerExtension,

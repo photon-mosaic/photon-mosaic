@@ -1,36 +1,31 @@
 import logging
 import time
-from pathlib import Path
 from typing import Any, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import ConfigDict, Field
-from pydantic_settings import BaseSettings
 
-from photon_mosaic.core import BaseImaging, BaseImagingEpoch, Motion
+from photon_mosaic.core import BaseImaging, BaseImagingEpoch, Motion, register_motion_class
 
-from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
+from .basepreprocessor import BasePreprocessorEpoch
+from .registration import RegisterImaging, RegistrationSettings
 
 
-class Suite2pRegistrationSettings(BaseSettings):
+class Suite2pRegistrationSettings(RegistrationSettings):
     """Settings for Suite2P motion correction.
 
-    This class defines all configuration parameters for motion correction using Suite2P.
+    Adds the Suite2P specific parameters on top of the shared
+    :class:`photon_mosaic.preprocessing.registration.RegistrationSettings`
+    (``debug``, ``tmp_dir``, ``batch_size``, ``device``).
     Values can be provided via constructor, environment variables, or .env file.
     """
 
-    debug: bool = Field(default=False, description="Run with partial dataset")
-    tmp_dir: str | Path = Field(
-        default=Path("/scratch"),
-        description="Directory into which to write temporary files produced by Suite2P",
-    )
     data_type: str = Field(default="h5", description="Processing h5 (default) or TIFF timeseries")
     do_registration: bool = Field(
         default=True,
         description="whether to register data (2 forces re-registration)",
     )
-    batch_size: int = Field(default=500, description="Number of frames per batch")
     align_by_chan: int = Field(
         default=1,
         description="when multi-channel, you can align by non-functional channel (1-based)",
@@ -174,11 +169,6 @@ class Suite2pRegistrationSettings(BaseSettings):
         description="Number of steps to grid between smooth_sigma and smooth_sigma_time_max. "
         "Large values will add significant time to motion correction",
     )
-    device: str = Field(
-        default="cpu",
-        description="Torch device for registration: 'cpu', 'cuda', or 'mps'.",
-    )
-
     model_config = ConfigDict(env_prefix="SUITE2P_REGISTRATION_", case_sensitive=False, env_file=".env")
 
 
@@ -246,6 +236,11 @@ class Suite2PMotion(Motion):
     on top of the algorithm-agnostic :class:`Motion` container.
     """
 
+    method_name = "suite2p"
+    settings_class = Suite2pRegistrationSettings
+    # epoch_class is bound at the bottom of the module, once
+    # RegisterSuite2PImagingEpoch is defined.
+
     def __init__(
         self,
         imaging: BaseImaging,
@@ -292,192 +287,185 @@ class Suite2PMotion(Motion):
         self.nonrigid_offsets = nonrigid_offsets
         self.blocks = blocks
 
+    @classmethod
+    def _compute(
+        cls,
+        imaging: BaseImaging,
+        *,
+        settings: Suite2pRegistrationSettings | None = None,
+        badframes: NDArray | None = None,
+        **params: Any,
+    ) -> "Suite2PMotion":
+        """Pre-compute Suite2P displacements for all planes and epochs.
 
-def compute_motion_suite2p(
-    imaging: BaseImaging,
-    settings: Suite2pRegistrationSettings | dict[str, Any] | None = None,
-    badframes: NDArray | None = None,
-    **kwargs: Any,
-) -> "Suite2PMotion":
-    """Pre-compute Suite2P displacements for all planes and epochs.
+        Computes the reference image and per-frame rigid (and optionally nonrigid)
+        shifts without applying them to the data. Shifts are stored in the returned
+        ``Motion`` object and applied lazily by ``RegisterSuite2PImagingEpoch``.
 
-    Computes the reference image and per-frame rigid (and optionally nonrigid)
-    shifts without applying them to the data. Shifts are stored in the returned
-    ``Motion`` object and applied lazily by ``RegisterSuite2PImagingEpoch``.
+        Called through :meth:`photon_mosaic.core.Motion.compute` (or its
+        ``compute_motion`` / ``compute_motion_suite2p`` aliases), which resolves
+        ``settings`` before calling this.
 
-    Parameters
-    ----------
-    imaging : BaseImaging
-        Imaging object containing one or more epochs/planes to be registered.
-    settings : Suite2pRegistrationSettings | dict | None, optional
-        Registration settings. Dicts and None are coerced into
-        ``Suite2pRegistrationSettings``. Extra keyword arguments override.
-    badframes : NDArray | None, optional
-        Boolean array of shape ``(n_frames,)`` marking frames to exclude from
-        reference image computation.
-    **kwargs : Any
-        Extra options forwarded to ``Suite2pRegistrationSettings``.
+        Parameters
+        ----------
+        imaging : BaseImaging
+            Imaging object containing one or more epochs/planes to be registered.
+        settings : Suite2pRegistrationSettings | None, optional
+            Registration settings; ``None`` uses the defaults.
+        badframes : NDArray | None, optional
+            Boolean array of shape ``(n_frames,)`` marking frames to exclude from
+            reference image computation.
+        **params : Any
+            Extra Suite2P options applied on top of ``settings``.
 
-    Returns
-    -------
-    Suite2PMotion
-        Motion container with per-epoch displacements and Suite2P-specific
-        fields (``ops``, ``blocks``, ``nonrigid_offsets``).
+        Returns
+        -------
+        Suite2PMotion
+            Motion container with per-epoch displacements and Suite2P-specific
+            fields (``ops``, ``blocks``, ``nonrigid_offsets``).
+        """
+        import torch
+        from suite2p.registration.register import compute_crop, default_settings, register_frames
+
+        # Merge suite2p defaults -> our settings -> caller overrides
+        ops = default_settings()["registration"]
+        if settings is None:
+            settings = cls.settings_class()
+        ops.update(settings.model_dump())
+        ops.update(params)
+
+        device = torch.device(ops.get("device", "cpu"))
+
+        n_planes = imaging.num_planes
+        n_epochs = imaging.get_num_epochs()
+
+        # Reference images and bidiphase offsets computed once per plane from epoch 0
+        refImgs: list[NDArray | None] = [None] * n_planes
+        bidiphases: list[int] = [0] * n_planes
+        # Block definitions are the same for all epochs (geometry doesn't change)
+        all_blocks: list[Any] | None = None
+
+        all_displacements: list[NDArray] = []
+        all_nonrigid_offsets: list[list | None] = []
+        all_yranges: list[list[tuple[int, int]]] = []
+        all_xranges: list[list[tuple[int, int]]] = []
+        all_corrected_badframes: list[NDArray] = []
+
+        for epoch_idx in range(n_epochs):
+            epoch = imaging.epochs[epoch_idx]
+            n_frames = imaging.get_num_samples(segment_index=epoch_idx)
+
+            # Load entire epoch: (n_frames, H, W, n_planes) or (n_frames, H, W)
+            all_frames = epoch.get_series(0, n_frames)
+            Ly, Lx = imaging.shape[0], imaging.shape[1]
+
+            badframes0 = np.zeros(n_frames, dtype=bool) if badframes is None else badframes.copy()
+
+            epoch_yoff: list[NDArray] = []
+            epoch_xoff: list[NDArray] = []
+            epoch_corrXY: list[NDArray] = []
+            epoch_nr: list[tuple[NDArray, NDArray] | None] = []
+            epoch_blocks: list[Any] = []
+
+            for p in range(n_planes):
+                if all_frames.ndim == 4:
+                    plane_frames = all_frames[:, :, :, p].astype(np.float32)
+                else:
+                    plane_frames = all_frames.astype(np.float32)
+
+                # Compute reference once from the first epoch
+                if epoch_idx == 0:
+                    refImgs[p], bidiphases[p] = _compute_reference_wrapper(
+                        plane_frames, ops, refImg=None, device=device
+                    )
+
+                # Compute shifts without applying them to the frames
+                _, _, _, offsets_all, blocks = register_frames(
+                    plane_frames,
+                    refImg=refImgs[p],
+                    f_align_out=None,
+                    batch_size=ops["batch_size"],
+                    bidiphase=bidiphases[p],
+                    norm_frames=ops.get("norm_frames", True),
+                    smooth_sigma=ops["smooth_sigma"],
+                    spatial_taper=ops.get("spatial_taper", 3.45),
+                    block_size=ops["block_size"],
+                    nonrigid=ops["nonrigid"],
+                    maxregshift=ops["maxregshift"],
+                    smooth_sigma_time=ops["smooth_sigma_time"],
+                    snr_thresh=ops["snr_thresh"],
+                    maxregshiftNR=ops["maxregshiftNR"],
+                    device=device,
+                    apply_shifts=False,
+                )
+                yoff, xoff, corrXY, yoff1, xoff1, corrXY1, zest, cmax_all = offsets_all
+
+                epoch_yoff.append(yoff)
+                epoch_xoff.append(xoff)
+                epoch_corrXY.append(corrXY)
+                epoch_nr.append((yoff1, xoff1) if yoff1 is not None else None)
+
+                if epoch_idx == 0 and blocks is not None:
+                    epoch_blocks.append(blocks)
+
+            if epoch_idx == 0 and epoch_blocks:
+                all_blocks = epoch_blocks
+
+            # Stack planes → always (n_frames, n_planes, 2)
+            disps = np.stack([np.stack(epoch_yoff, axis=1), np.stack(epoch_xoff, axis=1)], axis=-1)
+
+            all_displacements.append(disps)
+
+            has_nonrigid = any(o is not None for o in epoch_nr)
+            all_nonrigid_offsets.append(epoch_nr if has_nonrigid else None)
+
+            # Compute valid FOV region and refined bad-frame mask for each plane
+            epoch_yranges: list[tuple[int, int]] = []
+            epoch_xranges: list[tuple[int, int]] = []
+            epoch_cbf: list[NDArray] = []
+            for p in range(n_planes):
+                bf, yrange, xrange = compute_crop(
+                    xoff=epoch_xoff[p],
+                    yoff=epoch_yoff[p],
+                    corrXY=epoch_corrXY[p],
+                    th_badframes=ops.get("th_badframes", 1.0),
+                    badframes=badframes0.copy(),
+                    maxregshift=ops["maxregshift"],
+                    Ly=Ly,
+                    Lx=Lx,
+                )
+                epoch_yranges.append(tuple(yrange))
+                epoch_xranges.append(tuple(xrange))
+                epoch_cbf.append(bf)
+
+            all_yranges.append(epoch_yranges)
+            all_xranges.append(epoch_xranges)
+            # Bad frames are a property of the time axis (a corrupted volume frame
+            # is bad on all planes) — collapse Suite2P's per-plane masks into one.
+            all_corrected_badframes.append(np.logical_or.reduce(epoch_cbf))
+
+        nonrigid_offsets = all_nonrigid_offsets if any(o is not None for o in all_nonrigid_offsets) else None
+
+        return cls(
+            imaging=imaging,
+            displacements=all_displacements,
+            ops=ops,
+            reference=refImgs,
+            nonrigid_offsets=nonrigid_offsets,
+            blocks=all_blocks,
+            yranges=all_yranges,
+            xranges=all_xranges,
+            corrected_badframes=all_corrected_badframes,
+        )
+
+
+class RegisterSuite2PImaging(RegisterImaging):
+    """Apply pre-computed Suite2P motion correction on-the-fly.
+
+    Thin alias of :class:`photon_mosaic.preprocessing.registration.RegisterImaging`,
+    kept for discoverability and backwards compatibility; the generic class
+    already dispatches on the type of ``motion``.
     """
-    import torch
-    from suite2p.registration.register import compute_crop, default_settings, register_frames
-
-    # Merge suite2p defaults → our settings → caller overrides
-    ops = default_settings()["registration"]
-    if settings is None:
-        user_settings = Suite2pRegistrationSettings()
-    elif isinstance(settings, dict):
-        user_settings = Suite2pRegistrationSettings(**settings)
-    else:
-        user_settings = settings
-    ops.update(user_settings.model_dump())
-    ops.update(kwargs)
-
-    device = torch.device(ops.get("device", "cpu"))
-
-    n_planes = imaging.num_planes
-    n_epochs = imaging.get_num_epochs()
-
-    # Reference images and bidiphase offsets computed once per plane from epoch 0
-    refImgs: list[NDArray | None] = [None] * n_planes
-    bidiphases: list[int] = [0] * n_planes
-    # Block definitions are the same for all epochs (geometry doesn't change)
-    all_blocks: list[Any] | None = None
-
-    all_displacements: list[NDArray] = []
-    all_nonrigid_offsets: list[list | None] = []
-    all_yranges: list[list[tuple[int, int]]] = []
-    all_xranges: list[list[tuple[int, int]]] = []
-    all_corrected_badframes: list[NDArray] = []
-
-    for epoch_idx in range(n_epochs):
-        epoch = imaging.epochs[epoch_idx]
-        n_frames = imaging.get_num_samples(segment_index=epoch_idx)
-
-        # Load entire epoch: (n_frames, H, W, n_planes) or (n_frames, H, W)
-        all_frames = epoch.get_series(0, n_frames)
-        Ly, Lx = imaging.shape[0], imaging.shape[1]
-
-        badframes0 = np.zeros(n_frames, dtype=bool) if badframes is None else badframes.copy()
-
-        epoch_yoff: list[NDArray] = []
-        epoch_xoff: list[NDArray] = []
-        epoch_corrXY: list[NDArray] = []
-        epoch_nr: list[tuple[NDArray, NDArray] | None] = []
-        epoch_blocks: list[Any] = []
-
-        for p in range(n_planes):
-            if all_frames.ndim == 4:
-                plane_frames = all_frames[:, :, :, p].astype(np.float32)
-            else:
-                plane_frames = all_frames.astype(np.float32)
-
-            # Compute reference once from the first epoch
-            if epoch_idx == 0:
-                refImgs[p], bidiphases[p] = _compute_reference_wrapper(plane_frames, ops, refImg=None, device=device)
-
-            # Compute shifts without applying them to the frames
-            _, _, _, offsets_all, blocks = register_frames(
-                plane_frames,
-                refImg=refImgs[p],
-                f_align_out=None,
-                batch_size=ops["batch_size"],
-                bidiphase=bidiphases[p],
-                norm_frames=ops.get("norm_frames", True),
-                smooth_sigma=ops["smooth_sigma"],
-                spatial_taper=ops.get("spatial_taper", 3.45),
-                block_size=ops["block_size"],
-                nonrigid=ops["nonrigid"],
-                maxregshift=ops["maxregshift"],
-                smooth_sigma_time=ops["smooth_sigma_time"],
-                snr_thresh=ops["snr_thresh"],
-                maxregshiftNR=ops["maxregshiftNR"],
-                device=device,
-                apply_shifts=False,
-            )
-            yoff, xoff, corrXY, yoff1, xoff1, corrXY1, zest, cmax_all = offsets_all
-
-            epoch_yoff.append(yoff)
-            epoch_xoff.append(xoff)
-            epoch_corrXY.append(corrXY)
-            epoch_nr.append((yoff1, xoff1) if yoff1 is not None else None)
-
-            if epoch_idx == 0 and blocks is not None:
-                epoch_blocks.append(blocks)
-
-        if epoch_idx == 0 and epoch_blocks:
-            all_blocks = epoch_blocks
-
-        # Stack planes → always (n_frames, n_planes, 2)
-        disps = np.stack([np.stack(epoch_yoff, axis=1), np.stack(epoch_xoff, axis=1)], axis=-1)
-
-        all_displacements.append(disps)
-
-        has_nonrigid = any(o is not None for o in epoch_nr)
-        all_nonrigid_offsets.append(epoch_nr if has_nonrigid else None)
-
-        # Compute valid FOV region and refined bad-frame mask for each plane
-        epoch_yranges: list[tuple[int, int]] = []
-        epoch_xranges: list[tuple[int, int]] = []
-        epoch_cbf: list[NDArray] = []
-        for p in range(n_planes):
-            bf, yrange, xrange = compute_crop(
-                xoff=epoch_xoff[p],
-                yoff=epoch_yoff[p],
-                corrXY=epoch_corrXY[p],
-                th_badframes=ops.get("th_badframes", 1.0),
-                badframes=badframes0.copy(),
-                maxregshift=ops["maxregshift"],
-                Ly=Ly,
-                Lx=Lx,
-            )
-            epoch_yranges.append(tuple(yrange))
-            epoch_xranges.append(tuple(xrange))
-            epoch_cbf.append(bf)
-
-        all_yranges.append(epoch_yranges)
-        all_xranges.append(epoch_xranges)
-        # Bad frames are a property of the time axis (a corrupted volume frame
-        # is bad on all planes) — collapse Suite2P's per-plane masks into one.
-        all_corrected_badframes.append(np.logical_or.reduce(epoch_cbf))
-
-    nonrigid_offsets = all_nonrigid_offsets if any(o is not None for o in all_nonrigid_offsets) else None
-
-    return Suite2PMotion(
-        imaging=imaging,
-        displacements=all_displacements,
-        ops=ops,
-        reference=refImgs,
-        nonrigid_offsets=nonrigid_offsets,
-        blocks=all_blocks,
-        yranges=all_yranges,
-        xranges=all_xranges,
-        corrected_badframes=all_corrected_badframes,
-    )
-
-
-class RegisterSuite2PImaging(BasePreprocessor):
-    """Apply pre-computed Suite2P motion correction on-the-fly."""
-
-    def __init__(self, imaging: BaseImaging, motion: Suite2PMotion, **kwargs: Any) -> None:
-        """Build an imaging view that applies stored motion fields lazily."""
-        BasePreprocessor.__init__(self, imaging)
-
-        if motion.num_epochs != len(imaging.epochs):
-            raise ValueError(
-                f"Number of epochs in motion ({motion.num_epochs}) does not match imaging ({len(imaging.epochs)})"
-            )
-
-        for epoch_idx, parent_epoch in enumerate(imaging.epochs):
-            epoch = RegisterSuite2PImagingEpoch(parent_epoch, motion, epoch_idx, **kwargs)
-            self.add_epoch(epoch)
-
-        self._kwargs = dict(imaging=imaging, motion=motion, **kwargs)
 
 
 class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
@@ -594,4 +582,10 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
         return output
 
 
+# Late binding: the epoch class is defined after Suite2PMotion, and the
+# registry lets ``Motion.compute(..., method="suite2p")`` find the backend.
+Suite2PMotion.epoch_class = RegisterSuite2PImagingEpoch
+register_motion_class(Suite2PMotion)
+
+compute_motion_suite2p = Suite2PMotion.compute
 register_suite2p = RegisterSuite2PImaging
