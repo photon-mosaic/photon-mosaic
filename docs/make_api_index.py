@@ -31,6 +31,10 @@ def make_api_index():
         if "tests" in rel_path.parts:
             continue
 
+        # Skip hidden/cache directories (e.g. .ipynb_checkpoints, __pycache__)
+        if any(part.startswith(".") or part == "__pycache__" for part in rel_path.parts):
+            continue
+
         module_name = str(rel_path.with_suffix("")).replace(os.sep, ".")
 
         # rel_path.parts[0] == "photon_mosaic"; parts[1] is the submodule
