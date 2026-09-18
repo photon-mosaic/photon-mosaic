@@ -2,8 +2,15 @@
 
 import numpy as np
 import pytest
+from pydantic_settings import BaseSettings
 
-from photon_mosaic.core import Motion, generate_random_imaging
+from photon_mosaic.core import Motion, compute_motion, generate_random_imaging, register_motion_class
+from photon_mosaic.core.motion import (
+    _builtin_motion_modules,
+    _get_motion_class,
+    _registered_motion_classes,
+    coerce_settings,
+)
 
 
 class TestMotion:
@@ -76,3 +83,110 @@ class TestMotion:
         multi_val = motion.get_displacement_at_frames(np.array([2, 5]), plane_index=2)
         assert multi_val.shape == (2, 2)
         np.testing.assert_array_equal(multi_val, disps[0][[2, 5], 2])
+
+
+class DummySettings(BaseSettings):
+    value: int = 1
+
+
+class DummyMotion(Motion):
+    """Backend-less Motion subclass used to exercise the registry."""
+
+    method_name = "dummy_test_backend"
+    settings_class = DummySettings
+
+    @classmethod
+    def _compute(cls, imaging, *, settings=None, badframes=None, **params):
+        motion = cls(imaging=imaging, displacements=[np.zeros((3, 1, 2))])
+        motion.metadata = {"settings": settings, "badframes": badframes, "params": params}
+        return motion
+
+
+@pytest.fixture()
+def registered_dummy():
+    register_motion_class(DummyMotion)
+    yield DummyMotion
+    _registered_motion_classes.pop(DummyMotion.method_name, None)
+
+
+class TestMotionRegistry:
+    def test_suite2p_is_resolved_lazily(self):
+        from photon_mosaic.preprocessing.suite2p_registration import Suite2PMotion
+
+        assert _get_motion_class("suite2p") is Suite2PMotion
+
+    def test_unknown_method_raises(self):
+        with pytest.raises(ValueError, match="Unknown motion correction method"):
+            _get_motion_class("not_a_backend")
+
+    def test_register_and_resolve(self, registered_dummy):
+        assert _get_motion_class("dummy_test_backend") is DummyMotion
+
+    def test_register_requires_method_name(self):
+        class Nameless(Motion):
+            pass
+
+        with pytest.raises(ValueError, match="method_name"):
+            register_motion_class(Nameless)
+
+    def test_missing_optional_dependency_reports_the_method(self, monkeypatch):
+        monkeypatch.setitem(_builtin_motion_modules, "phantom", "photon_mosaic.preprocessing.not_a_module")
+        with pytest.raises(ImportError, match="phantom"):
+            _get_motion_class("phantom")
+
+
+class TestMotionCompute:
+    @pytest.fixture()
+    def imaging(self):
+        return generate_random_imaging(num_frames=3, height=8, width=9, num_planes=1, sampling_frequency=30.0, seed=3)
+
+    def test_dispatches_on_method(self, imaging, registered_dummy):
+        motion = compute_motion(imaging, method="dummy_test_backend")
+        assert isinstance(motion, DummyMotion)
+
+    def test_settings_are_coerced_and_params_forwarded(self, imaging, registered_dummy):
+        motion = compute_motion(imaging, method="dummy_test_backend", settings={"value": 7}, extra=3)
+        assert isinstance(motion.metadata["settings"], DummySettings)
+        assert motion.metadata["settings"].value == 7
+        assert motion.metadata["params"] == {"extra": 3}
+
+    def test_subclass_compute_needs_no_method(self, imaging, registered_dummy):
+        motion = DummyMotion.compute(imaging)
+        assert isinstance(motion, DummyMotion)
+
+    def test_subclass_rejects_a_foreign_method(self, imaging, registered_dummy):
+        with pytest.raises(ValueError, match="implements method"):
+            DummyMotion.compute(imaging, method="suite2p")
+
+    def test_non_string_method_points_at_settings(self, imaging, registered_dummy):
+        settings = DummySettings(value=2)
+        with pytest.raises(TypeError, match="settings="):
+            compute_motion(imaging, settings)
+        with pytest.raises(TypeError, match="settings="):
+            DummyMotion.compute(imaging, settings)
+
+    def test_base_compute_is_not_implemented(self, imaging):
+        class Bare(Motion):
+            method_name = "bare_test_backend"
+
+        with pytest.raises(NotImplementedError):
+            Bare.compute(imaging)
+
+
+class TestCoerceSettings:
+    def test_none_gives_defaults(self):
+        assert coerce_settings(None, DummySettings).value == 1
+
+    def test_dict_is_validated(self):
+        assert coerce_settings({"value": 5}, DummySettings).value == 5
+
+    def test_instance_passes_through(self):
+        settings = DummySettings(value=9)
+        assert coerce_settings(settings, DummySettings) is settings
+
+    def test_no_settings_class_passes_through(self):
+        assert coerce_settings("anything", None) == "anything"
+
+    def test_wrong_type_raises(self):
+        with pytest.raises(TypeError):
+            coerce_settings(3.14, DummySettings)
