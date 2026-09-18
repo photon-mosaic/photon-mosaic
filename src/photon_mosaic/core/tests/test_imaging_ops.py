@@ -162,6 +162,22 @@ def test_frame_slice_is_lazy():
     assert reads == [(4, 9)]
 
 
+def test_frame_slice_refuses_to_guess_the_epoch():
+    """A multi-epoch parent must name its epoch rather than silently getting the first.
+
+    Guards the failure mode issue #129 records on the sibling proxies: an
+    unnamed epoch quietly resolving to epoch 0 returns a plausible wrong answer.
+    ``BaseImaging.get_series`` raises here; so does this.
+    """
+    multi = generate_random_imaging(num_frames=(6, 9), height=3, width=3, sampling_frequency=10.0, seed=48)
+    with pytest.raises(ValueError, match="multi-epoch"):
+        _ = frame_slice(multi, 1, 4)
+
+    # a single-epoch parent is unambiguous, so it needs no epoch_index
+    single = generate_random_imaging(num_frames=(6,), height=3, width=3, sampling_frequency=10.0, seed=49)
+    np.testing.assert_array_equal(frame_slice(single, 1, 4).get_series(), single.get_series()[1:4])
+
+
 def test_frame_slice_round_trips_through_a_dict():
     """``_kwargs`` keys must match the constructor, or serialisation breaks."""
     imaging = generate_random_imaging(num_frames=(6, 20), height=3, width=3, sampling_frequency=10.0, seed=47)
@@ -176,15 +192,15 @@ def test_frame_slice_validates_its_bounds():
     imaging = generate_random_imaging(num_frames=(10, 4), height=3, width=3, sampling_frequency=10.0, seed=46)
 
     with pytest.raises(ValueError):
-        _ = frame_slice(imaging, -1, 5)
+        _ = frame_slice(imaging, -1, 5, epoch_index=0)
     with pytest.raises(ValueError):
-        _ = frame_slice(imaging, 10, 12)
+        _ = frame_slice(imaging, 10, 12, epoch_index=0)
     with pytest.raises(ValueError):
-        _ = frame_slice(imaging, 0, 11)
+        _ = frame_slice(imaging, 0, 11, epoch_index=0)
     with pytest.raises(ValueError):
-        _ = frame_slice(imaging, 0, 0)
+        _ = frame_slice(imaging, 0, 0, epoch_index=0)
     with pytest.raises(ValueError):
-        _ = frame_slice(imaging, 7, 3)
+        _ = frame_slice(imaging, 7, 3, epoch_index=0)
     with pytest.raises(IndexError):
         _ = frame_slice(imaging, 0, 3, epoch_index=2)
     with pytest.raises(TypeError):

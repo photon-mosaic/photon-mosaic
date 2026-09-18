@@ -162,10 +162,12 @@ class FrameSliceImaging(BaseImaging):
     end_frame : int | None, default: None
         End frame, excluded as in ordinary python slicing; the parent epoch's
         frame count if None.
-    epoch_index : int, default: 0
-        Which epoch of the parent to slice. SpikeInterface refuses a
-        multi-segment parent; here the epoch is named instead, since imaging
-        objects carry several epochs as a matter of course.
+    epoch_index : int | None, default: None
+        Which epoch of the parent to slice. If None and the parent has a single
+        epoch it defaults to that one; a multi-epoch parent must name its epoch,
+        as it must for :meth:`BaseImaging.get_series`. SpikeInterface refuses a
+        multi-segment parent outright; naming the epoch keeps that capability
+        without letting an unnamed one be picked silently (see issue #129).
     """
 
     def __init__(
@@ -173,9 +175,13 @@ class FrameSliceImaging(BaseImaging):
         parent_imaging: BaseImaging,
         start_frame: int | None = None,
         end_frame: int | None = None,
-        epoch_index: int = 0,
+        epoch_index: int | None = None,
     ):
         num_epochs = parent_imaging.get_num_epochs()
+        if epoch_index is None:
+            if num_epochs > 1:
+                raise ValueError("epoch_index must be provided for multi-epoch imaging data.")
+            epoch_index = 0
         if not isinstance(epoch_index, int) or isinstance(epoch_index, bool):
             raise TypeError("epoch_index must be an int")
         if not 0 <= epoch_index < num_epochs:
@@ -210,7 +216,7 @@ def frame_slice(
     parent_imaging: BaseImaging,
     start_frame: int | None = None,
     end_frame: int | None = None,
-    epoch_index: int = 0,
+    epoch_index: int | None = None,
 ) -> FrameSliceImaging:
     """Return a single-epoch proxy over ``[start_frame, end_frame)`` of one parent epoch.
 
