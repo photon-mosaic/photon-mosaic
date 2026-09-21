@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+import sparse
 
 from photon_mosaic.core.numpyimaging import NumpyImaging, NumpyImagingEpoch, NumpyRois
 
@@ -123,3 +124,20 @@ def test_numpyrois_mask_shapes():
     bad_masks = np.zeros(bad_shape)
     with pytest.raises(ValueError):
         NumpyRois(roi_image_masks=bad_masks, sampling_frequency=30.0, roi_ids=None)
+
+
+def test_numpyrois_accepts_empty_roi_array():
+    """`roi_image_masks[0]` would raise IndexError on a 0-ROI array; the shape check must not
+    rely on indexing into it."""
+    masks = np.zeros((0, 30, 30))
+    rois = NumpyRois(roi_image_masks=masks, sampling_frequency=30.0, roi_ids=None)
+    assert rois.get_num_rois() == 0
+
+
+def test_numpyrois_accepts_sparse_masks():
+    dense = np.zeros((3, 20, 20, 2))
+    dense[0, 5, 5, 0] = 1.0
+    masks = sparse.GCXS.from_numpy(dense, compressed_axes=(0,))
+    rois = NumpyRois(roi_image_masks=masks, sampling_frequency=30.0, roi_ids=None)
+    assert rois.get_num_rois() == 3
+    assert rois.get_num_planes() == 2
