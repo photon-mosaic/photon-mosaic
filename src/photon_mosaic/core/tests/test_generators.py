@@ -290,7 +290,7 @@ def test_generate_imaging_with_rois_poisson_noise_default_dff_recovery():
     recovering dF/F close to clean_traces, comparable to the Gaussian default."""
     from photon_mosaic.core import create_roi_analyzer
 
-    rois, imaging, ground_truth = generate_imaging_with_rois(num_frames=2000, num_rois=3, seed=0, noise_std="poisson")
+    rois, imaging, ground_truth = generate_imaging_with_rois(num_rois=3, seed=0, noise_std="poisson")
     analyzer = create_roi_analyzer(rois, imaging, format="memory")
     analyzer.compute("fluorescence")
     analyzer.compute("df_over_f")
