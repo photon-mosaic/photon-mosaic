@@ -225,7 +225,7 @@ def _generate_ou_process(
     rng: np.random.Generator,
     num_traces: int = 1,
 ) -> np.ndarray:
-    """Ornstein-Uhlenbeck-like fluctuation(s): mean 0, asymptotically unit variance.
+    """Ornstein-Uhlenbeck-like fluctuation(s): exactly zero-mean per trace, asymptotically unit variance.
 
     Discrete-time AR(1) via exact IIR recurrence (same `lfilter` style as
     `generate_fluorescence`'s exponential-kernel convolution): ``x[t] = phi * x[t-1] +
@@ -233,7 +233,10 @@ def _generate_ou_process(
     sampling_frequency))``. Starts at 0 and reaches unit variance within a few
     `_NEUROPIL_TAU_SECONDS` -- an accepted simplification (the brief initial transient is
     negligible for the frame counts this is meant for) rather than seeding the recurrence from
-    its stationary distribution.
+    its stationary distribution. Each trace's own realized mean is then subtracted off: the raw
+    recurrence is zero-mean only in expectation, and since this feeds directly into `background`
+    (see callers), an unremoved realized mean would let a short recording's actual background
+    level drift from the documented `background` parameter.
 
     Parameters
     ----------
@@ -249,13 +252,14 @@ def _generate_ou_process(
     Returns
     -------
     np.ndarray
-        ``(num_frames, num_traces)``, float32.
+        ``(num_frames, num_traces)``, float32, each column exactly zero-mean.
     """
     from scipy.signal import lfilter
 
     phi = np.exp(-1.0 / (_NEUROPIL_TAU_SECONDS * sampling_frequency))
     white = rng.normal(0, 1, size=(num_frames, num_traces)).astype(np.float32)
     ou = lfilter([np.sqrt(1 - phi**2)], [1.0, -phi], white, axis=0)
+    ou = ou - ou.mean(axis=0, keepdims=True)
     return ou.astype(np.float32)
 
 
