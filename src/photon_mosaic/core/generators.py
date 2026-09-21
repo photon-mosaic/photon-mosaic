@@ -335,9 +335,9 @@ def generate_imaging_with_rois(
     baseline_range: tuple[float, float] = (0.5, 1.0),
     noise_std: float | Literal["poisson"] = 1.3,
     bleaching_time: float = np.inf,
+    seed: int | None = None,
     neuropil_model: Literal["constant", "vignette", "diffuse"] = "constant",
     neuropil_fluctuation_std: float = 0.5,
-    seed: int | None = None,
 ) -> tuple[BaseRois, NumpyImaging, FluorescenceData]:
     """Generate a random NumpyImaging object and corresponding ROIs with fluorescence activity.
 
@@ -404,6 +404,8 @@ def generate_imaging_with_rois(
     bleaching_time : float, default: inf
         Time constant of multiplicative photobleaching in seconds, passed through to
         :func:`generate_fluorescence`. The default of ``inf`` means no photobleaching.
+    seed : int | None, default: None
+        Random seed for reproducibility.
     neuropil_model : {"constant", "vignette", "diffuse"}, default: "constant"
         How `background` varies over space and time:
 
@@ -431,8 +433,6 @@ def generate_imaging_with_rois(
         instantaneous background negative (unphysical); checked empirically for "diffuse" at
         default settings: ~11% of samples go negative at 0.8, ~4% at 0.5, ~0.6% at 0.3 -- 0.5
         balances a clearly demonstrable subtraction effect against that risk.
-    seed : int | None, default: None
-        Random seed for reproducibility.
 
     Returns
     -------
