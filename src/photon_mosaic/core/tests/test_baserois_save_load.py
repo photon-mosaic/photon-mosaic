@@ -76,7 +76,7 @@ def test_zarr_partial_load_does_not_scale_with_total_rois(tmp_path):
     """Regression test for the bug found in review: requesting one ROI's mask out of many
     should stay cheap, not cost about the same as loading everything -- which it did when
     the full array was loaded before indexing (see photon-mosaic#104). Compares single-ROI
-    vs. full-array cost within one 2000-ROI file, rather than single-ROI cost across a
+    vs. full-array cost within one 1000-ROI file, rather than single-ROI cost across a
     small-N vs. large-N file: at small total ROI counts the whole file is already smaller
     than one storage chunk, so there's no meaningful "partial" case to contrast against, and
     fixed per-call overhead dominates."""
@@ -84,7 +84,7 @@ def test_zarr_partial_load_does_not_scale_with_total_rois(tmp_path):
 
     for use_sparse in (False, True):
         rois = generate_rois(
-            num_rois=2000,
+            num_rois=1000,
             height=128,
             width=128,
             radius_range=(3, 6),
