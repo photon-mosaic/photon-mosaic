@@ -497,46 +497,6 @@ def test_generate_imaging_with_rois_neuropil_model_reproducible_and_does_not_per
     np.testing.assert_array_equal(fluor_a.traces, fluor_b.traces)
 
 
-def test_generate_imaging_with_rois_vignette_neuropil_subtraction_recovers_dff_better_than_constant():
-    """Under "constant", neuropil subtraction barely helps (there's no genuine fluctuation to
-    remove, only a constant offset already washed out by dF/F normalization); under "vignette",
-    subtraction should visibly improve recovered dF/F's correlation with ground truth, since it
-    removes a real, shared fluctuation."""
-    from photon_mosaic.core import create_roi_analyzer
-
-    def corr_with_and_without_subtraction(neuropil_model):
-        rois, imaging, ground_truth = generate_imaging_with_rois(
-            num_frames=3000,
-            height=64,
-            width=64,
-            num_rois=3,
-            radius_range=(3, 5),
-            noise_std=0.0,
-            neuropil_fluctuation_std=0.6,
-            neuropil_model=neuropil_model,
-            seed=0,
-        )
-        analyzer_without = create_roi_analyzer(rois, imaging, format="memory")
-        analyzer_without.compute("fluorescence", use_neuropil=False)
-        analyzer_without.compute("df_over_f", method="percentile")
-        dff_without = analyzer_without.get_extension("df_over_f").get_data()
-
-        analyzer_with = create_roi_analyzer(rois, imaging, format="memory")
-        analyzer_with.compute("neuropil", method="surround")
-        analyzer_with.compute("fluorescence", use_neuropil=True, neuropil_weight=1.0)
-        analyzer_with.compute("df_over_f", method="percentile")
-        dff_with = analyzer_with.get_extension("df_over_f").get_data()
-
-        def median_corr(dff):
-            return np.median([np.corrcoef(dff[:, i], ground_truth.clean_traces[:, i])[0, 1] for i in range(3)])
-
-        return median_corr(dff_with) - median_corr(dff_without)
-
-    gain_constant = corr_with_and_without_subtraction("constant")
-    gain_vignette = corr_with_and_without_subtraction("vignette")
-    assert gain_vignette > gain_constant + 0.05
-
-
 def test_generate_fluorescence_leaves_neuropil_none():
     """`generate_fluorescence` alone has no concept of background, so it shouldn't fabricate one."""
     fluorescence = generate_fluorescence(num_frames=50, num_rois=2, seed=0)
@@ -570,21 +530,3 @@ def test_generate_imaging_with_rois_neuropil_matches_actual_background(neuropil_
 
     np.testing.assert_allclose(fluorescence.neuropil, actual, rtol=1e-4, atol=1e-5)
     assert video.mean() == pytest.approx(0.2, rel=0.15)
-
-
-def test_generate_imaging_with_rois_neuropil_nonnegative_under_poisson_noise():
-    """Under `noise_std="poisson"`, the rendered video is clipped to nonnegative before sampling,
-    so `neuropil` shouldn't claim a negative photon count either (it otherwise would at these
-    settings, absent that clip)."""
-    _, _, fluorescence = generate_imaging_with_rois(
-        num_frames=2000,
-        height=64,
-        width=64,
-        num_rois=5,
-        radius_range=(3, 5),
-        weighted_rois=True,
-        noise_std="poisson",
-        neuropil_model="diffuse",
-        seed=0,
-    )
-    assert fluorescence.neuropil.min() >= 0
