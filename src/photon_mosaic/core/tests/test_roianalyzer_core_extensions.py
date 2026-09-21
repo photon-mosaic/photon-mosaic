@@ -5,11 +5,17 @@ import pytest
 
 from photon_mosaic.core import create_roi_analyzer, load_roi_analyzer
 from photon_mosaic.core.generators import generate_fluorescence, generate_random_imaging, generate_rois
+from photon_mosaic.core.numpyimaging import NumpyImaging, NumpyRois
 from photon_mosaic.core.roianalyzer_core_extensions import (
     FluorescenceNode,
     _build_surround_neuropil_masks,
+    _cnmf_objective,
     _kde_mode_percentile,
+    _nnls_block,
+    _partition_of_unity,
     _percentile_filter_roi,
+    _ridge_inverse,
+    _spatial_bandpass,
 )
 from photon_mosaic.extractors.suite2prois import Suite2pRois
 
@@ -1027,3 +1033,707 @@ def test_fluorescence_extension_use_neuropil_false_ignores_computed_extension(su
     expected = chunk_flat @ roi_masks_flat.T
 
     np.testing.assert_allclose(fluorescence, expected, rtol=1e-5)
+
+
+# ---------------------------------------------------------------------------
+# NeuropilExtension ("cnmf" / CNMF-style low-rank background)
+# ---------------------------------------------------------------------------
+
+# A hand-built ground truth rather than generate_imaging_with_rois: that generator's `background`
+# is a uniform, non-fluctuating scalar, so a low-rank fit on it is degenerate (f constant, b flat)
+# and could not validate anything. Here Y is literally C A.T + f b.T + noise.
+CNMF_H = CNMF_W = 24
+CNMF_FRAMES = 200
+CNMF_ROIS = 4
+CNMF_CENTERS = [(3, 3), (3, 15), (15, 3), (15, 15)]
+CNMF_SIDE = 4
+# 8 rather than the 20px default: the synthetic field of view is only 24px across.
+CNMF_HIGHPASS = 8.0
+
+
+def _cnmf_masks(weighted=False):
+    masks = np.zeros((CNMF_ROIS, CNMF_H, CNMF_W), dtype=np.float32)
+    for i, (y, x) in enumerate(CNMF_CENTERS):
+        block = np.ones((CNMF_SIDE, CNMF_SIDE), dtype=np.float32)
+        if weighted:
+            ramp = np.linspace(0.4, 1.0, CNMF_SIDE, dtype=np.float32)
+            block = np.outer(ramp, ramp)
+        masks[i, y : y + CNMF_SIDE, x : x + CNMF_SIDE] = block
+    return masks
+
+
+def _cnmf_ground_truth(num_frames=CNMF_FRAMES, weighted=False, background_scale=1.0, seed=0):
+    """Return ``(masks, movie, traces_true, background_spatial_true, background_temporal_true)``.
+
+    ``movie`` is ``(num_frames, H, W, 1)``; the two background factors are ``(n_pixels, 1)`` and
+    ``(num_frames, 1)``.
+    """
+    from scipy.ndimage import gaussian_filter1d
+
+    rng = np.random.default_rng(seed)
+    masks = _cnmf_masks(weighted=weighted)
+    masks_flat = masks.reshape(CNMF_ROIS, -1)
+
+    traces = 100.0 + 50.0 * np.abs(gaussian_filter1d(rng.standard_normal((num_frames, CNMF_ROIS)), 3, axis=0))
+    traces = traces.astype(np.float32)
+
+    yy, xx = np.mgrid[0:CNMF_H, 0:CNMF_W]
+    spatial = background_scale * (50.0 + 30.0 * np.exp(-((yy - 8) ** 2 + (xx - 16) ** 2) / 50.0) + 0.5 * yy)
+    spatial = spatial.reshape(-1, 1).astype(np.float32)
+    temporal = (
+        (1.0 + 0.3 * np.sin(2 * np.pi * np.arange(num_frames) / num_frames) + 0.2 * np.arange(num_frames) / num_frames)
+        .reshape(num_frames, 1)
+        .astype(np.float32)
+    )
+
+    movie = traces @ masks_flat + temporal @ spatial.T
+    movie = (movie + rng.normal(0.0, 0.5, movie.shape)).astype(np.float32)
+    return masks, movie.reshape(num_frames, CNMF_H, CNMF_W, 1), traces, spatial, temporal
+
+
+def _remove_direction(matrix, direction):
+    """Project ``direction``'s column space out of every column of ``matrix``."""
+    return matrix - direction @ (np.linalg.pinv(direction) @ matrix)
+
+
+def _corr(a, b):
+    return float(np.corrcoef(np.asarray(a).ravel(), np.asarray(b).ravel())[0, 1])
+
+
+@pytest.fixture(scope="module")
+def cnmf_truth():
+    return _cnmf_ground_truth()
+
+
+@pytest.fixture(scope="module")
+def cnmf_analyzer(cnmf_truth):
+    masks, movie, _, _, _ = cnmf_truth
+    imaging = NumpyImaging(movie, sampling_frequency=SF)
+    rois = NumpyRois(roi_image_masks=masks, sampling_frequency=SF)
+    analyzer = create_roi_analyzer(rois, imaging, format="memory")
+    analyzer.compute("neuropil", method="cnmf", gnb=1, max_iter=40, highpass_sigma=CNMF_HIGHPASS)
+    return analyzer
+
+
+@pytest.fixture(scope="module")
+def cnmf_extension(cnmf_analyzer):
+    return cnmf_analyzer.get_extension("neuropil")
+
+
+# --- numeric helpers -------------------------------------------------------
+
+
+def test_spatial_bandpass_removes_a_constant_frame():
+    chunk = np.full((3, 16, 16, 1), 7.0, dtype=np.float32)
+    out = _spatial_bandpass(chunk, highpass_sigma=4.0, lowpass_sigma=0.0)
+    # mode="nearest" keeps a constant frame constant under both blurs, so it cancels exactly.
+    np.testing.assert_allclose(out, 0.0, atol=1e-4)
+
+
+def test_spatial_bandpass_keeps_small_structure():
+    chunk = np.zeros((1, 32, 32, 1), dtype=np.float32)
+    chunk[0, 16, 16, 0] = 1.0
+    chunk += 5.0  # a large constant pedestal the high-pass should remove
+    out = _spatial_bandpass(chunk, highpass_sigma=8.0, lowpass_sigma=0.0)
+    assert out[0, 16, 16, 0] > 0.5
+    assert abs(out[0, 0, 0, 0]) < 1e-3
+
+
+def test_spatial_bandpass_treats_planes_independently():
+    chunk = np.zeros((2, 16, 16, 2), dtype=np.float32)
+    chunk[..., 0] = 3.0
+    chunk[0, 8, 8, 0] = 10.0
+    out = _spatial_bandpass(chunk, highpass_sigma=4.0, lowpass_sigma=1.0)
+    np.testing.assert_allclose(out[..., 1], 0.0, atol=1e-5)
+
+
+def test_spatial_bandpass_disabled_is_identity():
+    chunk = np.arange(2 * 4 * 4, dtype=np.float32).reshape(2, 4, 4, 1)
+    np.testing.assert_allclose(_spatial_bandpass(chunk, None, None), chunk)
+
+
+def test_cnmf_objective_matches_brute_force():
+    rng = np.random.default_rng(3)
+    n_frames, n_pixels, n_rois, gnb = 12, 20, 3, 2
+    movie = rng.standard_normal((n_frames, n_pixels))
+    masks = rng.standard_normal((n_pixels, n_rois))
+    traces = rng.standard_normal((n_frames, n_rois))
+    background = rng.standard_normal((n_pixels, gnb))
+    temporal = rng.standard_normal((n_frames, gnb))
+
+    expected = float(((movie - traces @ masks.T - temporal @ background.T) ** 2).sum())
+    got = _cnmf_objective(
+        float((movie**2).sum()),
+        traces,
+        temporal,
+        movie @ masks,
+        movie @ background,
+        masks.T @ masks,
+        masks.T @ background,
+        background.T @ background,
+    )
+    assert got == pytest.approx(expected, rel=1e-9)
+
+
+def test_nnls_block_is_nonnegative_and_exact_for_scalar_gram():
+    rng = np.random.default_rng(5)
+    gram = np.array([[2.0]])
+    rhs = rng.standard_normal((7, 1)) * 3.0
+    got = _nnls_block(gram, rhs, np.zeros((7, 1)), n_iter=200)
+    assert (got >= 0).all()
+    # A 1x1 Gram makes the rows independent, so clipping the unconstrained solution is exact.
+    np.testing.assert_allclose(got, np.maximum(rhs / 2.0, 0.0), atol=1e-9)
+
+
+def test_nnls_block_does_not_increase_the_quadratic():
+    rng = np.random.default_rng(6)
+    gram = rng.standard_normal((3, 3))
+    gram = gram @ gram.T + np.eye(3)
+    rhs = rng.standard_normal((10, 3))
+    x0 = np.abs(rng.standard_normal((10, 3)))
+
+    def quad(x):
+        return float(0.5 * np.sum((x @ gram) * x) - np.sum(x * rhs))
+
+    assert quad(_nnls_block(gram, rhs, x0, n_iter=100)) <= quad(x0) + 1e-9
+
+
+def test_ridge_inverse_is_scale_equivariant_per_block():
+    # The joint [A, b] Gram mixes blocks whose diagonals differ by orders of magnitude; a ridge
+    # scaled by the *mean* diagonal would badly over-penalise the small block.
+    gram = np.diag([16.0, 16.0, 2.3e6])
+    inverse = _ridge_inverse(gram, ridge=1e-6)
+    np.testing.assert_allclose(np.diag(inverse), 1.0 / (np.diag(gram) * (1 + 1e-6)), rtol=1e-9)
+
+
+def test_partition_of_unity_sums_to_one_per_pixel():
+    weights = _partition_of_unity((5, 9, 1), gnb=3)
+    assert weights.shape == (3, 45)
+    assert (weights >= 0).all()
+    np.testing.assert_allclose(weights.sum(axis=0), 1.0, rtol=1e-9)
+
+
+# --- ground-truth recovery -------------------------------------------------
+
+
+def test_cnmf_data_keys_shapes_and_dtypes(cnmf_extension):
+    data = cnmf_extension.data
+    assert set(data) == {
+        "background_spatial",
+        "background_temporal",
+        "neuropil_traces",
+        "demixed_fluorescence",
+        "epoch_frame_offsets",
+        "fit_info",
+    }
+    assert data["background_spatial"].shape == (1, CNMF_H, CNMF_W, 1)
+    assert data["background_temporal"].shape == (1, CNMF_FRAMES)
+    assert data["neuropil_traces"].shape == (CNMF_FRAMES, CNMF_ROIS)
+    assert data["demixed_fluorescence"].shape == (CNMF_FRAMES, CNMF_ROIS)
+    np.testing.assert_array_equal(data["epoch_frame_offsets"], [0, CNMF_FRAMES])
+    for key in ("background_spatial", "background_temporal", "neuropil_traces", "demixed_fluorescence"):
+        assert data[key].dtype == np.float32
+        assert np.isfinite(data[key]).all()
+
+
+def test_cnmf_background_factors_are_nonnegative_and_l2_normalised(cnmf_extension):
+    spatial, temporal = cnmf_extension.get_background()
+    assert (spatial >= 0).all()
+    assert (temporal >= 0).all()
+    assert np.linalg.norm(spatial.reshape(1, -1)[0]) == pytest.approx(1.0, rel=1e-5)
+
+
+def test_cnmf_recovers_the_background_movie(cnmf_extension, cnmf_truth):
+    _, _, _, spatial_true, temporal_true = cnmf_truth
+    spatial, temporal = cnmf_extension.get_background()
+    # Compare the reconstructed background *movie*: b and f are individually only defined up to a
+    # per-component positive scale, but their product is not.
+    got = temporal.T @ spatial.reshape(1, -1)
+    expected = temporal_true @ spatial_true.T
+    assert np.linalg.norm(got - expected) / np.linalg.norm(expected) < 0.05
+
+
+def test_cnmf_recovers_the_background_timecourse(cnmf_extension, cnmf_truth):
+    _, _, _, _, temporal_true = cnmf_truth
+    _, temporal = cnmf_extension.get_background()
+    assert _corr(temporal[0], temporal_true[:, 0]) > 0.99
+
+
+def test_cnmf_recovers_the_background_away_from_rois(cnmf_extension, cnmf_truth):
+    masks, _, _, spatial_true, _ = cnmf_truth
+    spatial, _ = cnmf_extension.get_background()
+    # Only off-ROI pixels are identifiable: b -> b + A alpha with C -> C - f alpha.T leaves the
+    # model bit-for-bit unchanged, and that gauge lives exactly on the ROI support.
+    off_roi = masks.reshape(CNMF_ROIS, -1).sum(axis=0) == 0
+    assert _corr(spatial.reshape(-1)[off_roi], spatial_true[:, 0][off_roi]) > 0.99
+    # On ROI pixels the background is only pinned by the initialisation's smoothness assumption,
+    # so the whole-image agreement is real but looser than the off-ROI agreement.
+    assert _corr(spatial.reshape(-1), spatial_true[:, 0]) > 0.95
+
+
+def test_cnmf_recovers_traces_up_to_the_background_gauge(cnmf_extension, cnmf_truth):
+    _, _, traces_true, _, _ = cnmf_truth
+    _, temporal = cnmf_extension.get_background()
+    traces = cnmf_extension.get_data("demixed_fluorescence")
+
+    # The initialisation fixes the gauge sensibly, so the traces land close to ground truth outright.
+    assert np.linalg.norm(traces - traces_true) / np.linalg.norm(traces_true) < 0.1
+
+    # What residual error there is must lie in the single non-identifiable f direction...
+    error = traces - traces_true
+    residual = _remove_direction(error, temporal.T)
+    assert np.linalg.norm(residual) / np.linalg.norm(error) < 0.2
+
+    # ...so once that direction is projected out, the agreement is much tighter.
+    projected = _remove_direction(traces, temporal.T)
+    projected_true = _remove_direction(traces_true, temporal.T)
+    assert np.linalg.norm(projected - projected_true) / np.linalg.norm(projected_true) < 0.02
+    for i in range(CNMF_ROIS):
+        assert _corr(projected[:, i], projected_true[:, i]) > 0.99
+
+
+def test_cnmf_objective_is_monotone_and_matches_the_final_residual(cnmf_extension, cnmf_truth):
+    masks, movie, _, _, _ = cnmf_truth
+    info = cnmf_extension.get_data("fit_info")
+    objective = np.asarray(info["objective"])
+    assert len(objective) >= 2
+    # Every block update is a descent step, so the objective can only move backwards by float noise.
+    assert np.all(np.diff(objective) <= 1e-9 * info["ynorm_sq"])
+
+    flat = movie.reshape(CNMF_FRAMES, -1)
+    spatial, temporal = cnmf_extension.get_background()
+    traces = cnmf_extension.get_data("demixed_fluorescence")
+    residual = flat - (traces @ masks.reshape(CNMF_ROIS, -1) + temporal.T @ spatial.reshape(1, -1))
+    assert info["objective_full"] == pytest.approx(float((residual**2).sum()), rel=1e-3)
+
+
+def test_cnmf_fit_info_holds_plain_python_scalars(cnmf_extension):
+    import json
+
+    info = cnmf_extension.get_data("fit_info")
+    # The zarr backend serialises this with numcodecs.JSON() and binary_folder with check_json;
+    # numpy scalars do not survive either.
+    json.dumps(info)
+    assert isinstance(info["gnb"], int)
+    assert isinstance(info["converged"], bool)
+    assert all(isinstance(v, float) for v in info["objective"])
+
+
+def test_cnmf_neuropil_traces_match_the_background_projected_through_each_mask(cnmf_extension, cnmf_truth):
+    masks, _, _, _, _ = cnmf_truth
+    spatial, temporal = cnmf_extension.get_background()
+    masks_flat = masks.reshape(CNMF_ROIS, -1)
+    masks_l1 = masks_flat / masks_flat.sum(axis=1, keepdims=True)
+    expected = temporal.T @ (masks_l1 @ spatial.reshape(-1, 1)).T
+    np.testing.assert_allclose(cnmf_extension.get_data("neuropil_traces"), expected, rtol=1e-4)
+
+
+def test_cnmf_runs_with_weighted_masks():
+    masks, movie, _, _, temporal_true = _cnmf_ground_truth(weighted=True)
+    analyzer = create_roi_analyzer(
+        NumpyRois(roi_image_masks=masks, sampling_frequency=SF),
+        NumpyImaging(movie, sampling_frequency=SF),
+        format="memory",
+    )
+    ext = analyzer.compute("neuropil", method="cnmf", gnb=1, max_iter=30, highpass_sigma=CNMF_HIGHPASS)
+    _, temporal = ext.get_background()
+    assert _corr(temporal[0], temporal_true[:, 0]) > 0.99
+
+
+@pytest.mark.parametrize("init_method", ["ramp", "svd"])
+def test_cnmf_init_methods_converge_to_a_similar_background(cnmf_truth, init_method):
+    masks, movie, _, _, temporal_true = cnmf_truth
+    analyzer = create_roi_analyzer(
+        NumpyRois(roi_image_masks=masks, sampling_frequency=SF),
+        NumpyImaging(movie, sampling_frequency=SF),
+        format="memory",
+    )
+    ext = analyzer.compute(
+        "neuropil", method="cnmf", gnb=1, max_iter=40, highpass_sigma=CNMF_HIGHPASS, init_method=init_method
+    )
+    _, temporal = ext.get_background()
+    assert _corr(temporal[0], temporal_true[:, 0]) > 0.99
+
+
+def test_cnmf_with_several_background_components_runs(cnmf_truth):
+    masks, movie, _, _, _ = cnmf_truth
+    analyzer = create_roi_analyzer(
+        NumpyRois(roi_image_masks=masks, sampling_frequency=SF),
+        NumpyImaging(movie, sampling_frequency=SF),
+        format="memory",
+    )
+    ext = analyzer.compute("neuropil", method="cnmf", gnb=3, max_iter=15, highpass_sigma=CNMF_HIGHPASS)
+    spatial, temporal = ext.get_background()
+    assert spatial.shape == (3, CNMF_H, CNMF_W, 1)
+    assert temporal.shape == (3, CNMF_FRAMES)
+    assert (spatial >= 0).all() and (temporal >= 0).all()
+    # Components are ordered by descending temporal energy.
+    energies = np.linalg.norm(temporal, axis=1)
+    assert np.all(np.diff(energies) <= 1e-6 * max(energies[0], 1.0))
+    objective = np.asarray(ext.get_data("fit_info")["objective"])
+    assert np.all(np.diff(objective) <= 1e-9 * ext.get_data("fit_info")["ynorm_sq"])
+
+
+def test_cnmf_is_invariant_to_chunk_size(cnmf_truth):
+    masks, movie, _, _, _ = cnmf_truth
+    results = []
+    for chunk_duration in (None, "1s"):
+        analyzer = create_roi_analyzer(
+            NumpyRois(roi_image_masks=masks, sampling_frequency=SF),
+            NumpyImaging(movie, sampling_frequency=SF),
+            format="memory",
+        )
+        kwargs = {} if chunk_duration is None else {"chunk_duration": chunk_duration}
+        results.append(
+            analyzer.compute("neuropil", method="cnmf", gnb=1, max_iter=20, highpass_sigma=CNMF_HIGHPASS, **kwargs)
+        )
+    for key in ("background_spatial", "background_temporal", "demixed_fluorescence", "neuropil_traces"):
+        # rtol=1e-4, not 1e-7: float32 movie chunks are summed in a different order.
+        np.testing.assert_allclose(results[0].get_data(key), results[1].get_data(key), rtol=1e-4, atol=1e-5)
+
+
+def test_cnmf_concatenates_epochs_in_order(cnmf_truth):
+    masks, movie, traces_true, spatial_true, temporal_true = cnmf_truth
+    first = 120
+    # Deliberately asymmetric, and only the *background* is brightened in the second epoch -- so
+    # the recovered f, not C, has to carry the step. A symmetric test would pass even with the
+    # epoch offsets wired backwards.
+    boost = 3.0
+    scaled_temporal = temporal_true.copy()
+    scaled_temporal[first:] *= boost
+    rebuilt = traces_true @ masks.reshape(CNMF_ROIS, -1) + scaled_temporal @ spatial_true.T
+    rebuilt = rebuilt.astype(np.float32).reshape(CNMF_FRAMES, CNMF_H, CNMF_W, 1)
+    epochs = [rebuilt[:first].copy(), rebuilt[first:].copy()]
+
+    analyzer = create_roi_analyzer(
+        NumpyRois(roi_image_masks=masks, sampling_frequency=SF),
+        NumpyImaging(epochs, sampling_frequency=SF),
+        format="memory",
+    )
+    ext = analyzer.compute("neuropil", method="cnmf", gnb=1, max_iter=30, highpass_sigma=CNMF_HIGHPASS)
+
+    np.testing.assert_array_equal(ext.get_data("epoch_frame_offsets"), [0, first, CNMF_FRAMES])
+    _, temporal = ext.get_background()
+    assert temporal.shape == (1, CNMF_FRAMES)
+    assert ext.get_data("demixed_fluorescence").shape == (CNMF_FRAMES, CNMF_ROIS)
+    # The recovered timecourse must track the ground truth across the epoch boundary, which pins
+    # both the ordering and the offsets.
+    assert _corr(temporal[0], scaled_temporal[:, 0]) > 0.99
+    # Against the ground truth's own between-epoch ratio, not `boost`: f_true is not flat, so the
+    # two epochs' means differ for reasons other than the boost.
+    expected_ratio = scaled_temporal[first:, 0].mean() / scaled_temporal[:first, 0].mean()
+    ratio = temporal[0, first:].mean() / temporal[0, :first].mean()
+    assert ratio == pytest.approx(expected_ratio, rel=0.05)
+    assert expected_ratio > 2.0  # the boost really is visible in the second epoch
+    assert movie.shape[0] == CNMF_FRAMES
+
+
+def test_cnmf_handles_multiplane_masks():
+    masks_2d, movie, _, _, _ = _cnmf_ground_truth(num_frames=60)
+    masks = np.zeros((CNMF_ROIS, CNMF_H, CNMF_W, 2), dtype=np.float32)
+    masks[..., 0] = masks_2d
+    volume = np.concatenate([movie, movie * np.float32(0.5)], axis=3)
+    analyzer = create_roi_analyzer(
+        NumpyRois(roi_image_masks=masks, sampling_frequency=SF),
+        NumpyImaging(volume, sampling_frequency=SF),
+        format="memory",
+    )
+    ext = analyzer.compute("neuropil", method="cnmf", gnb=1, max_iter=10, highpass_sigma=CNMF_HIGHPASS)
+    spatial, _ = ext.get_background()
+    assert spatial.shape == (1, CNMF_H, CNMF_W, 2)
+    assert np.isfinite(ext.get_data("neuropil_traces")).all()
+
+
+def test_cnmf_with_sparse_masks_matches_dense(cnmf_truth):
+    import sparse as sparse_lib
+
+    masks, movie, _, _, _ = cnmf_truth
+    dense = create_roi_analyzer(
+        NumpyRois(roi_image_masks=masks, sampling_frequency=SF),
+        NumpyImaging(movie, sampling_frequency=SF),
+        format="memory",
+    ).compute("neuropil", method="cnmf", gnb=1, max_iter=10, highpass_sigma=CNMF_HIGHPASS)
+    sparse_masks = sparse_lib.GCXS.from_numpy(masks, compressed_axes=(0,))
+    spare = create_roi_analyzer(
+        NumpyRois(roi_image_masks=sparse_masks, sampling_frequency=SF),
+        NumpyImaging(movie, sampling_frequency=SF),
+        format="memory",
+    ).compute("neuropil", method="cnmf", gnb=1, max_iter=10, highpass_sigma=CNMF_HIGHPASS)
+    np.testing.assert_allclose(
+        dense.get_data("demixed_fluorescence"), spare.get_data("demixed_fluorescence"), rtol=1e-5, atol=1e-4
+    )
+
+
+# --- params, dispatch, error paths ----------------------------------------
+
+
+def test_cnmf_default_params(analyzer):
+    defaults = analyzer.get_default_extension_params("neuropil")
+    assert defaults["gnb"] == 1
+    assert defaults["max_iter"] == 20
+    assert defaults["tol"] == 1e-4
+    assert defaults["highpass_sigma"] == 20.0
+    assert defaults["lowpass_sigma"] == 1.0
+    assert defaults["init_method"] == "ramp"
+    assert defaults["nonneg_background"] is True
+    assert defaults["nonneg_traces"] is False
+    assert defaults["subsample_frames"] == 1000
+
+
+@pytest.mark.parametrize(
+    "kwargs, match",
+    [
+        ({"gnb": 0}, "gnb must be >= 1"),
+        ({"init_method": "bogus"}, "Unknown init_method"),
+        ({"subsample_frames": 1}, "subsample_frames must be None or >= 2"),
+        ({"max_iter": 0}, "max_iter must be >= 1"),
+    ],
+)
+def test_cnmf_invalid_params_raise(analyzer, kwargs, match):
+    with pytest.raises(ValueError, match=match):
+        analyzer.compute("neuropil", method="cnmf", **kwargs)
+
+
+def test_cnmf_params_are_not_validated_for_surround(analyzer):
+    # gnb is a cnmf-only knob, so an absurd value must not block the surround method.
+    analyzer.compute("neuropil", method="surround", min_neuropil_pixels=30, gnb=0)
+
+
+def test_neuropil_unknown_method_message_lists_both(analyzer):
+    with pytest.raises(ValueError, match="Supported: 'surround', 'cnmf'"):
+        analyzer.compute("neuropil", method="nope")
+
+
+# --- data accessors --------------------------------------------------------
+
+
+def test_cnmf_get_data_defaults_to_neuropil_traces(cnmf_extension):
+    np.testing.assert_array_equal(cnmf_extension.get_data(), cnmf_extension.get_data("neuropil_traces"))
+
+
+def test_cnmf_get_data_unknown_key_lists_the_available_ones(cnmf_extension):
+    with pytest.raises(KeyError, match="available keys"):
+        cnmf_extension.get_data("not_a_key")
+
+
+def test_surround_get_data_still_returns_masks(imaging, rois):
+    # Backward-compatibility lock on the _get_data signature change.
+    analyzer = create_roi_analyzer(rois, imaging, format="memory")
+    ext = analyzer.compute("neuropil", method="surround", min_neuropil_pixels=30)
+    masks = ext.get_data()
+    assert masks.shape == (NUM_ROIS, H, W)
+    np.testing.assert_array_equal(masks.todense(), ext.get_data("neuropil_masks").todense())
+
+
+def test_get_background_rejects_the_surround_method(imaging, rois):
+    analyzer = create_roi_analyzer(rois, imaging, format="memory")
+    ext = analyzer.compute("neuropil", method="surround", min_neuropil_pixels=30)
+    with pytest.raises(ValueError, match="only available for method='cnmf'"):
+        ext.get_background()
+
+
+def test_cnmf_select_extension_data_keeps_every_key(cnmf_extension, cnmf_analyzer):
+    keep = cnmf_analyzer.rois.roi_ids[:2]
+    selected = cnmf_extension._select_extension_data(keep)
+    # copy() assigns this dict straight over `data`, so a missing key is silently lost.
+    assert set(selected) == set(cnmf_extension.data)
+    assert selected["neuropil_traces"].shape == (CNMF_FRAMES, 2)
+    assert selected["demixed_fluorescence"].shape == (CNMF_FRAMES, 2)
+    assert selected["background_spatial"].shape == cnmf_extension.data["background_spatial"].shape
+    np.testing.assert_array_equal(selected["demixed_fluorescence"], cnmf_extension.data["demixed_fluorescence"][:, :2])
+
+
+def test_cnmf_survives_select_rois(cnmf_analyzer):
+    keep = cnmf_analyzer.rois.roi_ids[:2]
+    sub = cnmf_analyzer.select_rois(keep)
+    ext = sub.get_extension("neuropil")
+    assert ext.get_data("neuropil_traces").shape == (CNMF_FRAMES, 2)
+    assert ext.get_data("background_temporal").shape == (1, CNMF_FRAMES)
+
+
+@pytest.mark.parametrize("fmt", ["binary_folder", "zarr"])
+def test_cnmf_roundtrips_through_disk(cnmf_truth, tmp_path, fmt):
+    masks, movie, _, _, _ = cnmf_truth
+    folder = tmp_path / ("cnmf_binary" if fmt == "binary_folder" else "cnmf.zarr")
+    analyzer = create_roi_analyzer(
+        NumpyRois(roi_image_masks=masks, sampling_frequency=SF),
+        NumpyImaging(movie, sampling_frequency=SF),
+        format=fmt,
+        folder=folder,
+    )
+    ext = analyzer.compute("neuropil", method="cnmf", gnb=1, max_iter=10, highpass_sigma=CNMF_HIGHPASS)
+    reloaded = load_roi_analyzer(folder).get_extension("neuropil")
+
+    for key in (
+        "background_spatial",
+        "background_temporal",
+        "neuropil_traces",
+        "demixed_fluorescence",
+        "epoch_frame_offsets",
+    ):
+        np.testing.assert_array_equal(reloaded.get_data(key), ext.get_data(key))
+    assert reloaded.params["method"] == "cnmf"
+    assert reloaded.get_data("fit_info")["gnb"] == 1
+    assert reloaded.get_data("fit_info")["converged"] in (True, False)
+
+
+# --- integration with FluorescenceExtension --------------------------------
+
+
+def test_fluorescence_uses_cnmf_neuropil_traces(cnmf_truth):
+    masks, movie, _, _, _ = cnmf_truth
+    analyzer = create_roi_analyzer(
+        NumpyRois(roi_image_masks=masks, sampling_frequency=SF),
+        NumpyImaging(movie, sampling_frequency=SF),
+        format="memory",
+    )
+    neuropil = analyzer.compute("neuropil", method="cnmf", gnb=1, max_iter=20, highpass_sigma=CNMF_HIGHPASS)
+    weight = 0.3
+    corrected = analyzer.compute("fluorescence", neuropil_weight=weight).get_data()
+
+    masks_flat = masks.reshape(CNMF_ROIS, -1).astype(np.float32)
+    l1 = masks_flat.sum(axis=1, keepdims=True)
+    rescale = (l1 / (masks_flat**2).sum(axis=1, keepdims=True)).T
+    raw = movie.reshape(CNMF_FRAMES, -1) @ (masks_flat / l1).T
+    expected = (raw - weight * neuropil.get_data("neuropil_traces")) * rescale
+    np.testing.assert_allclose(corrected, expected, rtol=1e-4, atol=1e-3)
+
+
+def test_fluorescence_cnmf_and_surround_subtract_on_the_same_scale(cnmf_truth):
+    # Both methods must land in the same units, so that neuropil_weight means the same thing.
+    masks, movie, _, _, _ = cnmf_truth
+    imaging = NumpyImaging(movie, sampling_frequency=SF)
+    rois = NumpyRois(roi_image_masks=masks, sampling_frequency=SF)
+
+    plain = create_roi_analyzer(rois, imaging, format="memory")
+    uncorrected = plain.compute("fluorescence", use_neuropil=False).get_data()
+
+    cnmf = create_roi_analyzer(rois, imaging, format="memory")
+    neuropil = cnmf.compute("neuropil", method="cnmf", gnb=1, max_iter=20, highpass_sigma=CNMF_HIGHPASS)
+    corrected = cnmf.compute("fluorescence", neuropil_weight=1.0).get_data()
+
+    masks_flat = masks.reshape(CNMF_ROIS, -1).astype(np.float32)
+    rescale = (masks_flat.sum(axis=1) / (masks_flat**2).sum(axis=1)).reshape(1, -1)
+    difference = (uncorrected - corrected) / rescale
+    np.testing.assert_allclose(difference, neuropil.get_data("neuropil_traces"), rtol=1e-4, atol=1e-3)
+
+
+def test_fluorescence_use_neuropil_false_ignores_a_cnmf_extension(cnmf_truth):
+    masks, movie, _, _, _ = cnmf_truth
+    analyzer = create_roi_analyzer(
+        NumpyRois(roi_image_masks=masks, sampling_frequency=SF),
+        NumpyImaging(movie, sampling_frequency=SF),
+        format="memory",
+    )
+    analyzer.compute("neuropil", method="cnmf", gnb=1, max_iter=5, highpass_sigma=CNMF_HIGHPASS)
+    traces = analyzer.compute("fluorescence", use_neuropil=False).get_data()
+
+    masks_flat = masks.reshape(CNMF_ROIS, -1).astype(np.float32)
+    l1 = masks_flat.sum(axis=1, keepdims=True)
+    rescale = (l1 / (masks_flat**2).sum(axis=1, keepdims=True)).T
+    expected = (movie.reshape(CNMF_FRAMES, -1) @ (masks_flat / l1).T) * rescale
+    np.testing.assert_allclose(traces, expected, rtol=1e-4, atol=1e-3)
+
+
+def test_cnmf_neuropil_correction_beats_no_correction(cnmf_truth):
+    masks, movie, traces_true, _, temporal_true = cnmf_truth
+    imaging = NumpyImaging(movie, sampling_frequency=SF)
+    rois = NumpyRois(roi_image_masks=masks, sampling_frequency=SF)
+
+    plain = create_roi_analyzer(rois, imaging, format="memory")
+    uncorrected = plain.compute("fluorescence", use_neuropil=False).get_data()
+
+    cnmf = create_roi_analyzer(rois, imaging, format="memory")
+    cnmf.compute("neuropil", method="cnmf", gnb=1, max_iter=20, highpass_sigma=CNMF_HIGHPASS)
+    corrected = cnmf.compute("fluorescence", neuropil_weight=1.0).get_data()
+
+    # The whole point of the correction is to remove the background's f-shaped contamination, so
+    # this is compared directly, without projecting that direction out.
+    error_without = np.linalg.norm(uncorrected - traces_true)
+    error_with = np.linalg.norm(corrected - traces_true)
+    assert error_with < error_without / 5
+    assert temporal_true.shape[0] == CNMF_FRAMES
+
+
+def test_demixed_fluorescence_matches_mask_projection_without_background():
+    # With binary non-overlapping masks, M M.T is diagonal, so the least-squares traces coincide
+    # exactly with FluorescenceNode's L1-then-L2 rescaled mask projection. No fit convergence is
+    # involved, which makes this a tight check on the units of demixed_fluorescence.
+    masks, movie, _, _, _ = _cnmf_ground_truth(num_frames=80, background_scale=0.0, seed=11)
+    analyzer = create_roi_analyzer(
+        NumpyRois(roi_image_masks=masks, sampling_frequency=SF),
+        NumpyImaging(movie, sampling_frequency=SF),
+        format="memory",
+    )
+    ext = analyzer.compute("neuropil", method="cnmf", gnb=1, max_iter=30, highpass_sigma=CNMF_HIGHPASS)
+    projection = analyzer.compute("fluorescence", use_neuropil=False).get_data()
+    demixed = ext.get_data("demixed_fluorescence")
+    background = ext.get_data("neuropil_traces")
+    # demixed = projection - (the background the fit attributed to each ROI), in the same units.
+    np.testing.assert_allclose(demixed, projection - background, rtol=1e-3, atol=1e-2)
+
+
+# --- FluorescenceNode-level tests ------------------------------------------
+
+
+def test_fluorescence_node_rejects_both_neuropil_arguments(imaging, rois):
+    with pytest.raises(ValueError, match="not both"):
+        FluorescenceNode(
+            imaging,
+            rois,
+            neuropil=np.zeros((NUM_ROIS, H, W), dtype=np.float32),
+            neuropil_traces=np.zeros((NUM_FRAMES, NUM_ROIS), dtype=np.float32),
+        )
+
+
+def test_fluorescence_node_checks_the_neuropil_traces_shape(imaging, rois):
+    with pytest.raises(ValueError, match="expected"):
+        FluorescenceNode(imaging, rois, neuropil_traces=np.zeros((NUM_FRAMES, NUM_ROIS + 1), dtype=np.float32))
+
+
+def test_fluorescence_node_rejects_a_nonzero_margin(imaging, rois, chunk):
+    node = FluorescenceNode(imaging, rois, neuropil_traces=np.zeros((NUM_FRAMES, NUM_ROIS), dtype=np.float32))
+    with pytest.raises(NotImplementedError, match="zero-margin"):
+        node.compute(chunk, 0, NUM_FRAMES, 0, 3)
+
+
+def test_fluorescence_node_slices_neuropil_traces_by_epoch(rois):
+    first, second = 7, 5
+    imaging = generate_random_imaging(num_frames=(first, second), height=H, width=W, sampling_frequency=SF, seed=SEED)
+    traces = np.arange((first + second) * NUM_ROIS, dtype=np.float32).reshape(first + second, NUM_ROIS)
+    node = FluorescenceNode(imaging, rois, neuropil_traces=traces, neuropil_weight=1.0)
+
+    chunk = imaging.get_series(start_frame=2, end_frame=5, epoch_index=1)
+    (got,) = node.compute(chunk, 2, 5, 1, 0)
+
+    chunk_flat = chunk.reshape(3, -1).astype(np.float32)
+    expected = (chunk_flat @ node._masks_flat.T - traces[first + 2 : first + 5]) * node._rescale_to_l2
+    np.testing.assert_allclose(got, expected, rtol=1e-5)
+
+
+@pytest.mark.parametrize("method_params", [{"method": "surround", "min_neuropil_pixels": 30}, None])
+def test_multi_extension_compute_matches_sequential(imaging, rois, method_params, cnmf_truth):
+    """The shared node-pipeline path must agree with computing one extension at a time.
+
+    It used to raise ``TypeError: 'NoneType' is not iterable`` because ``FluorescenceExtension``
+    never declared ``nodepipeline_variables``, so this whole path was dead and any post-gather
+    neuropil subtraction would have silently been skipped on it.
+    """
+    if method_params is None:
+        masks, movie, _, _, _ = cnmf_truth
+        imaging = NumpyImaging(movie, sampling_frequency=SF)
+        rois = NumpyRois(roi_image_masks=masks, sampling_frequency=SF)
+        method_params = {"method": "cnmf", "gnb": 1, "max_iter": 5, "highpass_sigma": CNMF_HIGHPASS}
+
+    together = create_roi_analyzer(rois, imaging, format="memory")
+    together.compute({"neuropil": method_params, "fluorescence": {"neuropil_weight": 0.5}})
+
+    one_by_one = create_roi_analyzer(rois, imaging, format="memory")
+    one_by_one.compute("neuropil", **method_params)
+    one_by_one.compute("fluorescence", neuropil_weight=0.5)
+
+    np.testing.assert_allclose(
+        together.get_extension("fluorescence").get_data(),
+        one_by_one.get_extension("fluorescence").get_data(),
+        rtol=1e-6,
+    )

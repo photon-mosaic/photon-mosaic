@@ -1,3 +1,5 @@
+from typing import Any
+
 import numpy as np
 import pytest
 
@@ -7,7 +9,7 @@ from photon_mosaic.core.generators import generate_rois
 
 @pytest.fixture
 def make_rois_for_tests() -> tuple[BaseRois, dict]:
-    roi_kwargs = dict(
+    roi_kwargs: dict[str, Any] = dict(
         num_rois=3,
         height=50,
         width=50,
@@ -32,7 +34,7 @@ class MockImaging:
 
 @pytest.fixture
 def make_rois_for_tests_multiplane() -> tuple[BaseRois, dict]:
-    roi_kwargs = dict(
+    roi_kwargs: dict[str, Any] = dict(
         num_rois=3,
         height=50,
         width=50,
