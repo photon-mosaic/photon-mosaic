@@ -421,78 +421,26 @@ def test_generate_imaging_with_rois_neuropil_model_rejects_unknown_value():
         generate_imaging_with_rois(num_frames=50, num_rois=2, radius_range=(3, 5), neuropil_model="invalid")
 
 
-@pytest.mark.parametrize("neuropil_model", ["vignette", "diffuse"])
-def test_generate_imaging_with_rois_neuropil_model_preserves_background_mean(neuropil_model):
-    """Regardless of `neuropil_model`, the background's overall mean should still match the
-    `background` parameter -- each model's spatial profile and/or fluctuation is normalized to
-    mean 1, so `background` means the same "mean photon count per pixel per frame" everywhere."""
-    rois, imaging, _ = generate_imaging_with_rois(
-        num_frames=3000,
-        height=64,
-        width=64,
-        num_rois=1,
-        radius_range=(2, 3),
-        baseline_range=(0.0, 0.0),  # zero-signal control -- only background is present
-        background=0.2,
-        noise_std=0.0,
-        neuropil_model=neuropil_model,
-        seed=1,
-    )
-    video = imaging.get_series()
-    assert video.mean() == pytest.approx(0.2, rel=0.15)
+def test_generate_imaging_with_rois_vignette_properties():
+    """ "vignette"'s defining properties: brighter at the frame center than the corners,
+    fluctuates over time (unlike "constant"), and all background pixels share that one
+    fluctuation (the defining difference from "diffuse" below)."""
+    kwargs = dict(num_frames=1000, height=64, width=64, num_rois=1, radius_range=(2, 3), noise_std=0.0, seed=1)
+    rois, im_constant, _ = generate_imaging_with_rois(**kwargs, baseline_range=(0.0, 0.0), neuropil_model="constant")
+    _, im_vignette, _ = generate_imaging_with_rois(**kwargs, baseline_range=(0.0, 0.0), neuropil_model="vignette")
+    video = im_vignette.get_series()
 
-
-def test_generate_imaging_with_rois_vignette_is_spatially_nonuniform():
-    """ "vignette"'s background should be brighter at the frame center than at the corners."""
-    rois, imaging, _ = generate_imaging_with_rois(
-        num_frames=500,
-        height=64,
-        width=64,
-        num_rois=1,
-        radius_range=(2, 3),
-        baseline_range=(0.0, 0.0),
-        noise_std=0.0,
-        neuropil_model="vignette",
-        seed=1,
-    )
-    video = imaging.get_series()
     center = video[:, 30:34, 30:34]
     corner = video[:, :4, :4]
     assert center.mean() > corner.mean()
 
-
-def test_generate_imaging_with_rois_vignette_fluctuates_over_time():
-    """ "vignette"'s background should fluctuate over time; "constant"'s should not (beyond
-    `bleaching_time` decay, which defaults to off here)."""
-    kwargs = dict(num_frames=1000, height=20, width=20, num_rois=2, radius_range=(3, 5), noise_std=0.0, seed=1)
-    rois, im_constant, _ = generate_imaging_with_rois(**kwargs, neuropil_model="constant")
-    _, im_vignette, _ = generate_imaging_with_rois(**kwargs, neuropil_model="vignette")
-
     outside_any_roi = rois.get_roi_image_masks().sum(axis=0) == 0
     bg_constant = im_constant.epochs[0]._video[:, outside_any_roi]
     bg_vignette = im_vignette.epochs[0]._video[:, outside_any_roi]
-
     assert bg_constant.mean(axis=1).std() == pytest.approx(0.0, abs=1e-6)
     assert bg_vignette.mean(axis=1).std() > 0.01
 
-
-def test_generate_imaging_with_rois_vignette_shares_one_trace():
-    """ "vignette"'s background pixels should all fluctuate together (one shared trace scaled
-    by the static spatial profile) -- the defining difference from "diffuse" below."""
-    rois, imaging, _ = generate_imaging_with_rois(
-        num_frames=1000,
-        height=30,
-        width=30,
-        num_rois=1,
-        radius_range=(2, 3),
-        baseline_range=(0.0, 0.0),
-        noise_std=0.0,
-        neuropil_model="vignette",
-        seed=1,
-    )
-    video = imaging.get_series()
-    trace_a = video[:, 3, 3, 0]
-    trace_b = video[:, 26, 26, 0]
+    trace_a, trace_b = video[:, 3, 3, 0], video[:, 60, 60, 0]
     assert np.corrcoef(trace_a, trace_b)[0, 1] > 0.999
 
 
@@ -534,18 +482,15 @@ def test_generate_imaging_with_rois_diffuse_is_a_spatially_varying_mixture():
 
 
 @pytest.mark.parametrize("neuropil_model", ["vignette", "diffuse"])
-def test_generate_imaging_with_rois_neuropil_model_is_reproducible(neuropil_model):
-    kwargs = dict(num_frames=60, height=30, width=40, num_rois=4, radius_range=(3, 5), sampling_frequency=10.0, seed=99)
+def test_generate_imaging_with_rois_neuropil_model_reproducible_and_does_not_perturb_others(neuropil_model):
+    """Same seed/model twice gives identical output; switching `neuropil_model` (a dedicated RNG
+    sub-stream) must not change ROI placement or the injected fluorescence traces -- only the
+    background."""
+    kwargs = dict(num_frames=60, height=30, width=40, num_rois=4, radius_range=(3, 5), seed=99)
     _, im1, _ = generate_imaging_with_rois(**kwargs, neuropil_model=neuropil_model)
     _, im2, _ = generate_imaging_with_rois(**kwargs, neuropil_model=neuropil_model)
     np.testing.assert_array_equal(im1.get_series(), im2.get_series())
 
-
-@pytest.mark.parametrize("neuropil_model", ["vignette", "diffuse"])
-def test_generate_imaging_with_rois_neuropil_model_does_not_perturb_rois_or_fluorescence(neuropil_model):
-    """Switching `neuropil_model` draws from a dedicated RNG sub-stream, so it must not change
-    ROI placement or the injected fluorescence traces -- only the background."""
-    kwargs = dict(num_frames=60, height=30, width=40, num_rois=4, radius_range=(3, 5), seed=99)
     rois_a, _, fluor_a = generate_imaging_with_rois(**kwargs, neuropil_model="constant")
     rois_b, _, fluor_b = generate_imaging_with_rois(**kwargs, neuropil_model=neuropil_model)
     np.testing.assert_array_equal(rois_a.get_roi_image_masks(), rois_b.get_roi_image_masks())
@@ -601,7 +546,9 @@ def test_generate_fluorescence_leaves_neuropil_none():
 @pytest.mark.parametrize("neuropil_model", ["constant", "vignette", "diffuse"])
 def test_generate_imaging_with_rois_neuropil_matches_actual_background(neuropil_model):
     """`neuropil` should exactly match the true, mask-weighted mean background level actually
-    present in the video, isolated from ROI signal (zero baseline) and noise."""
+    present in the video, isolated from ROI signal (zero baseline) and noise; and regardless of
+    `neuropil_model`, the video's overall mean should still match the `background` parameter --
+    each model's spatial profile and/or fluctuation is normalized to mean 1."""
     rois, imaging, fluorescence = generate_imaging_with_rois(
         num_frames=500,
         height=40,
@@ -610,13 +557,34 @@ def test_generate_imaging_with_rois_neuropil_matches_actual_background(neuropil_
         radius_range=(3, 5),
         weighted_rois=True,
         baseline_range=(0.0, 0.0),  # zero-signal control -- only background is present
+        background=0.2,
         noise_std=0.0,
         neuropil_model=neuropil_model,
         neuropil_fluctuation_std=0.5,
         seed=7,
     )
-    video_flat = imaging.get_series().reshape(500, -1).astype(np.float64)
+    video = imaging.get_series()
+    video_flat = video.reshape(500, -1).astype(np.float64)
     masks_flat = rois.get_roi_image_masks().reshape(rois.get_num_rois(), -1).astype(np.float64)
     actual = (video_flat @ masks_flat.T) / masks_flat.sum(axis=1)
 
     np.testing.assert_allclose(fluorescence.neuropil, actual, rtol=1e-4, atol=1e-5)
+    assert video.mean() == pytest.approx(0.2, rel=0.15)
+
+
+def test_generate_imaging_with_rois_neuropil_nonnegative_under_poisson_noise():
+    """Under `noise_std="poisson"`, the rendered video is clipped to nonnegative before sampling,
+    so `neuropil` shouldn't claim a negative photon count either (it otherwise would at these
+    settings, absent that clip)."""
+    _, _, fluorescence = generate_imaging_with_rois(
+        num_frames=2000,
+        height=64,
+        width=64,
+        num_rois=5,
+        radius_range=(3, 5),
+        weighted_rois=True,
+        noise_std="poisson",
+        neuropil_model="diffuse",
+        seed=0,
+    )
+    assert fluorescence.neuropil.min() >= 0

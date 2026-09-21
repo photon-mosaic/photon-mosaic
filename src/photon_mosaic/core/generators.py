@@ -233,10 +233,7 @@ def _generate_ou_process(
     sampling_frequency))``. Starts at 0 and reaches unit variance within a few
     `_NEUROPIL_TAU_SECONDS` -- an accepted simplification (the brief initial transient is
     negligible for the frame counts this is meant for) rather than seeding the recurrence from
-    its stationary distribution. Each trace's own realized mean is then subtracted off: the raw
-    recurrence is zero-mean only in expectation, and since this feeds directly into `background`
-    (see callers), an unremoved realized mean would let a short recording's actual background
-    level drift from the documented `background` parameter.
+    its stationary distribution. Each trace is then centered to exactly zero mean.
 
     Parameters
     ----------
@@ -458,9 +455,6 @@ def generate_imaging_with_rois(
     fluorescence_seed = int(rng.integers(0, 2**31))
     noise_seed = int(rng.integers(0, 2**31))
     roi_baseline = rng.uniform(baseline_range[0], baseline_range[1], size=num_rois)
-    # Drawn last, and unconditionally (even for "constant", which doesn't use it): keeps the
-    # preceding draws' consumption of `rng` identical regardless of `neuropil_model`, and drawing
-    # it unconditionally means switching *which* non-"constant" model is used never perturbs it.
     neuropil_seed = int(rng.integers(0, 2**31))
 
     imaging = generate_random_imaging(
@@ -546,6 +540,10 @@ def generate_imaging_with_rois(
         neuropil = (background * bleach)[:, np.newaxis] * (
             roi_profile_avg[np.newaxis, :] + neuropil_fluctuation_std * roi_modulation
         )
+    if noise_std == "poisson":
+        # Matches the clip applied to the rendered video below -- otherwise `neuropil` could
+        # report a negative photon count where the video itself never goes negative.
+        neuropil = np.clip(neuropil, 0, None)
     fluorescence = fluorescence._replace(neuropil=neuropil.astype(np.float32))
 
     noise_rng = np.random.default_rng(noise_seed)
