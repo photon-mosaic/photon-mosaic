@@ -527,8 +527,15 @@ def generate_imaging_with_rois(
     # True background level under each ROI's own mask (mask-weighted mean, before noise) --
     # cheap ((num_frames, num_rois), not (num_frames, H*W*P)) since it only needs each ROI's
     # own mask, not the full pixel grid. Mirrors the same matmul-compositing pattern used above.
+    # Under `noise_std="poisson"`, the per-pixel background is clipped to nonnegative before it's
+    # composited into the video below (see the slab loop) -- computed here in closed form, that
+    # clip couldn't be applied consistently (it's nonlinear, so clipping this mask-weighted
+    # average isn't the same as averaging the clipped per-pixel field), so `neuropil` is instead
+    # accumulated from that same clipped per-pixel field inside the slab loop in that case.
     mask_sums = masks_flat.sum(axis=1)
-    if neuropil_model == "constant":
+    if noise_std == "poisson":
+        neuropil = np.empty((num_frames, num_rois), dtype=np.float32)
+    elif neuropil_model == "constant":
         neuropil = np.broadcast_to((background * bleach)[:, np.newaxis], (num_frames, num_rois)).copy()
     elif neuropil_model == "vignette":
         roi_profile_avg = (masks_flat * profile_flat[np.newaxis, :]).sum(axis=1) / mask_sums
@@ -540,11 +547,6 @@ def generate_imaging_with_rois(
         neuropil = (background * bleach)[:, np.newaxis] * (
             roi_profile_avg[np.newaxis, :] + neuropil_fluctuation_std * roi_modulation
         )
-    if noise_std == "poisson":
-        # Matches the clip applied to the rendered video below -- otherwise `neuropil` could
-        # report a negative photon count where the video itself never goes negative.
-        neuropil = np.clip(neuropil, 0, None)
-    fluorescence = fluorescence._replace(neuropil=neuropil.astype(np.float32))
 
     noise_rng = np.random.default_rng(noise_seed)
     slab_size = 256
@@ -552,9 +554,9 @@ def generate_imaging_with_rois(
         sl = flat[t0 : t0 + slab_size]
         bleach_sl = bleach[t0 : t0 + slab_size]
         if neuropil_model == "constant":
-            sl += (background * bleach_sl)[:, np.newaxis]
+            bg_slab = np.broadcast_to((background * bleach_sl)[:, np.newaxis], sl.shape)
         elif neuropil_model == "vignette":
-            sl += (background * bleach_sl * fluctuation[t0 : t0 + slab_size])[:, np.newaxis] * profile_flat[
+            bg_slab = (background * bleach_sl * fluctuation[t0 : t0 + slab_size])[:, np.newaxis] * profile_flat[
                 np.newaxis, :
             ]
         else:  # "diffuse"
@@ -566,19 +568,25 @@ def generate_imaging_with_rois(
             # `neuropil_fluctuation_std=0` there), rather than losing its background entirely.
             # Built as a (slab, K) @ (K, H*W*P) matmul, K = n_sources -- the same pattern the
             # ROI signal itself uses above -- so no full (num_frames, H*W*P) array is ever
-            # materialized.
+            # materialized before this point.
             modulation_sl = (ou_traces[t0 : t0 + slab_size] @ footprints_flat) * modulation_scale
-            sl += (
+            bg_slab = (
                 (background * bleach_sl)[:, np.newaxis]
                 * profile_flat[np.newaxis, :]
                 * (1.0 + neuropil_fluctuation_std * modulation_sl)
             )
 
         if noise_std == "poisson":
+            bg_slab = np.clip(bg_slab, 0, None)
+            neuropil[t0 : t0 + slab_size] = (bg_slab @ masks_flat.T) / mask_sums
+        sl += bg_slab
+
+        if noise_std == "poisson":
             sl[:] = noise_rng.poisson(np.clip(sl, 0, None))
         else:
             sl += noise_rng.normal(0, noise_std, sl.shape)
 
+    fluorescence = fluorescence._replace(neuropil=neuropil.astype(np.float32))
     rois.register_imaging(imaging)  # Link the ROIs to the imaging data
 
     return rois, imaging, fluorescence
