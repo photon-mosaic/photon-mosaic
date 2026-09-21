@@ -414,6 +414,13 @@ def test_generate_imaging_with_rois_neuropil_model_constant_is_default_and_uncha
     np.testing.assert_array_equal(default.get_series(), explicit.get_series())
 
 
+def test_generate_imaging_with_rois_neuropil_model_rejects_unknown_value():
+    """An unrecognized `neuropil_model` should raise clearly, not silently fall through to the
+    "diffuse" branch (which would otherwise reference variables never defined for it)."""
+    with pytest.raises(ValueError, match="neuropil_model"):
+        generate_imaging_with_rois(num_frames=50, num_rois=2, radius_range=(3, 5), neuropil_model="invalid")
+
+
 @pytest.mark.parametrize("neuropil_model", ["vignette", "diffuse"])
 def test_generate_imaging_with_rois_neuropil_model_preserves_background_mean(neuropil_model):
     """Regardless of `neuropil_model`, the background's overall mean should still match the

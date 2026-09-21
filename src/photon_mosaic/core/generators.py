@@ -449,15 +449,19 @@ def generate_imaging_with_rois(
         e.g. for comparison against values recovered from `imaging` via an
         :class:`~photon_mosaic.core.roianalyzer.RoiAnalyzer`.
     """
+    if neuropil_model not in ("constant", "vignette", "diffuse"):
+        raise ValueError(f"Unknown neuropil_model: {neuropil_model!r}. Supported: 'constant', 'vignette', 'diffuse'.")
+
     rng = np.random.default_rng(seed)
     imaging_seed = int(rng.integers(0, 2**31))
     rois_seed = int(rng.integers(0, 2**31))
     fluorescence_seed = int(rng.integers(0, 2**31))
     noise_seed = int(rng.integers(0, 2**31))
-    # Drawn unconditionally (even for "constant", which doesn't use it) so switching
-    # `neuropil_model` never perturbs the other seeds' consumption/downstream RNG streams.
-    neuropil_seed = int(rng.integers(0, 2**31))
     roi_baseline = rng.uniform(baseline_range[0], baseline_range[1], size=num_rois)
+    # Drawn last, and unconditionally (even for "constant", which doesn't use it): keeps the
+    # preceding draws' consumption of `rng` identical regardless of `neuropil_model`, and drawing
+    # it unconditionally means switching *which* non-"constant" model is used never perturbs it.
+    neuropil_seed = int(rng.integers(0, 2**31))
 
     imaging = generate_random_imaging(
         num_frames=num_frames,
