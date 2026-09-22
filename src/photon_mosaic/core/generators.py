@@ -180,9 +180,8 @@ def generate_rois(
 _VIGNETTE_FALLOFF = 0.25  # fraction of center brightness lost at the frame corners
 _NEUROPIL_TAU_SECONDS = 5.0  # OU mean-reversion timescale -- slow drift, not frame-to-frame noise
 _DIFFUSE_DENSITY = 2  # diffuse sources per ROI -- empirically more robust across seeds than 8
-# Relative to ROI radius -- needs to be well above 1x to read as pooled/blurred contamination
-# rather than another cell-sized blob; illustrative, not measured, but Zhou et al. 2018
-# (CNMF-E) independently used the same ratio in one of their own synthetic robustness tests.
+# Relative to ROI radius; needs to be well above 1x to read as pooled/blurred
+# contamination rather than another cell-sized blob.
 _DIFFUSE_RADIUS_MULTIPLIER = 5.0
 # Converts a cone-style radius to a Gaussian sigma with the same FWHM: 1 / (2 * sqrt(2 * ln(2))).
 _DIFFUSE_SIGMA_TO_RADIUS = 0.4247
@@ -211,11 +210,11 @@ def _generate_vignette_profile(height: int, width: int, num_planes: int = 1) -> 
     y, x = np.ogrid[:height, :width]
     center_y, center_x = (height - 1) / 2.0, (width - 1) / 2.0
     distance = np.sqrt((y - center_y) ** 2 + (x - center_x) ** 2)
-    max_distance = np.sqrt(center_y**2 + center_x**2)  # center-to-corner distance
+    max_distance = np.sqrt(center_y**2 + center_x**2)
     profile = 1.0 - _VIGNETTE_FALLOFF * (distance / max_distance)
-    profile = profile / profile.mean()  # renormalize to spatial mean 1
+    profile = profile / profile.mean()
     if num_planes > 1:
-        profile = np.broadcast_to(profile[:, :, np.newaxis], (height, width, num_planes)).copy()
+        profile = np.broadcast_to(profile[:, :, np.newaxis], (height, width, num_planes))
     return profile.astype(np.float32)
 
 
@@ -270,16 +269,13 @@ def _generate_diffuse_footprints(
 ) -> np.ndarray:
     """Broad, overlapping, low-amplitude spatial footprints for the "diffuse" neuropil model.
 
-    2D Gaussian, matching the standard Gaussian-beam approximation for a microscope's
-    out-of-focus point-spread function (unlike `generate_rois`'s weighted masks, which
-    represent cell shape rather than optical blur, so their linear cone doesn't apply here).
-    Centers are unconstrained by frame edges (these blobs are meant to be broad relative to the
-    frame, unlike per-cell ROIs) and returned as a plain array rather than a `BaseRois` -- these
-    aren't ROIs, and `generate_rois`'s edge-margin ``assert`` would otherwise reject radii this
-    large relative to typical frame sizes. Each source spans a single plane (drawn uniformly)
-    rather than `generate_rois`' ellipsoidal 3D masks. Not truncated: a real PSF has no hard
-    edge either, and every pixel already gets its own dense array regardless (`np.ogrid` over
-    the full frame), so truncating would only add an artificial cutoff without saving any work.
+    2D Gaussian footprints, approximating a microscope's out-of-focus point-spread function
+    (unlike `generate_rois`'s linear-cone cell shapes). Centers are unconstrained by frame
+    edges, each source spans a single plane, and the result is a plain array rather than a
+    `BaseRois` -- these aren't ROIs, and at this radius they'd violate `generate_rois`'s
+    edge-margin assumptions anyway. Not truncated: a real PSF has no hard edge either, and
+    every pixel already gets a dense array regardless (`np.ogrid` over the full frame), so
+    truncating would only add an artificial cutoff without saving any work.
 
     Parameters
     ----------
@@ -362,14 +358,12 @@ def generate_imaging_with_rois(
     sampling_frequency : float, default: 30.0
         Sampling frequency in Hz.
     decay_time : float, default: 0.5
-        Duration of exponential decay for fluorescence events in seconds. The generative model
-        here (sharp rise, single-exponential decay) is the same simplified model OASIS itself
-        fits during deconvolution, so the most relevant reference point isn't a sensor's true
-        (more complex, nonlinear) single-spike kinetics, but the single-exponential time
-        constant OASIS finds optimal when fit to real GCaMP8 ground-truth recordings under that
-        same model: 0.2/0.45/0.5 s for GCaMP8f/8m/8s (Rupprecht et al. 2026, Nat. Methods). This
-        default follows GCaMP8s, the variant most often recommended for reliably detecting
-        isolated action potentials.
+        Duration of exponential decay for fluorescence events in seconds. Since this generative
+        model (sharp rise, single-exponential decay) matches OASIS's own deconvolution model, the
+        relevant reference is OASIS's optimal single-exponential fit to real GCaMP8 recordings --
+        0.2/0.45/0.5 s for GCaMP8f/8m/8s (Rupprecht et al. 2026, Nat. Methods) -- not the sensor's
+        true, more complex kinetics. Default follows GCaMP8s, the variant most often recommended
+        for reliably detecting isolated action potentials.
     event_rate : float, default: 0.3
         Mean spike-event rate in Hz, passed through to :func:`generate_fluorescence`. Each
         ROI's number of events scales with the recording's duration (`num_frames` /
@@ -410,8 +404,6 @@ def generate_imaging_with_rois(
         How `background` varies over space and time:
 
         - ``"constant"``: spatially uniform, no fluctuation beyond `bleaching_time` decay.
-          Neuropil subtraction only ever corrects this constant attenuation, never a genuine
-          fluctuation.
         - ``"vignette"``: one shared Ornstein-Uhlenbeck-like fluctuation (slow, ~5s timescale)
           modulated by a static radial illumination falloff (brighter center, dimmer edges --
           real 2P vignetting). Every background pixel shares the same fluctuation, just scaled
@@ -427,12 +419,12 @@ def generate_imaging_with_rois(
         ``"constant"``. Kept intentionally simple -- just enough realism to make neuropil
         subtraction demonstrably matter, not an optically/biologically precise model.
     neuropil_fluctuation_std : float, default: 0.5
-        How strongly the background fluctuates relative to `background` itself, for
-        ``neuropil_model="vignette"`` or ``"diffuse"``. Ignored for ``"constant"``. Since the
-        fluctuation is additive around a mean level, a large enough value can push the
-        instantaneous background negative (unphysical); checked empirically for "diffuse" at
-        default settings: ~11% of samples go negative at 0.8, ~4% at 0.5, ~0.6% at 0.3 -- 0.5
-        balances a clearly demonstrable subtraction effect against that risk.
+        How strongly the background fluctuates relative to `background`, for
+        ``neuropil_model="vignette"`` or ``"diffuse"`` (ignored for ``"constant"``). The
+        fluctuation is additive around a mean level, so large values can push the instantaneous
+        background negative (unphysical); empirically for "diffuse", ~11% of samples go negative
+        at 0.8, ~4% at 0.5, ~0.6% at 0.3 -- 0.5 balances a clearly demonstrable effect against
+        that risk.
 
     Returns
     -------
@@ -516,22 +508,16 @@ def generate_imaging_with_rois(
             n_sources, height, width, num_planes, diffuse_radius_range, neuropil_rng
         )
         footprints_flat = footprints.reshape(n_sources, -1).astype(video.dtype)
-        # Typical per-pixel variance if every source's own trace had unit variance -- each
-        # source's trace *is* unit variance (`_generate_ou_process`), so this scales
-        # `neuropil_fluctuation_std` to a comparable magnitude to "vignette"'s single shared
-        # trace, exactly rather than approximately.
+        # Scales `neuropil_fluctuation_std` to the same magnitude as "vignette"'s single shared
+        # trace: typical per-pixel variance if every (unit-variance) source contributed independently.
         typical_variance = (footprints_flat**2).sum(axis=0).mean()
         modulation_scale = 1.0 / np.sqrt(max(typical_variance, 1e-12))
         ou_traces = _generate_ou_process(num_frames, sampling_frequency, neuropil_rng, num_traces=n_sources)
 
-    # True background level under each ROI's own mask (mask-weighted mean, before noise) --
-    # cheap ((num_frames, num_rois), not (num_frames, H*W*P)) since it only needs each ROI's
-    # own mask, not the full pixel grid. Mirrors the same matmul-compositing pattern used above.
-    # Under `noise_std="poisson"`, the per-pixel background is clipped to nonnegative before it's
-    # composited into the video below (see the slab loop) -- computed here in closed form, that
-    # clip couldn't be applied consistently (it's nonlinear, so clipping this mask-weighted
-    # average isn't the same as averaging the clipped per-pixel field), so `neuropil` is instead
-    # accumulated from that same clipped per-pixel field inside the slab loop in that case.
+    # True background level under each ROI's mask (mask-weighted mean, before noise) -- cheap
+    # since it only needs the ROI masks, not the full pixel grid. Under `noise_std="poisson"`,
+    # this can't work in closed form (the per-pixel clip to nonnegative is nonlinear), so
+    # `neuropil` is instead accumulated from the clipped per-pixel field in the slab loop.
     mask_sums = masks_flat.sum(axis=1)
     if noise_std == "poisson":
         neuropil = np.empty((num_frames, num_rois), dtype=np.float32)
@@ -566,9 +552,6 @@ def generate_imaging_with_rois(
             # spatially-varying mixture of many sources, rather than one shared trace). A pixel
             # far from every source simply doesn't fluctuate (behaves like "vignette" with
             # `neuropil_fluctuation_std=0` there), rather than losing its background entirely.
-            # Built as a (slab, K) @ (K, H*W*P) matmul, K = n_sources -- the same pattern the
-            # ROI signal itself uses above -- so no full (num_frames, H*W*P) array is ever
-            # materialized before this point.
             modulation_sl = (ou_traces[t0 : t0 + slab_size] @ footprints_flat) * modulation_scale
             bg_slab = (
                 (background * bleach_sl)[:, np.newaxis]
