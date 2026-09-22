@@ -163,9 +163,8 @@ class NumpyRois(BaseRois):
             Optional array of ROI IDs. If None, IDs will be assigned as integers from 0 to num_rois-1.
         """
         num_rois = roi_image_masks.shape[0]
-        # Not `roi_image_masks[0].shape`: indexing a sparse array triggers its numba backend to
-        # JIT-compile `__getitem__` from scratch on first use (multi-second one-time cost), and
-        # raises on an empty (0-ROI) array besides. `.shape[1:]` is equivalent, cheap, and safe.
+        # `.shape[1:]` avoids `roi_image_masks[0].shape`, which triggers a multi-second numba
+        # JIT compile on sparse arrays and crashes outright on an empty (0-ROI) array.
         mask_shape = roi_image_masks.shape[1:]
         if len(mask_shape) not in [2, 3]:
             raise ValueError("Each ROI mask must be a 2D (height x width) or 3D (height x width x planes) array")
