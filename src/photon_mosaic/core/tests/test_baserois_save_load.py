@@ -108,5 +108,5 @@ def test_zarr_partial_load_does_not_scale_with_total_rois(tmp_path):
         # peak_all; comfortably below half of it confirms only a fraction was actually read.
         assert peak_one < peak_all / 2, (
             f"sparse={use_sparse}: single-ROI load ({peak_one} bytes) not much smaller than "
-            f"full ({peak_all} bytes) out of 2000 ROIs"
+            f"full ({peak_all} bytes) out of {saved.shape[0]} ROIs"
         )
