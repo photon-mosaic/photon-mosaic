@@ -179,7 +179,7 @@ def generate_rois(
 # Internal constants for the "vignette"/"diffuse" neuropil models (see `generate_imaging_with_rois`).
 _VIGNETTE_FALLOFF = 0.25  # fraction of center brightness lost at the frame corners
 _NEUROPIL_TAU_SECONDS = 5.0  # OU mean-reversion timescale -- slow drift, not frame-to-frame noise
-_DIFFUSE_DENSITY = 2  # diffuse sources per ROI -- empirically more robust across seeds than 8
+_DIFFUSE_DENSITY = 0.46  # diffuse sources per ROI -- CNMF-E's (Zhou et al. 2018) own base
 # Relative to ROI radius; needs to be well above 1x to read as pooled/blurred
 # contamination rather than another cell-sized blob.
 _DIFFUSE_RADIUS_MULTIPLIER = 5.0
@@ -408,11 +408,11 @@ def generate_imaging_with_rois(
           modulated by a static radial illumination falloff (brighter center, dimmer edges --
           real 2P vignetting). Every background pixel shares the same fluctuation, just scaled
           by its own position.
-        - ``"diffuse"``: many (``2 * num_rois``) broad, overlapping Gaussian sources, each with
-          its own independent Ornstein-Uhlenbeck-like fluctuation, so nearby background pixels
-          move together while distant ones don't. Each source's width is `radius_range * 5`
-          (see `_DIFFUSE_RADIUS_MULTIPLIER`), so it scales with ROI size rather than frame size.
-          Also carries the same vignette falloff as ``"vignette"``.
+        - ``"diffuse"``: several (``0.46 * num_rois``, see `_DIFFUSE_DENSITY`) broad, overlapping
+          Gaussian sources, each with its own independent Ornstein-Uhlenbeck-like fluctuation, so
+          nearby background pixels move together while distant ones don't. Each source's width
+          is `radius_range * 5` (see `_DIFFUSE_RADIUS_MULTIPLIER`), so it scales with ROI size
+          rather than frame size. Also carries the same vignette falloff as ``"vignette"``.
 
         Both new models are normalized to preserve `background`'s mean-photon-count semantics
         (see `background` above); only their *spatial and temporal structure* differs from
