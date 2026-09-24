@@ -65,21 +65,20 @@ Note that each submodule has its own `tests/` folder for unit tests.
 
 ### The mental model for `Imaging` and `Epoch` objects
 
-`photon-mosaic` takes an object-oriented approach to represent multi-photon time series. Two types of object are central to this: `Imaging` objects represent a collection of  multi-photon time series that are (approximately) contiguous in space. One or several `Epoch` objects are contained within an `Imaging` and represent multi-photon time series that are (exactly) contiguous in space _and_ channel _and_ time. This concept is visualised below:
+`photon-mosaic` takes an object-oriented approach to represent multi-photon time series. Two types of object are central to this: `Imaging` objects represent a collection of single-channel multi-photon time series that are (approximately) contiguous in space. One or several `Epoch` objects are contained within an `Imaging` and represent multi-photon time series that are (exactly) contiguous in space _and_ time. This concept is visualised below:
 
 ![](_static/single-plane-single-epoch.png)
 ![](_static/multi-plane-single-epoch.png)
 
 Single- and multi-plane time series are stored in the same `Epoch`...
 
-![](_static/multi-channel-multi-epoch.png)
 ![](_static/multi-acquisition-multi-epoch.png)
 
-... but different channels, and time series that were interrupted (e.g. consecutive days) belong in different `Epoch` objects, but the same `Imaging` object (assuming they were taken from the same anatomical location).
+... but time series that were interrupted (e.g. consecutive days) belong in different `Epoch` objects, but the same `Imaging` object (assuming they were taken from the same anatomical location and the same imaging setup).
 
-For example, let's say someone acquires a 2-channel time series of a certain brain region. The acquisition is repeated daily, on the same animal and region, for three days. In this case, each day's time series would be two epochs (one per channel) containing all planes, and all the data would live in the same `Imaging` object, which would contain six epochs (3 days by 2 channels).
+For example, let's say someone acquires a 2-channel time series of a certain brain region. The acquisition is repeated daily, on the same animal and region, for three days. In this case, each day's time series would be an `Epoch` containing all planes, and the two channels' data would live in two separate `Imaging` objects, with three epochs each.
 
-Time series of different brain regions should be kept in separate `Imaging` objects. Sometimes, adhering to this mental model requires splitting or merging of input data. `photon-mosaic` provides functionality for this.
+Time series of different brain regions should also be kept in separate `Imaging` objects. Sometimes, adhering to this mental model requires splitting or merging of input data. `photon-mosaic` provides functionality for this.
 
 We intend the wider `photon-mosaic` code and external code to interact with `Imaging` functionality directly, while `Epoch` functionality should generally not be called outside the `Imaging` it belongs to. `Imaging` objects will delegate many computations to their `Epoch` objects as appropriate.
 
