@@ -55,7 +55,7 @@ To install these, change directory to the `docs` folder in your terminal and typ
 pip install -r docs/requirements.txt
 ```
 
-The command to build the documentation is:
+The command to build the documentation from within the `docs/` folder is:
 
 ```
 make clean api_index.rst html
