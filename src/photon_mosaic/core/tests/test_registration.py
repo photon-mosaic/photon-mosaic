@@ -7,9 +7,9 @@ from pydantic_settings import BaseSettings
 from photon_mosaic.core import Motion, compute_motion, generate_random_imaging, register_motion_class
 from photon_mosaic.core.motion import (
     _builtin_motion_modules,
+    _coerce_settings,
     _get_motion_class,
     _registered_motion_classes,
-    coerce_settings,
 )
 
 
@@ -175,18 +175,18 @@ class TestMotionCompute:
 
 class TestCoerceSettings:
     def test_none_gives_defaults(self):
-        assert coerce_settings(None, DummySettings).value == 1
+        assert _coerce_settings(None, DummySettings).value == 1
 
     def test_dict_is_validated(self):
-        assert coerce_settings({"value": 5}, DummySettings).value == 5
+        assert _coerce_settings({"value": 5}, DummySettings).value == 5
 
     def test_instance_passes_through(self):
         settings = DummySettings(value=9)
-        assert coerce_settings(settings, DummySettings) is settings
+        assert _coerce_settings(settings, DummySettings) is settings
 
     def test_no_settings_class_passes_through(self):
-        assert coerce_settings("anything", None) == "anything"
+        assert _coerce_settings("anything", None) == "anything"
 
     def test_wrong_type_raises(self):
         with pytest.raises(TypeError):
-            coerce_settings(3.14, DummySettings)
+            _coerce_settings(3.14, DummySettings)

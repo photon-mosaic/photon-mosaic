@@ -76,7 +76,7 @@ def _get_motion_class(method: str) -> type["Motion"]:
     return _registered_motion_classes[method]
 
 
-def coerce_settings(settings: Any, settings_class: type | None) -> Any:
+def _coerce_settings(settings: Any, settings_class: type | None) -> Any:
     """Turn ``None`` / a dict / a settings instance into ``settings_class``.
 
     Returns ``settings`` unchanged when ``settings_class`` is ``None`` (a
@@ -211,7 +211,7 @@ class Motion:
                 )
             target = cls
 
-        resolved_settings = coerce_settings(settings, target.settings_class)
+        resolved_settings = _coerce_settings(settings, target.settings_class)
         return target._compute(imaging, settings=resolved_settings, badframes=badframes, **params)
 
     @classmethod
