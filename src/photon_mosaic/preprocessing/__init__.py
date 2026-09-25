@@ -1,6 +1,10 @@
+from photon_mosaic.core import compute_motion
+
+from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
+from .registration import RegisterImaging, RegistrationSettings, register_motion
 from .suite2p_registration import compute_motion_suite2p
 from .suite2p_registration import RegisterSuite2PImagingEpoch
 from .suite2p_registration import RegisterSuite2PImaging
 from .suite2p_registration import register_suite2p
 from .suite2p_registration import Suite2pRegistrationSettings
-from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
+from .suite2p_registration import Suite2PMotion
