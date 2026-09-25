@@ -56,6 +56,12 @@ class TestBasePreprocessor:
         reg = BasePreprocessor(empty_imaging, dtype=np.float32)
         assert reg.get_dtype() == np.dtype(np.float32)
 
+    def test_init_with_empty_imaging_and_no_dtype_raises(self):
+        # With no dtype stored and no data to sample, the error should say why.
+        empty_imaging = BaseImaging(sampling_frequency=30.0, shape=(8, 9), dtype=None)
+        with pytest.raises(AssertionError, match="empty imaging object"):
+            BasePreprocessor(empty_imaging)
+
     def test_init_rejects_non_imaging(self):
         with pytest.raises(AssertionError, match="must be a BaseImaging"):
             BasePreprocessor("not_an_imaging_object")

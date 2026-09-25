@@ -286,6 +286,7 @@ class BaseImaging(BaseExtractor, TimeSeries):
         """
         if self._dtype is not None:
             return self._dtype
+        assert self.get_num_epochs() > 0, "Cannot infer dtype from an empty imaging object, provide an explicit 'dtype'"
         return self.get_series(start_frame=0, end_frame=2, epoch_index=0).dtype
 
     def get_num_pixels(self) -> int:
