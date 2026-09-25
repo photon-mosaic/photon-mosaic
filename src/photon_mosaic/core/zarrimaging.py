@@ -44,7 +44,9 @@ class ZarrImaging(BaseImaging):
         assert sampling_frequency is not None, "'sampling_frequency' attribute not found!"
         assert num_epochs is not None, "'num_epochs' attribute not found!"
 
-        BaseImaging.__init__(self, sampling_frequency=sampling_frequency, shape=shapes)
+        BaseImaging.__init__(
+            self, sampling_frequency=sampling_frequency, shape=shapes, dtype=self._root["video_epoch0"].dtype
+        )
 
         t_starts = self._root.get("t_starts", None)
         if load_compression_ratio:

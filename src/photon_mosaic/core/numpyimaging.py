@@ -71,7 +71,7 @@ class NumpyImaging(BaseImaging):
             assert len(time_vectors) == num_epochs, "Number of time vectors must match number of epochs"
         else:
             time_vectors = [None] * num_epochs
-        BaseImaging.__init__(self, shape=shapes[0], sampling_frequency=sampling_frequency)
+        BaseImaging.__init__(self, shape=shapes[0], sampling_frequency=sampling_frequency, dtype=videos[0].dtype)
 
         for video, time_vector in zip(videos, time_vectors):
             self.add_epoch(

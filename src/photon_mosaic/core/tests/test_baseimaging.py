@@ -111,7 +111,7 @@ def test_random_imaging_repr_contains_expected_fields():
 def test_baseimaging_constructor_with_2d_dhape():
     shape = (50, 50)
     sampling_frequency = 15.0
-    base_imaging = BaseImaging(sampling_frequency=sampling_frequency, shape=shape)
+    base_imaging = BaseImaging(sampling_frequency=sampling_frequency, shape=shape, dtype="float32")
 
     assert base_imaging.shape == (50, 50, 1)
 

@@ -29,7 +29,9 @@ class SelectEpochImaging(BaseImaging):
     def __init__(self, imaging: BaseImaging, epoch_indices: int | list[int]):
         normalized_epoch_indices = _normalize_epoch_indices(epoch_indices, imaging.get_num_epochs())
 
-        BaseImaging.__init__(self, sampling_frequency=imaging.sampling_frequency, shape=imaging.shape)
+        BaseImaging.__init__(
+            self, sampling_frequency=imaging.sampling_frequency, shape=imaging.shape, dtype=imaging.get_dtype()
+        )
         imaging.copy_metadata(self)
 
         for epoch_index in normalized_epoch_indices:
