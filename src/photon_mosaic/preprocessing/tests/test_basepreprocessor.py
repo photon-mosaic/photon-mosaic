@@ -52,7 +52,7 @@ class TestBasePreprocessor:
         # An imaging object with no epochs has no data to sample. If get_dtype()
         # tried to infer the dtype from data, this would raise; an explicit
         # dtype should be answerable from the stored value alone.
-        empty_imaging = BaseImaging(sampling_frequency=30.0, shape=(8, 9))
+        empty_imaging = BaseImaging(sampling_frequency=30.0, shape=(8, 9), dtype="float32")
         reg = BasePreprocessor(empty_imaging, dtype=np.float32)
         assert reg.get_dtype() == np.dtype(np.float32)
 
