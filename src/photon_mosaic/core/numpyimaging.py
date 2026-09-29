@@ -61,7 +61,7 @@ class NumpyImaging(BaseImaging):
                 )
             if len(video.shape) == 3:
                 videos[i] = video[:, :, :, np.newaxis]  # Add a planes dimension
-                
+
             shapes.append(video.shape[1:])
         if not all(shape == shapes[0] for shape in shapes):
             raise ValueError("All epochs must have the same image shape (height, width, planes)")
