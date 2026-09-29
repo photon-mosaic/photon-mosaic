@@ -41,6 +41,8 @@ classifiers = [
 widgets = [
   "matplotlib",
   "ipywidgets",
+  "ipympl",
+  "ipykernel"
 ]
 suite2p-registration = [
   "suite2p==1.0.0.1",
