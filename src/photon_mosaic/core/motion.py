@@ -30,8 +30,7 @@ def register_motion_class(motion_class: type["Motion"]) -> type["Motion"]:
     Parameters
     ----------
     motion_class : type[Motion]
-        Subclass defining ``method_name`` (and usually ``settings_class`` and
-        ``registration_class``).
+        Subclass defining ``method_name`` (and usually ``settings_class``).
 
     Returns
     -------
@@ -76,6 +75,62 @@ def _get_motion_class(method: str) -> type["Motion"]:
     return _registered_motion_classes[method]
 
 
+# Method name -> registration/epoch class, filled in by
+# ``register_registration_class``. Kept independent of
+# ``_registered_motion_classes``: a backend may register a ``Motion``
+# subclass without a registration class (e.g. it only produces diagnostics),
+# or register a registration class for motion produced elsewhere.
+_registered_registration_classes: dict[str, type] = {}
+
+
+def register_registration_class(method: str, registration_class: type) -> type:
+    """Register the class that applies motion computed by ``method``.
+
+    Backend modules call this at import time, independently of
+    :func:`register_motion_class`, so that
+    :class:`photon_mosaic.preprocessing.registration.RegisterImaging` can find
+    the class that knows how to apply their motion.
+
+    Returns
+    -------
+    type
+        ``registration_class``, unchanged, so this can be used as a decorator.
+    """
+
+    if not method:
+        raise ValueError("'method' must be a non-empty string to register a registration class.")
+    _registered_registration_classes[method] = registration_class
+    return registration_class
+
+
+def get_registration_class(method: str) -> type:
+    """Return the class that applies motion computed by ``method``.
+
+    Built-in backends are imported lazily on first use, mirroring
+    :func:`_get_motion_class`.
+    """
+
+    if method in _registered_registration_classes:
+        return _registered_registration_classes[method]
+
+    module_path = _builtin_motion_modules.get(method)
+    if module_path is not None:
+        try:
+            importlib.import_module(module_path)
+        except ImportError as exc:
+            raise ImportError(
+                f"Motion correction method '{method}' requires optional dependencies that are not installed "
+                f"(failed to import '{module_path}': {exc})."
+            ) from exc
+
+    if method not in _registered_registration_classes:
+        raise TypeError(
+            f"Motion correction method '{method}' did not register a 'registration_class', "
+            "so its motion cannot be applied."
+        )
+    return _registered_registration_classes[method]
+
+
 def _coerce_settings(settings: Any, settings_class: type | None) -> Any:
     """Turn ``None`` / a dict / a settings instance into ``settings_class``.
 
@@ -102,17 +157,21 @@ class Motion:
     block-wise non-rigid offsets) belong on dedicated subclasses such as
     ``Suite2PMotion``.
 
-    Subclasses declare three class attributes so that they can be reached
-    through :meth:`compute` and applied by
-    :class:`photon_mosaic.preprocessing.registration.RegisterImaging`:
-    ``method_name`` (the string users pass as ``method``), ``settings_class``
-    (their pydantic settings model) and ``registration_class`` (the
-    ``BasePreprocessorEpoch`` that applies the stored motion).
+    Subclasses declare two class attributes so that they can be reached
+    through :meth:`compute`: ``method_name`` (the string users pass as
+    ``method``) and ``settings_class`` (their pydantic settings model).
+
+    The class that knows how to apply the stored motion (a
+    ``BasePreprocessorEpoch``) is unrelated to ``Motion`` itself: a backend
+    registers it under the same ``method_name`` via
+    :func:`register_registration_class`, independently of whether or how it
+    registers its ``Motion`` subclass, and
+    :class:`photon_mosaic.preprocessing.registration.RegisterImaging` resolves
+    it via :func:`get_registration_class`.
     """
 
     method_name: str | None = None
     settings_class: type | None = None
-    registration_class: type | None = None
 
     def __init__(
         self,

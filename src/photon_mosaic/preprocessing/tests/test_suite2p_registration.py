@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from photon_mosaic.core import Motion, NumpyImaging, compute_motion, generate_random_imaging
+from photon_mosaic.core import Motion, NumpyImaging, compute_motion, generate_random_imaging, get_registration_class
 from photon_mosaic.preprocessing.registration import RegisterImaging
 from photon_mosaic.preprocessing.suite2p_registration import (
     RegisterSuite2PImaging,
@@ -348,7 +348,7 @@ class TestGenericEntryPoints:
     def test_motion_declares_its_backend_hooks(self):
         assert Suite2PMotion.method_name == "suite2p"
         assert Suite2PMotion.settings_class is Suite2pRegistrationSettings
-        assert Suite2PMotion.registration_class is RegisterSuite2PImagingEpoch
+        assert get_registration_class("suite2p") is RegisterSuite2PImagingEpoch
 
 
 def test_register_suite2p_is_alias():

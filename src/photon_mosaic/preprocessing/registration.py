@@ -6,7 +6,7 @@ from typing import Any
 from pydantic import ConfigDict, Field
 from pydantic_settings import BaseSettings
 
-from photon_mosaic.core import BaseImaging, Motion
+from photon_mosaic.core import BaseImaging, Motion, get_registration_class
 
 from .basepreprocessor import BasePreprocessor
 
@@ -38,12 +38,13 @@ class RegistrationSettings(BaseSettings):
 class RegisterImaging(BasePreprocessor):
     """Apply pre-computed motion correction on-the-fly, whatever the backend.
 
-    The backend is carried by the ``motion`` object: each :class:`Motion`
-    subclass declares the ``registration_class`` that knows how to apply it, so this
-    class imports no backend itself.
+    Dispatch is by ``method`` (like :meth:`Motion.compute`), defaulting to
+    ``motion.method_name``, and resolved through
+    :func:`photon_mosaic.core.get_registration_class`, so this class imports
+    no backend itself.
     """
 
-    def __init__(self, imaging: BaseImaging, motion: Motion, **kwargs: Any) -> None:
+    def __init__(self, imaging: BaseImaging, motion: Motion, method: str | None = None, **kwargs: Any) -> None:
         """Build an imaging view that applies stored motion fields lazily."""
         BasePreprocessor.__init__(self, imaging)
 
@@ -52,11 +53,19 @@ class RegisterImaging(BasePreprocessor):
                 f"Number of epochs in motion ({motion.num_epochs}) does not match imaging ({len(imaging.epochs)})"
             )
 
-        registration_class = type(motion).registration_class
-        if registration_class is None:
-            raise TypeError(
-                f"{type(motion).__name__} does not declare a 'registration_class', so its motion cannot be applied."
+        if method is not None and motion.method_name is not None and method != motion.method_name:
+            raise ValueError(
+                f"motion was computed with method '{motion.method_name}', but method='{method}' was requested."
             )
+
+        resolved_method = method or motion.method_name
+        if resolved_method is None:
+            raise TypeError(
+                f"{type(motion).__name__} does not declare a 'method_name', so no registration_class can be "
+                "resolved for it."
+            )
+
+        registration_class = get_registration_class(resolved_method)
 
         for epoch_idx, parent_epoch in enumerate(imaging.epochs):
             self.add_epoch(registration_class(parent_epoch, motion, epoch_idx, **kwargs))

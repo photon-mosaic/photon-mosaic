@@ -14,7 +14,13 @@ from .imaging_ops import (
     stack_planes,
 )
 from .loading import load
-from .motion import Motion, compute_motion, register_motion_class
+from .motion import (
+    Motion,
+    compute_motion,
+    get_registration_class,
+    register_motion_class,
+    register_registration_class,
+)
 from .numpyimaging import NumpyImaging
 from .roianalyzer import (
     AnalyzerExtension,

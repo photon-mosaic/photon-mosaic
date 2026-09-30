@@ -6,7 +6,13 @@ import numpy as np
 from numpy.typing import NDArray
 from pydantic import ConfigDict, Field
 
-from photon_mosaic.core import BaseImaging, BaseImagingEpoch, Motion, register_motion_class
+from photon_mosaic.core import (
+    BaseImaging,
+    BaseImagingEpoch,
+    Motion,
+    register_motion_class,
+    register_registration_class,
+)
 
 from .basepreprocessor import BasePreprocessorEpoch
 from .registration import RegisterImaging, RegistrationSettings
@@ -238,8 +244,6 @@ class Suite2PMotion(Motion):
 
     method_name = "suite2p"
     settings_class = Suite2pRegistrationSettings
-    # registration_class is bound at the bottom of the module, once
-    # RegisterSuite2PImagingEpoch is defined.
 
     def __init__(
         self,
@@ -464,7 +468,7 @@ class RegisterSuite2PImaging(RegisterImaging):
 
     Thin alias of :class:`photon_mosaic.preprocessing.registration.RegisterImaging`,
     kept for discoverability and backwards compatibility; the generic class
-    already dispatches on the type of ``motion``.
+    already dispatches on ``method``.
     """
 
 
@@ -582,10 +586,8 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
         return output
 
 
-# Late binding: the epoch class is defined after Suite2PMotion, and the
-# registry lets ``Motion.compute(..., method="suite2p")`` find the backend.
-Suite2PMotion.registration_class = RegisterSuite2PImagingEpoch
 register_motion_class(Suite2PMotion)
+register_registration_class("suite2p", RegisterSuite2PImagingEpoch)
 
 compute_motion_suite2p = Suite2PMotion.compute
 register_suite2p = RegisterSuite2PImaging

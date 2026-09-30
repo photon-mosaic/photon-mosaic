@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from photon_mosaic.core import Motion, generate_random_imaging
+from photon_mosaic.core import Motion, generate_random_imaging, register_motion_class, register_registration_class
 from photon_mosaic.preprocessing import RegisterImaging, RegistrationSettings, register_motion
 from photon_mosaic.preprocessing.basepreprocessor import BasePreprocessorEpoch
 
@@ -25,7 +25,10 @@ class DoublingEpoch(BasePreprocessorEpoch):
 
 class DoublingMotion(Motion):
     method_name = "doubling_test_backend"
-    registration_class = DoublingEpoch
+
+
+register_motion_class(DoublingMotion)
+register_registration_class("doubling_test_backend", DoublingEpoch)
 
 
 @pytest.fixture()
