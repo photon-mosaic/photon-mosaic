@@ -348,7 +348,7 @@ class TestGenericEntryPoints:
     def test_motion_declares_its_backend_hooks(self):
         assert Suite2PMotion.method_name == "suite2p"
         assert Suite2PMotion.settings_class is Suite2pRegistrationSettings
-        assert Suite2PMotion.epoch_class is RegisterSuite2PImagingEpoch
+        assert Suite2PMotion.registration_class is RegisterSuite2PImagingEpoch
 
 
 def test_register_suite2p_is_alias():

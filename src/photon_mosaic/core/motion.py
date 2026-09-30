@@ -31,7 +31,7 @@ def register_motion_class(motion_class: type["Motion"]) -> type["Motion"]:
     ----------
     motion_class : type[Motion]
         Subclass defining ``method_name`` (and usually ``settings_class`` and
-        ``epoch_class``).
+        ``registration_class``).
 
     Returns
     -------
@@ -106,13 +106,13 @@ class Motion:
     through :meth:`compute` and applied by
     :class:`photon_mosaic.preprocessing.registration.RegisterImaging`:
     ``method_name`` (the string users pass as ``method``), ``settings_class``
-    (their pydantic settings model) and ``epoch_class`` (the
+    (their pydantic settings model) and ``registration_class`` (the
     ``BasePreprocessorEpoch`` that applies the stored motion).
     """
 
     method_name: str | None = None
     settings_class: type | None = None
-    epoch_class: type | None = None
+    registration_class: type | None = None
 
     def __init__(
         self,

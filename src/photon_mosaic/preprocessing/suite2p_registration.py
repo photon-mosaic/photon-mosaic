@@ -238,7 +238,7 @@ class Suite2PMotion(Motion):
 
     method_name = "suite2p"
     settings_class = Suite2pRegistrationSettings
-    # epoch_class is bound at the bottom of the module, once
+    # registration_class is bound at the bottom of the module, once
     # RegisterSuite2PImagingEpoch is defined.
 
     def __init__(
@@ -584,7 +584,7 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
 
 # Late binding: the epoch class is defined after Suite2PMotion, and the
 # registry lets ``Motion.compute(..., method="suite2p")`` find the backend.
-Suite2PMotion.epoch_class = RegisterSuite2PImagingEpoch
+Suite2PMotion.registration_class = RegisterSuite2PImagingEpoch
 register_motion_class(Suite2PMotion)
 
 compute_motion_suite2p = Suite2PMotion.compute

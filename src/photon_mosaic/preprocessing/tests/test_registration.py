@@ -25,7 +25,7 @@ class DoublingEpoch(BasePreprocessorEpoch):
 
 class DoublingMotion(Motion):
     method_name = "doubling_test_backend"
-    epoch_class = DoublingEpoch
+    registration_class = DoublingEpoch
 
 
 @pytest.fixture()
@@ -73,7 +73,7 @@ class TestRegistrationSettings:
 
 
 class TestRegisterImaging:
-    def test_applies_the_backend_epoch_class(self, imaging):
+    def test_applies_the_backend_registration_class(self, imaging):
         motion = DoublingMotion(imaging=imaging, displacements=[np.zeros((6, 1, 2))])
         registered = RegisterImaging(imaging, motion)
 
@@ -86,9 +86,9 @@ class TestRegisterImaging:
         with pytest.raises(ValueError, match="does not match imaging"):
             RegisterImaging(imaging, motion)
 
-    def test_motion_without_epoch_class_raises(self, imaging):
+    def test_motion_without_registration_class_raises(self, imaging):
         motion = Motion(imaging=imaging, displacements=[np.zeros((6, 1, 2))])
-        with pytest.raises(TypeError, match="epoch_class"):
+        with pytest.raises(TypeError, match="registration_class"):
             RegisterImaging(imaging, motion)
 
     def test_kwargs_are_forwarded_to_the_epoch(self, imaging):

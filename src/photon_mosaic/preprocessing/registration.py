@@ -39,7 +39,7 @@ class RegisterImaging(BasePreprocessor):
     """Apply pre-computed motion correction on-the-fly, whatever the backend.
 
     The backend is carried by the ``motion`` object: each :class:`Motion`
-    subclass declares the ``epoch_class`` that knows how to apply it, so this
+    subclass declares the ``registration_class`` that knows how to apply it, so this
     class imports no backend itself.
     """
 
@@ -52,14 +52,14 @@ class RegisterImaging(BasePreprocessor):
                 f"Number of epochs in motion ({motion.num_epochs}) does not match imaging ({len(imaging.epochs)})"
             )
 
-        epoch_class = type(motion).epoch_class
-        if epoch_class is None:
+        registration_class = type(motion).registration_class
+        if registration_class is None:
             raise TypeError(
-                f"{type(motion).__name__} does not declare an 'epoch_class', so its motion cannot be applied."
+                f"{type(motion).__name__} does not declare a 'registration_class', so its motion cannot be applied."
             )
 
         for epoch_idx, parent_epoch in enumerate(imaging.epochs):
-            self.add_epoch(epoch_class(parent_epoch, motion, epoch_idx, **kwargs))
+            self.add_epoch(registration_class(parent_epoch, motion, epoch_idx, **kwargs))
 
         self._kwargs = dict(imaging=imaging, motion=motion, **kwargs)
 
