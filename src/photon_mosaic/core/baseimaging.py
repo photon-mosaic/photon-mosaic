@@ -26,6 +26,7 @@ class BaseImaging(BaseExtractor, TimeSeries):
         assert len(shape) == 3, "Shape must be a tuple/list/array of length 3 (height, width, planes)"
         num_planes = shape[2]
         BaseExtractor.__init__(self, range(0, num_planes))
+        TimeSeries.__init__(self)
         self._sampling_frequency = float(sampling_frequency)
         self._shape = tuple(shape)  # Image is intended as a volume (H, W, planes)
         self._average_image = None
@@ -413,7 +414,7 @@ class BaseImaging(BaseExtractor, TimeSeries):
             folder = kwargs["folder"]
             file_paths = [folder / f"video_cached_seg{i}.raw" for i in range(self.get_num_epochs())]
             dtype = kwargs.get("dtype", None) or self.get_dtype()
-            t_starts = self._get_t_starts()
+            t_starts = self.get_segment_t_starts()
 
             write_binary(self, file_paths=file_paths, dtype=dtype, verbose=verbose, **job_kwargs)
 
