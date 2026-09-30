@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 import importlib
-from typing import Any, Sequence
+from typing import Any, Literal, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
 
 from photon_mosaic.core import BaseImaging
+
+# Editor autocomplete/typo-checking for the built-in methods. Not exhaustive:
+# any string registered via ``register_motion_class``/``register_registration_class``
+# (including third-party ones) is still accepted at runtime.
+KnownMotionMethod = Literal["suite2p", "jnormcorre"]
 
 # Method name -> module that defines (and registers) the backend's Motion
 # subclass. Only module *paths* live here, so core imports no backend: the
@@ -222,7 +227,7 @@ class Motion:
     def compute(
         cls,
         imaging: BaseImaging,
-        method: str | None = None,
+        method: KnownMotionMethod | str | None = None,
         settings: Any = None,
         badframes: NDArray | None = None,
         **params: Any,

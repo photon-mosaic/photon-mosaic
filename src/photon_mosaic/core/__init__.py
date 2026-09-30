@@ -15,6 +15,7 @@ from .imaging_ops import (
 )
 from .loading import load
 from .motion import (
+    KnownMotionMethod,
     Motion,
     compute_motion,
     get_registration_class,

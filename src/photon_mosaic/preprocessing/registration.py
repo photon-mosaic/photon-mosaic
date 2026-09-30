@@ -6,7 +6,7 @@ from typing import Any
 from pydantic import ConfigDict, Field
 from pydantic_settings import BaseSettings
 
-from photon_mosaic.core import BaseImaging, Motion, get_registration_class
+from photon_mosaic.core import BaseImaging, KnownMotionMethod, Motion, get_registration_class
 
 from .basepreprocessor import BasePreprocessor
 
@@ -44,7 +44,13 @@ class RegisterImaging(BasePreprocessor):
     no backend itself.
     """
 
-    def __init__(self, imaging: BaseImaging, motion: Motion, method: str | None = None, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        imaging: BaseImaging,
+        motion: Motion,
+        method: KnownMotionMethod | str | None = None,
+        **kwargs: Any,
+    ) -> None:
         """Build an imaging view that applies stored motion fields lazily."""
         BasePreprocessor.__init__(self, imaging)
 
