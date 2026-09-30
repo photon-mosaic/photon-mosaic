@@ -254,7 +254,7 @@ class FluorescenceNode(PipelineNode):
         return (fluorescence,)
 
 
-_NEUROPIL_PRIMARY_DATA_KEY = {"surround": "neuropil_masks", "cnmf": "neuropil_traces"}
+_NEUROPIL_PRIMARY_DATA_KEY = {"surround": "neuropil_masks", "cnmf": "background_spatial"}
 
 
 class NeuropilExtension(AnalyzerExtension):
@@ -474,23 +474,21 @@ class NeuropilExtension(AnalyzerExtension):
             imaging = self.roi_analyzer.imaging
             job_kwargs = fix_job_kwargs(job_kwargs)
             chunk_size = ensure_chunk_size(imaging, **job_kwargs)
-            self.data.update(
-                _fit_cnmf_background(
-                    imaging,
-                    rois.get_roi_image_masks(),
-                    gnb=self.params["gnb"],
-                    max_iter=self.params["max_iter"],
-                    tol=self.params["tol"],
-                    highpass_sigma=self.params["highpass_sigma"],
-                    lowpass_sigma=self.params["lowpass_sigma"],
-                    init_method=self.params["init_method"],
-                    nonneg_background=self.params["nonneg_background"],
-                    nonneg_traces=self.params["nonneg_traces"],
-                    ridge=self.params["ridge"],
-                    subsample_frames=self.params["subsample_frames"],
-                    chunk_size=chunk_size,
-                    verbose=verbose,
-                )
+            self.data["background_spatial"] = _fit_cnmf_background(
+                imaging,
+                rois.get_roi_image_masks(),
+                gnb=self.params["gnb"],
+                max_iter=self.params["max_iter"],
+                tol=self.params["tol"],
+                highpass_sigma=self.params["highpass_sigma"],
+                lowpass_sigma=self.params["lowpass_sigma"],
+                init_method=self.params["init_method"],
+                nonneg_background=self.params["nonneg_background"],
+                nonneg_traces=self.params["nonneg_traces"],
+                ridge=self.params["ridge"],
+                subsample_frames=self.params["subsample_frames"],
+                chunk_size=chunk_size,
+                verbose=verbose,
             )
         else:
             raise ValueError(f"Unknown method: '{method}'. Supported: 'surround', 'cnmf'.")
@@ -522,34 +520,14 @@ class NeuropilExtension(AnalyzerExtension):
             raise KeyError(f"No '{key}' in neuropil data; available keys: {sorted(self.data)}")
         return self.data[key]
 
-    def get_background(self) -> tuple[np.ndarray, np.ndarray]:
-        """Return the fitted ``(background_spatial, background_temporal)`` for ``method='cnmf'``.
-
-        Returns
-        -------
-        tuple of np.ndarray
-            ``b`` of shape ``(gnb, Ly, Lx, n_planes)`` and ``f`` of shape ``(gnb, n_frames)``. The
-            modelled background movie for frame ``t`` is ``sum_k f[k, t] * b[k]``.
-        """
-        if self.params.get("method") != "cnmf":
-            raise ValueError(f"get_background() is only available for method='cnmf', not '{self.params.get('method')}'")
-        return self.data["background_spatial"], self.data["background_temporal"]
-
     def _select_extension_data(self, roi_ids):
         roi_indices = self.roi_analyzer.rois.ids_to_indices(roi_ids)
         if self.params.get("method", "surround") == "cnmf":
             # Every key must be returned: copy() assigns the result straight over `data`, so an
-            # omitted key would be silently dropped. The background components are properties of the
-            # whole field of view, so they pass through unsliced; the ROI-indexed traces are sliced
-            # out of the full-problem solution rather than refitted on the ROI subset (same
-            # semantics as slicing `fluorescence`).
+            # omitted key would be silently dropped. The spatial background is a property of the
+            # whole field of view, so it passes through unsliced.
             return {
                 "background_spatial": self.data["background_spatial"],
-                "background_temporal": self.data["background_temporal"],
-                "epoch_frame_offsets": self.data["epoch_frame_offsets"],
-                "fit_info": dict(self.data["fit_info"]),
-                "neuropil_traces": self.data["neuropil_traces"][:, roi_indices],
-                "demixed_fluorescence": self.data["demixed_fluorescence"][:, roi_indices],
             }
         return {"neuropil_masks": self.data["neuropil_masks"][roi_indices]}
 
@@ -1400,7 +1378,7 @@ def _fit_cnmf_background(
     subsample_frames: int | None,
     chunk_size: int | None,
     verbose: bool = False,
-) -> dict[str, Any]:
+) -> np.ndarray:
     """Fit a low-rank CNMF background ``b f`` and demixed traces ``C`` against *fixed* footprints.
 
     Model: ``Y ~= C A.T + f b.T`` for ``Y`` ``(n_frames, n_pixels)``, ``A`` ``(n_pixels, n_rois)``
@@ -1414,10 +1392,8 @@ def _fit_cnmf_background(
     **two streaming passes** over the movie; refining ``b`` at full temporal resolution would need
     two more and is deliberately not done.
 
-    Returns the extension data dict; see :class:`NeuropilExtension` for the keys.
+    Returns the spatial neuropil background.
     """
-    import scipy.sparse as sp
-
     num_rois = int(masks.shape[0])
     spatial_shape = tuple(int(s) for s in masks.shape[1:])
     if len(spatial_shape) == 2:
@@ -1430,15 +1406,7 @@ def _fit_cnmf_background(
     num_frames = int(epoch_offsets[-1])
 
     if num_rois == 0:
-        empty_traces = np.zeros((num_frames, 0), dtype=np.float32)
-        return {
-            "background_spatial": np.zeros((gnb,) + spatial_shape, dtype=np.float32),
-            "background_temporal": np.zeros((gnb, num_frames), dtype=np.float32),
-            "neuropil_traces": empty_traces,
-            "demixed_fluorescence": empty_traces,
-            "epoch_frame_offsets": epoch_offsets,
-            "fit_info": _cnmf_fit_info(gnb, 0, True, [], 0.0, 0.0, 0.0, 0.0, 0, init_method),
-        }
+        return np.zeros((gnb,) + spatial_shape, dtype=np.float32)
 
     # float64 throughout: see _project_float64 on why float32 reductions are not good enough here.
     masks_csr = _masks_to_sparse_matrix(masks).astype(np.float64)  # (n_rois, n_pixels)
@@ -1450,7 +1418,6 @@ def _fit_cnmf_background(
     # Same all-zero-mask guard as FluorescenceNode._row_norm: a zero mask stays zero, not NaN.
     l1_norm = np.asarray(masks_csr.sum(axis=1), dtype=np.float64).ravel()
     l1_norm[l1_norm == 0] = 1.0
-    masks_l1 = sp.diags(1.0 / l1_norm) @ masks_csr
 
     if chunk_size is None:
         chunk_size = max(num_frames, 1)
@@ -1509,7 +1476,6 @@ def _fit_cnmf_background(
     proj_masks_sub = proj_masks[sub_rows]
     ysub_norm_sq = float(np.sum(y_sub.astype(np.float64) ** 2))
     objective: list[float] = []
-    converged = False
     n_iter = 0
 
     for n_iter in range(1, max_iter + 1):
@@ -1549,12 +1515,6 @@ def _fit_cnmf_background(
         )
         if verbose:
             print(f"neuropil(cnmf) iteration {n_iter}: objective={objective[-1]:.6g}")
-        if len(objective) > 1:
-            previous = objective[-2]
-            denom = abs(previous) if previous else 1.0
-            if abs(previous - objective[-1]) / denom < tol:
-                converged = True
-                break
 
     # ---- Pass 2: P_b = Y @ b, then the exact joint solve over all frames -----------------------
     proj_background = np.zeros((num_frames, gnb), dtype=np.float64)
@@ -1572,8 +1532,6 @@ def _fit_cnmf_background(
         traces = (proj_masks - temporal @ gram_ab.T) @ gram_aa_inv  # keep C optimal given f
     if nonneg_traces:
         traces = np.maximum(traces, 0.0)
-
-    objective_full = _cnmf_objective(ynorm_sq, traces, temporal, proj_masks, proj_background, gram_aa, gram_ab, gram_bb)
 
     # ---- Pin the scale/permutation ambiguity so results are comparable across runs -------------
     # b f is invariant under b_k -> alpha_k b_k, f_k -> f_k / alpha_k for any alpha_k > 0, and under
@@ -1597,30 +1555,7 @@ def _fit_cnmf_background(
             stacklevel=2,
         )
 
-    # The modelled background movie is f b.T; projecting *it* through each ROI's own L1-normalised
-    # mask is the drop-in replacement for the surround method's mask-times-movie neuropil trace:
-    #   (f b.T) @ A_L1.T == f @ (A_L1 @ b).T
-    neuropil_traces = temporal @ np.asarray(masks_l1 @ background, dtype=np.float64).T
-
-    return {
-        "background_spatial": np.ascontiguousarray(background.T.reshape((gnb,) + spatial_shape), dtype=np.float32),
-        "background_temporal": np.ascontiguousarray(temporal.T, dtype=np.float32),
-        "neuropil_traces": np.ascontiguousarray(neuropil_traces, dtype=np.float32),
-        "demixed_fluorescence": np.ascontiguousarray(traces, dtype=np.float32),
-        "epoch_frame_offsets": epoch_offsets,
-        "fit_info": _cnmf_fit_info(
-            gnb,
-            n_iter,
-            converged,
-            objective,
-            objective_full,
-            cond_aa,
-            cond_joint,
-            ynorm_sq,
-            len(sub_rows),
-            init_method,
-        ),
-    }
+    return np.ascontiguousarray(background.T.reshape((gnb,) + spatial_shape), dtype=np.float32)
 
 
 def _cnmf_fit_info(
