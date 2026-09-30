@@ -40,6 +40,19 @@ def test_numpyimaging_defaults_time_vectors_to_none_per_epoch():
     assert len(im.epochs) == 2
 
 
+@pytest.mark.parametrize(
+    "imaging",
+    [
+        NumpyImaging(np.zeros((5, 8, 9)), sampling_frequency=30.0),
+        NumpyImaging(np.zeros((5, 8, 9, 2)), sampling_frequency=30.0),
+    ],
+)
+def test_numpyimaging_get_series_has_consistent_dimensions(imaging):
+    series = imaging.get_series()
+    assert series.shape[1:] == imaging.shape
+    assert series.shape[0] == imaging.get_num_frames()
+
+
 def test_numpyimaging_rejects_non_3d_or_4d_videos():
     bad2d = np.zeros((10, 10), dtype=np.float32)
     bad5d = np.zeros((2, 3, 4, 5, 6), dtype=np.float32)

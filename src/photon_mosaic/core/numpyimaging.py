@@ -54,13 +54,14 @@ class NumpyImaging(BaseImaging):
 
         # Check that all shapes and number of planes are consistent across epochs
         shapes = []
-        for video in videos:
+        for i, video in enumerate(videos):
             if len(video.shape) not in [3, 4]:
                 raise ValueError(
                     "'timeseries' must be a 3D or 4D numpy array (num_frames, height, width, [num_planes])"
                 )
             if len(video.shape) == 3:
-                video = video[:, :, :, np.newaxis]  # Add a planes dimension
+                videos[i] = video[:, :, :, np.newaxis]  # Add a planes dimension
+
             shapes.append(video.shape[1:])
         if not all(shape == shapes[0] for shape in shapes):
             raise ValueError("All epochs must have the same image shape (height, width, planes)")
@@ -75,6 +76,7 @@ class NumpyImaging(BaseImaging):
         BaseImaging.__init__(self, shape=shapes[0], sampling_frequency=sampling_frequency)
 
         for video, time_vector in zip(videos, time_vectors):
+            assert len(video.shape) == 4, "Video must be a 4D numpy array (num_frames, height, width, num_planes)"
             self.add_epoch(
                 NumpyImagingEpoch(
                     video=video,
