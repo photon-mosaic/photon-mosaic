@@ -107,6 +107,15 @@ class ZarrImaging(BaseImaging):
             "load_compression_ratio": load_compression_ratio,
         }
 
+    @staticmethod
+    def write_imaging(imaging: BaseImaging, folder_path: str, verbose=False, **kwargs):
+        import zarr
+
+        storage_options = kwargs.get("storage_options", None)
+        zarr_root = zarr.open(str(folder_path), mode="w", storage_options=storage_options)
+        add_imaging_to_zarr_group(imaging, zarr_root, verbose=verbose, **kwargs)
+        return ZarrImaging(folder_path=folder_path)
+
 
 class ZarrImagingEpoch(BaseImagingEpoch):
     def __init__(self, root, dataset_name, **time_kwargs):
@@ -157,7 +166,7 @@ def add_imaging_to_zarr_group(
 
     zarr_kwargs, job_kwargs = split_job_kwargs(kwargs)
 
-    if imaging.check_if_json_serializable():
+    if imaging.check_serializability("json"):
         zarr_group.attrs["provenance"] = check_json(imaging.to_dict(recursive=True))
     else:
         zarr_group.attrs["provenance"] = None  # pragma: no cover

@@ -64,8 +64,8 @@ class _FrameRangeEpoch(BaseImagingEpoch):
     """Lazy view over a contiguous frame range of a parent epoch."""
 
     def __init__(self, parent_epoch: BaseImagingEpoch, start_frame: int, end_frame: int):
-        t_start = parent_epoch.t_start if getattr(parent_epoch, "t_start", None) is not None else 0.0
-        sampling_frequency = parent_epoch.sampling_frequency
+        t_start = parent_epoch._t_start if getattr(parent_epoch, "_t_start", None) is not None else 0.0
+        sampling_frequency = parent_epoch._sampling_frequency
         BaseImagingEpoch.__init__(  # type: ignore[call-arg]
             self,
             sampling_frequency=sampling_frequency,
@@ -250,7 +250,7 @@ class _StackedPlanesEpoch(BaseImagingEpoch):
         first = parent_epochs[0]
         BaseImagingEpoch.__init__(  # type: ignore[call-arg]
             self,
-            sampling_frequency=first.sampling_frequency,
+            sampling_frequency=first._sampling_frequency,
             t_start=getattr(first, "t_start", None),
         )
         self._parent_epochs = list(parent_epochs)
