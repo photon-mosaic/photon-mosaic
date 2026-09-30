@@ -12,6 +12,7 @@ from photon_mosaic.core.imaging_ops import (
     split_epochs,
     stack_planes,
 )
+from photon_mosaic.core.selectplanes import select_planes
 
 
 def test_split_epoch_with_single_index_returns_single_epoch_proxy():
@@ -35,6 +36,27 @@ def test_split_epoch_with_multiple_indices_preserves_order():
     np.testing.assert_allclose(split_imaging.get_series(epoch_index=1), imaging.get_series(epoch_index=0))
     assert split_imaging.epochs[0] is imaging.epochs[2]
     assert split_imaging.epochs[1] is imaging.epochs[0]
+
+
+def test_split_repeatly():
+    imaging = generate_random_imaging(num_frames=(4, 6, 8, 10), height=5, width=7, sampling_frequency=20.0, seed=0)
+
+    split_imaging = split_epochs(imaging, [1, 2, 3])  # take last three epochs
+    split_split_imaging = split_epochs(split_imaging, [1])  # take middle of last three epochs
+
+    assert split_split_imaging.get_num_epochs() == 1
+    np.testing.assert_allclose(split_split_imaging.get_series(epoch_index=0), split_imaging.get_series(epoch_index=1))
+    np.testing.assert_allclose(split_split_imaging.get_series(epoch_index=0), imaging.get_series(epoch_index=2))
+    assert split_split_imaging.epochs[0] is split_imaging.epochs[1]
+    assert split_split_imaging.epochs[0] is imaging.epochs[2]
+
+
+def test_splitting_of_selected_planes_preserves_ids():
+    img = generate_random_imaging(num_frames=[6, 10], height=3, width=4, sampling_frequency=10.0, num_planes=5, seed=0)
+    parent_series = img.get_series(epoch_index=0)
+
+    epoch0_planes23 = split_epochs(select_planes(img, plane_ids=[2, 3]), epoch_indices=0)
+    assert np.array_equal(epoch0_planes23.get_series(epoch_index=0), parent_series[..., [2, 3]])
 
 
 def test_split_epoch_raises_on_invalid_indices():
