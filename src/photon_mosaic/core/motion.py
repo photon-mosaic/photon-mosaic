@@ -11,14 +11,14 @@ from photon_mosaic.core import BaseImaging
 # Editor autocomplete/typo-checking for the built-in methods. Not exhaustive:
 # any string registered via ``register_motion_class``/``register_registration_class``
 # (including third-party ones) is still accepted at runtime.
-KnownMotionMethod = Literal["suite2p", "jnormcorre"]
+KnownMotionMethod = Literal["suite2p", "normcorre"]
 
 # Method name -> module that defines (and registers) the backend's Motion
 # subclass. Only module *paths* live here, so core imports no backend: the
 # module is imported lazily the first time the method is requested.
 _builtin_motion_modules: dict[str, str] = {
     "suite2p": "photon_mosaic.preprocessing.suite2p_registration",
-    "jnormcorre": "photon_mosaic.preprocessing.jnormcorre_registration",
+    "normcorre": "photon_mosaic.preprocessing.normcorre_registration",
 }
 
 # Method name -> Motion subclass, filled in by ``register_motion_class``.
