@@ -335,6 +335,8 @@ class Suite2PMotion(Motion):
             settings = cls.settings_class()
         ops.pop("maxregshiftNR", None)  # suite2p's name for max_nonrigid_shift; ours is used throughout
         ops.update(settings.model_dump())
+        if "maxregshiftNR" in params:
+            raise ValueError("'maxregshiftNR' is now 'max_nonrigid_shift'.")
         ops.update(params)
         indices = ops["indices"]
         if indices is not None and ops["nonrigid"]:
