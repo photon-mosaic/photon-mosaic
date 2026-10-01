@@ -105,7 +105,10 @@ class FluorescenceNode(PipelineNode):
             Optional neuropil mask(s) to subtract from the fluorescence traces.
             Should have shape (num_rois, height, width) or (height, width).
         neuropil_weight : float, optional
-            Weight to apply to the neuropil signal before subtraction (default is 0.7).
+            Weight to apply to the neuropil signal before subtraction. Default is 0.7, the
+            standard neuropil-contamination coefficient from Kerlin et al. 2010 (Neuron) and
+            Chen et al. 2013 (Nature, the GCaMP6 paper), widely adopted since (e.g. Suite2p's
+            ``neucoeff``).
         """
         PipelineNode.__init__(
             self,
