@@ -8,14 +8,12 @@ from pydantic import ConfigDict, Field
 
 from photon_mosaic.core import (
     BaseImaging,
-    BaseImagingEpoch,
     Motion,
     register_motion_class,
     register_registration_class,
 )
 
-from .basepreprocessor import BasePreprocessorEpoch
-from .registration import RegisterImaging, RegistrationSettings
+from .registration import RegisterImaging, RegisterImagingEpoch, RegistrationSettings
 
 
 class Suite2pRegistrationSettings(RegistrationSettings):
@@ -42,16 +40,16 @@ class Suite2pRegistrationSettings(RegistrationSettings):
         "frame max(width and height). This will be ignored if force_refImg is set to True",
     )
     force_refImg: bool = Field(default=True, description="Force the use of an external reference image")
-    nonrigid: bool = Field(default=True, description="Whether to use non-rigid registration")
+    nonrigid: bool = Field(default=True, description="Whether to use non-rigid registration")  # shared field
     block_size: list = Field(default_factory=lambda: [128, 128], description="Block size for non-rigid registration.")
     snr_thresh: float = Field(
         default=1.2,
         description="if any nonrigid block is below this threshold, it gets smoothed "
         "until above this threshold. 1.0 results in no smoothing",
     )
-    maxregshiftNR: int = Field(
+    max_nonrigid_shift: int = Field(
         default=5,
-        description="maximum pixel shift allowed for nonrigid, relative to rigid",
+        description="maximum pixel shift allowed for nonrigid, relative to rigid (suite2p calls this maxregshiftNR)",
     )
     outlier_detrend_window: float = Field(
         default=3.0,
@@ -334,8 +332,16 @@ class Suite2PMotion(Motion):
         ops = default_settings()["registration"]
         if settings is None:
             settings = cls.settings_class()
+        ops.pop("maxregshiftNR", None)  # suite2p's name for max_nonrigid_shift; ours is used throughout
         ops.update(settings.model_dump())
         ops.update(params)
+        indices = ops["indices"]
+        if indices is not None and ops["nonrigid"]:
+            raise ValueError(
+                "'indices' (an estimation crop) is supported by the suite2p backend for rigid registration only: "
+                "its non-rigid block geometry is defined on the frame the shifts are applied to."
+            )
+        estimation_region = (slice(None), slice(None)) if indices is None else (slice(*indices[0]), slice(*indices[1]))
 
         device = torch.device(ops.get("device", "cpu"))
 
@@ -375,6 +381,7 @@ class Suite2PMotion(Motion):
                     plane_frames = all_frames[:, :, :, p].astype(np.float32)
                 else:
                     plane_frames = all_frames.astype(np.float32)
+                plane_frames = plane_frames[:, estimation_region[0], estimation_region[1]]
 
                 # Compute reference once from the first epoch
                 if epoch_idx == 0:
@@ -397,7 +404,7 @@ class Suite2PMotion(Motion):
                     maxregshift=ops["maxregshift"],
                     smooth_sigma_time=ops["smooth_sigma_time"],
                     snr_thresh=ops["snr_thresh"],
-                    maxregshiftNR=ops["maxregshiftNR"],
+                    maxregshiftNR=ops["max_nonrigid_shift"],
                     device=device,
                     apply_shifts=False,
                 )
@@ -471,118 +478,67 @@ class RegisterSuite2PImaging(RegisterImaging):
     """
 
 
-class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
-    """Epoch-level preprocessor that applies stored Suite2P displacements."""
+class RegisterSuite2PImagingEpoch(RegisterImagingEpoch):
+    """Epoch-level preprocessor that applies stored Suite2P displacements.
 
-    def __init__(
-        self,
-        parent_imaging_epoch: BaseImagingEpoch,
-        motion: Suite2PMotion,
-        epoch_index: int,
-        **kwargs: Any,
-    ) -> None:
-        """Create an epoch preprocessor for a specific epoch and displacement set."""
-        BasePreprocessorEpoch.__init__(self, parent_imaging_epoch)
-        self.motion = motion
-        self.epoch_index = epoch_index
-        self.kwargs = kwargs
+    Frame bounds, plane selection and output allocation come from
+    :class:`~photon_mosaic.preprocessing.registration.RegisterImagingEpoch`; this class
+    only shifts one plane's frames with Suite2P's ``shift_frames``.
+    """
 
-    def get_series(
+    motion: Suite2PMotion
+
+    def _correct_plane(
         self,
+        plane_video: NDArray[np.floating[Any]],
+        plane_index: int,
         start_frame: int,
         end_frame: int,
-        plane_indices: int | slice | Sequence[int] | None = None,
     ) -> NDArray[np.floating[Any]]:
-        """Return motion-corrected frames for the requested interval and planes."""
+        """Shift one plane's frames by the stored rigid (and non-rigid) offsets."""
 
         import torch
         from suite2p.registration import register
 
-        num_samples = self.parent_imaging_epoch.get_num_samples()
-        if end_frame > num_samples:
-            logging.warning(
-                "end_frame %d exceeds recording length %d; clamping. "
-                "This usually indicates a miscalculation upstream.",
-                end_frame,
-                num_samples,
-            )
-            end_frame = num_samples
-        if start_frame > end_frame:
-            raise ValueError(
-                f"start_frame ({start_frame}) is past end_frame ({end_frame}); " f"recording length is {num_samples}."
-            )
-
-        video = self.parent_imaging_epoch.get_series(start_frame, end_frame)
-        num_planes = video.shape[3] if video.ndim == 4 else 1
-
-        if plane_indices is None:
-            planes_to_process = list(range(num_planes))
-        elif isinstance(plane_indices, int):
-            planes_to_process = [plane_indices]
-        elif isinstance(plane_indices, slice):
-            planes_to_process = list(range(*plane_indices.indices(num_planes)))
-        else:
-            planes_to_process = list(plane_indices)
-
+        p = plane_index
         disps = self.motion.displacements[self.epoch_index]
-        n_frames = end_frame - start_frame
-        H, W = video.shape[1], video.shape[2]
-        output = np.empty((n_frames, H, W, len(planes_to_process)), dtype=np.float32)
-        if n_frames == 0:
-            return output
+        yoff = disps[start_frame:end_frame, p, 0].astype(int)
+        xoff = disps[start_frame:end_frame, p, 1].astype(int)
 
-        for i, p in enumerate(planes_to_process):
-            plane_video = video[:, :, :, p] if video.ndim == 4 else video
-            plane_video = plane_video.astype("float32", copy=True)
+        yoff1 = xoff1 = blocks = None
+        if self.motion.nonrigid_offsets is not None:
+            epoch_offsets = self.motion.nonrigid_offsets[self.epoch_index]
+            if epoch_offsets is not None and p < len(epoch_offsets):
+                plane_offsets = epoch_offsets[p]
+                if plane_offsets is not None:
+                    yoff1_full, xoff1_full = plane_offsets
+                    yoff1 = yoff1_full[start_frame:end_frame]
+                    xoff1 = xoff1_full[start_frame:end_frame]
+                    if self.motion.blocks is not None:
+                        blocks = self.motion.blocks[p]
 
-            # Ensure plane_video is always 3D (frames, height, width)
-            if plane_video.ndim == 2:
-                plane_video = plane_video[np.newaxis, :, :]
+        # Apply motion correction shifts — always CPU for on-the-fly application
+        device = torch.device("cpu")
 
-            yoff = disps[start_frame:end_frame, p, 0].astype(int)
-            xoff = disps[start_frame:end_frame, p, 1].astype(int)
+        plane_video_torch = torch.from_numpy(plane_video).to(device)
+        yoff_torch = torch.from_numpy(yoff.astype(np.int64)).to(device)
+        xoff_torch = torch.from_numpy(xoff.astype(np.int64)).to(device)
 
-            yoff1 = xoff1 = blocks = None
-            if self.motion.nonrigid_offsets is not None:
-                epoch_offsets = self.motion.nonrigid_offsets[self.epoch_index]
-                if epoch_offsets is not None and p < len(epoch_offsets):
-                    plane_offsets = epoch_offsets[p]
-                    if plane_offsets is not None:
-                        yoff1_full, xoff1_full = plane_offsets
-                        yoff1 = yoff1_full[start_frame:end_frame]
-                        xoff1 = xoff1_full[start_frame:end_frame]
-                        if self.motion.blocks is not None:
-                            blocks = self.motion.blocks[p]
+        yoff1_torch = None
+        xoff1_torch = None
+        if yoff1 is not None:
+            yoff1_torch = torch.from_numpy(yoff1).to(device)
+            xoff1_torch = torch.from_numpy(xoff1).to(device)
 
-            # Apply motion correction shifts — always CPU for on-the-fly application
-            device = torch.device("cpu")
-
-            plane_video_torch = torch.from_numpy(plane_video).to(device)
-            yoff_torch = torch.from_numpy(yoff.astype(np.int64)).to(device)
-            xoff_torch = torch.from_numpy(xoff.astype(np.int64)).to(device)
-
-            yoff1_torch = None
-            xoff1_torch = None
-            if yoff1 is not None:
-                yoff1_torch = torch.from_numpy(yoff1).to(device)
-                xoff1_torch = torch.from_numpy(xoff1).to(device)
-
-            registered_plane = register.shift_frames(
-                plane_video_torch,
-                yoff_torch,
-                xoff_torch,
-                yoff1_torch,
-                xoff1_torch,
-                blocks=blocks,
-                device=device,
-            )
-            # Ensure registered_plane is always 3D (frames, height, width)
-            if registered_plane.ndim == 2:
-                registered_plane = registered_plane[np.newaxis, :, :]
-
-            output[..., i] = registered_plane
-
-        return output
+        return register.shift_frames(
+            plane_video_torch,
+            yoff_torch,
+            xoff_torch,
+            yoff1_torch,
+            xoff1_torch,
+            blocks=blocks,
+            device=device,
+        )
 
 
 register_motion_class(Suite2PMotion)
