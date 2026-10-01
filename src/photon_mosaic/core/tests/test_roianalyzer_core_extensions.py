@@ -48,20 +48,20 @@ def chunk(imaging):
 
 def test_compute_returns_tuple(imaging, rois, chunk):
     node = FluorescenceNode(imaging, rois)
-    result = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    result = node.compute(chunk)
     assert isinstance(result, tuple)
-    assert len(result) == 1
+    assert len(result) == 2  # (fluorescence, background)
 
 
 def test_compute_output_shape(imaging, rois, chunk):
     node = FluorescenceNode(imaging, rois)
-    (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluorescence, _ = node.compute(chunk)
     assert fluorescence.shape == (NUM_FRAMES, NUM_ROIS)
 
 
 def test_compute_output_dtype(imaging, rois, chunk):
     node = FluorescenceNode(imaging, rois)
-    (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluorescence, _ = node.compute(chunk)
     assert fluorescence.dtype == np.float32
 
 
@@ -73,7 +73,7 @@ def test_compute_matches_manual_weighted_sum(imaging, rois, chunk):
     comparing -- for the binary masks used here, that's equivalent to dividing by pixel count.
     """
     node = FluorescenceNode(imaging, rois)
-    (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluorescence, _ = node.compute(chunk)
 
     masks = rois.get_roi_image_masks()  # (N, H, W)
     chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
@@ -95,7 +95,7 @@ def test_zero_mask_gives_zero_fluorescence(imaging, rois, chunk):
         sampling_frequency=SF,
     )
     node = FluorescenceNode(imaging, zero_rois)
-    (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluorescence, _ = node.compute(chunk)
     np.testing.assert_array_equal(fluorescence, 0.0)
 
 
@@ -106,8 +106,8 @@ def test_compute_matches_dense_result_with_sparse_masks(imaging, chunk):
     sparse_rois = generate_rois(num_rois=NUM_ROIS, height=H, width=W, sampling_frequency=SF, seed=SEED, sparse=True)
     dense_rois = generate_rois(num_rois=NUM_ROIS, height=H, width=W, sampling_frequency=SF, seed=SEED)
 
-    (fluorescence_sparse,) = FluorescenceNode(imaging, sparse_rois).compute(chunk, 0, NUM_FRAMES, 0, 0)
-    (fluorescence_dense,) = FluorescenceNode(imaging, dense_rois).compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluorescence_sparse, _ = FluorescenceNode(imaging, sparse_rois).compute(chunk)
+    fluorescence_dense, _ = FluorescenceNode(imaging, dense_rois).compute(chunk)
     np.testing.assert_allclose(fluorescence_sparse, fluorescence_dense, rtol=1e-5)
 
 
@@ -128,7 +128,7 @@ def test_compute_matches_least_squares_for_weighted_nonoverlapping_masks(imaging
     weighted_rois = NumpyRois(roi_image_masks=weighted_masks, sampling_frequency=SF)
 
     node = FluorescenceNode(imaging, weighted_rois)
-    (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluorescence, _ = node.compute(chunk)
 
     chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
     masks_flat = weighted_masks.reshape(2, -1)
@@ -149,7 +149,7 @@ def test_neuropil_per_roi_subtraction(imaging, rois, chunk):
     neuropil_weight = 0.7
 
     node = FluorescenceNode(imaging, rois, neuropil=neuropil, neuropil_weight=neuropil_weight)
-    (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluorescence, _ = node.compute(chunk)
 
     # Compute expected manually (masks_flat normalized to sum to 1, see FluorescenceNode's docstring)
     chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
@@ -180,7 +180,7 @@ def test_neuropil_subtraction_with_weighted_masks_matches_manual(imaging, chunk)
     neuropil_weight = 0.7
 
     node = FluorescenceNode(imaging, weighted_rois, neuropil=neuropil, neuropil_weight=neuropil_weight)
-    (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluorescence, _ = node.compute(chunk)
 
     chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
     masks_flat = weighted_masks.reshape(2, -1)
@@ -197,7 +197,7 @@ def test_neuropil_subtraction_with_weighted_masks_matches_manual(imaging, chunk)
 def test_neuropil_per_roi_shape(imaging, rois, chunk):
     neuropil = np.ones((NUM_ROIS, H, W), dtype=np.float32)
     node = FluorescenceNode(imaging, rois, neuropil=neuropil)
-    (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluorescence, _ = node.compute(chunk)
     assert fluorescence.shape == (NUM_FRAMES, NUM_ROIS)
 
 
@@ -213,7 +213,7 @@ def test_neuropil_global_subtraction(imaging, rois, chunk):
     neuropil_weight = 0.7
 
     node = FluorescenceNode(imaging, rois, neuropil=neuropil, neuropil_weight=neuropil_weight)
-    (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluorescence, _ = node.compute(chunk)
 
     chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
     masks_flat = rois.get_roi_image_masks().reshape(NUM_ROIS, -1).astype(np.float32)
@@ -230,7 +230,7 @@ def test_neuropil_global_broadcasts_correctly(imaging, rois, chunk):
     neuropil = np.ones((H, W), dtype=np.float32)
     neuropil_weight = 0.7
     node = FluorescenceNode(imaging, rois, neuropil=neuropil, neuropil_weight=neuropil_weight)
-    (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluorescence, _ = node.compute(chunk)
 
     # The global neuropil trace is the sum of each frame
     chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
@@ -238,7 +238,7 @@ def test_neuropil_global_broadcasts_correctly(imaging, rois, chunk):
 
     # Without neuropil
     node_no_np = FluorescenceNode(imaging, rois)
-    (fluor_no_np,) = node_no_np.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluor_no_np, _ = node_no_np.compute(chunk)
 
     np.testing.assert_allclose(fluorescence, fluor_no_np - neuropil_weight * global_trace, rtol=1e-5)
 
@@ -255,7 +255,7 @@ def test_neuropil_weight_scales_subtraction(imaging, rois, chunk, neuropil_weigh
     neuropil = rng.random((NUM_ROIS, H, W)).astype(np.float32)
 
     node = FluorescenceNode(imaging, rois, neuropil=neuropil, neuropil_weight=neuropil_weight)
-    (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluorescence, _ = node.compute(chunk)
 
     chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
     masks_flat = rois.get_roi_image_masks().reshape(NUM_ROIS, -1).astype(np.float32)
@@ -272,10 +272,10 @@ def test_neuropil_weight_zero_equals_no_subtraction(imaging, rois, chunk):
     neuropil = rng.random((NUM_ROIS, H, W)).astype(np.float32)
 
     node_weighted = FluorescenceNode(imaging, rois, neuropil=neuropil, neuropil_weight=0.0)
-    (fluor_weighted,) = node_weighted.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluor_weighted, _ = node_weighted.compute(chunk)
 
     node_none = FluorescenceNode(imaging, rois, neuropil=None)
-    (fluor_none,) = node_none.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluor_none, _ = node_none.compute(chunk)
 
     np.testing.assert_allclose(fluor_weighted, fluor_none, rtol=1e-5)
 
@@ -286,10 +286,10 @@ def test_neuropil_weight_default(imaging, rois, chunk):
     neuropil = rng.random((NUM_ROIS, H, W)).astype(np.float32)
 
     node_default = FluorescenceNode(imaging, rois, neuropil=neuropil)
-    (fluor_default,) = node_default.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluor_default, _ = node_default.compute(chunk)
 
     node_explicit = FluorescenceNode(imaging, rois, neuropil=neuropil, neuropil_weight=0.7)
-    (fluor_explicit,) = node_explicit.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluor_explicit, _ = node_explicit.compute(chunk)
 
     np.testing.assert_allclose(fluor_default, fluor_explicit, rtol=1e-5)
 
@@ -301,7 +301,7 @@ def test_neuropil_weight_default(imaging, rois, chunk):
 
 def test_no_neuropil_returns_normalized_weighted_sum(imaging, rois, chunk):
     node = FluorescenceNode(imaging, rois, neuropil=None)
-    (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluorescence, _ = node.compute(chunk)
 
     chunk_flat = chunk.reshape(NUM_FRAMES, -1).astype(np.float32)
     masks_flat = rois.get_roi_image_masks().reshape(NUM_ROIS, -1).astype(np.float32)
@@ -320,7 +320,7 @@ def test_compute_partial_chunk(imaging, rois):
     """Compute on a sub-slice of the video should return matching shape."""
     chunk = imaging.get_series(epoch_index=0, start_frame=5, end_frame=10)
     node = FluorescenceNode(imaging, rois)
-    (fluorescence,) = node.compute(chunk, 5, 10, 0, 0)
+    fluorescence, _ = node.compute(chunk)
     assert fluorescence.shape == (5, NUM_ROIS)
 
 
@@ -341,7 +341,7 @@ def test_compute_multiplane(rois):
     chunk = imaging_mp.get_series(epoch_index=0)
 
     node = FluorescenceNode(imaging_mp, rois_mp)
-    (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluorescence, _ = node.compute(chunk)
     assert fluorescence.shape == (NUM_FRAMES, NUM_ROIS)
     assert fluorescence.dtype == np.float32
 
@@ -1103,6 +1103,13 @@ def test_fluorescence_unknown_method_raises(analyzer):
         analyzer.compute("fluorescence", method="nope")
 
 
+def test_fluorescence_background_key_needs_a_neuropil(analyzer):
+    ext = analyzer.compute("fluorescence")
+    assert ext.data["background"].shape == (NUM_FRAMES, 0)
+    with pytest.raises(ValueError, match="No background"):
+        ext.get_data(key="background")
+
+
 def test_regression_matches_projection_for_nonoverlapping_masks(cnmf_truth):
     # With non-overlapping masks A A.T is diagonal, so the least-squares traces are exactly the
     # L2-rescaled projection -- for weighted masks too.
@@ -1154,6 +1161,20 @@ def test_regression_with_surround_neuropil_matches_projection(suite2p_rois, neur
     np.testing.assert_allclose(regression, projection, rtol=1e-4, atol=1e-2)
 
 
+@pytest.mark.parametrize("method", ["projection", "regression"])
+def test_surround_persists_its_ring_mean(suite2p_rois, neuropil_imaging, method):
+    # The ring mean Fneu used to be discarded per chunk; it is now persisted, before neuropil_weight.
+    analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
+    ring = analyzer.compute("neuropil", method="surround").get_data()
+    ext = analyzer.compute("fluorescence", neuropil_weight=0.7, method=method)
+    uncorrected = analyzer.compute("fluorescence", use_neuropil=False, method=method).get_data()
+
+    movie = neuropil_imaging.get_series(epoch_index=0)
+    expected_fneu = movie.reshape(movie.shape[0], -1) @ ring.reshape((ring.shape[0], -1)).todense().T
+    np.testing.assert_allclose(ext.get_data(key="background"), expected_fneu, rtol=1e-4, atol=1e-3)
+    np.testing.assert_allclose(ext.get_data() + 0.7 * ext.get_data(key="background"), uncorrected, rtol=1e-4, atol=1e-2)
+
+
 # --- FluorescenceNode-level tests ------------------------------------------
 
 
@@ -1174,7 +1195,7 @@ def test_multi_extension_compute_matches_sequential(imaging, rois, method_params
     one_by_one.compute("neuropil", **method_params)
     one_by_one.compute("fluorescence", **fluorescence_params)
 
-    for key in ("fluorescence",):
+    for key in ("fluorescence", "background"):
         np.testing.assert_array_equal(
             together.get_extension("fluorescence").data[key], one_by_one.get_extension("fluorescence").data[key]
         )

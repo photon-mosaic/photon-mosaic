@@ -25,13 +25,25 @@ class FluorescenceExtension(AnalyzerExtension):
     - ``'nnls'``: the same solve with ``C >= 0`` enforced (fluorescence is a photon count). Solved
       frame by frame with :func:`scipy.optimize.nnls`, so it costs more per chunk than
       ``'regression'``.
+
+    Computed data keys:
+
+    ================  ======================  ======================================================
+    Key               Shape                   Contents
+    ================  ======================  ======================================================
+    ``fluorescence``  ``(n_frames, n_rois)``  the extracted traces, ``F - neuropil_weight * Fneu``
+                                              with a surround neuropil
+    ``background``    ``(n_frames, n_rois)``  the surround ring mean ``Fneu``, before
+                                              ``neuropil_weight``. ``(n_frames, 0)`` without a
+                                              neuropil.
+    ================  ======================  ======================================================
     """
 
     extension_name = "fluorescence"
     depend_on: list[str] = []
     need_imaging = True
     use_nodepipeline = True
-    nodepipeline_variables = ["fluorescence"]
+    nodepipeline_variables = ["fluorescence", "background"]
     need_job_kwargs = True
 
     @classmethod
@@ -65,7 +77,7 @@ class FluorescenceExtension(AnalyzerExtension):
 
         job_kwargs = fix_job_kwargs(job_kwargs)
         nodes = self.get_pipeline_nodes()
-        fluorescence = run_node_pipeline(
+        fluorescence, background = run_node_pipeline(
             self.roi_analyzer.imaging,
             nodes,
             job_kwargs=job_kwargs,
@@ -75,6 +87,7 @@ class FluorescenceExtension(AnalyzerExtension):
             verbose=verbose,
         )
         self.data["fluorescence"] = fluorescence
+        self.data["background"] = background
 
     def _get_pipeline_nodes(self):
         if self.params["use_neuropil"] and self.roi_analyzer.has_extension("neuropil"):
@@ -92,15 +105,30 @@ class FluorescenceExtension(AnalyzerExtension):
             )
         ]
 
-    def _get_data(self, outputs="numpy"):
-        fluorescence_traces = self.data["fluorescence"]
+    def _get_data(self, outputs="numpy", key="fluorescence"):
+        """Return the extracted traces.
+
+        Parameters
+        ----------
+        outputs : str, optional
+            ``'numpy'`` or ``'recording'`` (a SpikeInterface ``NumpyRecording``). Default is
+            ``'numpy'``.
+        key : str, optional
+            ``'fluorescence'`` (the traces) or ``'background'`` (the surround ring mean ``Fneu``; see
+            the class docstring). Default is ``'fluorescence'``.
+        """
+        if key not in ("fluorescence", "background"):
+            raise KeyError(f"Unknown key: '{key}'. Supported: 'fluorescence', 'background'.")
+        if key == "background" and ("background" not in self.data or self.data["background"].shape[1] == 0):
+            raise ValueError("No background: fluorescence was extracted without a neuropil.")
+        traces = self.data[key]
         if outputs == "numpy":
-            return fluorescence_traces
+            return traces
         elif outputs == "recording":
             from spikeinterface.core import NumpyRecording
 
             return NumpyRecording(
-                fluorescence_traces,
+                traces,
                 sampling_frequency=self.roi_analyzer.imaging.sampling_frequency,
                 channel_ids=self.roi_analyzer.rois.roi_ids,
             )
@@ -109,7 +137,12 @@ class FluorescenceExtension(AnalyzerExtension):
 
     def _select_extension_data(self, roi_ids):
         roi_indices = self.roi_analyzer.rois.ids_to_indices(roi_ids)
-        return {"fluorescence": self.data["fluorescence"][:, roi_indices]}
+        selected = {"fluorescence": self.data["fluorescence"][:, roi_indices]}
+        if "background" in self.data:
+            background = self.data["background"]
+            # (n_frames, 0) when there was no neuropil: nothing to slice.
+            selected["background"] = background[:, roi_indices] if background.shape[1] else background
+        return selected
 
 
 class FluorescenceNode(PipelineNode):
@@ -252,7 +285,7 @@ class FluorescenceNode(PipelineNode):
     def get_dtype(self):
         return np.float32
 
-    def compute(self, chunk, *args):
+    def compute(self, chunk):
         # chunk shape: (num_frames, H, W, P)
         num_frames = chunk.shape[0]
         chunk_flat = chunk.reshape(num_frames, -1).astype(np.float32)  # (T, spatial)
@@ -260,6 +293,7 @@ class FluorescenceNode(PipelineNode):
         if self.method == "projection":
             # Weighted fluorescence per ROI: (T, N)
             fluorescence = chunk_flat @ self._masks_flat.T
+            neuropil_trace = None
             # Neuropil subtraction, in the same L1/mean scale as self._masks_flat
             if self._neuropil_flat is not None:
                 # (T, 1) for global or (T, N) for per-ROI
@@ -268,7 +302,7 @@ class FluorescenceNode(PipelineNode):
             # Rescale from L1 to the L2-normalized scale (see __init__) -- a no-op (factor 1) for
             # binary masks (Suite2pRois and generate_rois's default).
             fluorescence *= self._rescale_to_l2
-            return (fluorescence,)
+            return fluorescence, self._persisted_neuropil(neuropil_trace, num_frames)
 
         rhs = np.asarray(self._masks_csr @ chunk_flat.T.astype(np.float64)).T  # (T, N)
         if self.method == "regression":
@@ -281,12 +315,27 @@ class FluorescenceNode(PipelineNode):
             for t in range(num_frames):
                 traces[t], _ = nnls(self._nnls_matrix, targets[t])
 
+        neuropil_trace = None
         if self._neuropil_flat is not None:
             # Surround stays a two-step correction on the traces. They are already on the L2 scale
             # and the ring trace on the L1 (mean) scale, hence the same rescale as the projection path.
             neuropil_trace = chunk_flat @ self._neuropil_flat.T
             traces = traces - self.neuropil_weight * neuropil_trace * self._rescale_to_l2
-        return (traces.astype(np.float32),)
+        return traces.astype(np.float32), self._persisted_neuropil(neuropil_trace, num_frames)
+
+    def _persisted_neuropil(self, neuropil_trace, num_frames):
+        """The surround ring mean ``Fneu`` as ``(T, N)``, persisted rather than discarded.
+
+        Rescaled by the same L1 -> L2 factor as the traces (a no-op for binary masks), so that
+        ``fluorescence + neuropil_weight * background`` is the uncorrected trace. ``(T, 0)`` when there
+        is no surround neuropil.
+        """
+        num_rois = self._rescale_to_l2.shape[1]
+        if neuropil_trace is None:
+            return np.zeros((num_frames, 0), dtype=np.float32)
+        # A global (H, W) neuropil gives (T, 1): the same ring mean for every ROI.
+        neuropil_trace = np.broadcast_to(neuropil_trace, (num_frames, num_rois))
+        return (neuropil_trace * self._rescale_to_l2).astype(np.float32)
 
 
 register_result_extension(FluorescenceExtension)
