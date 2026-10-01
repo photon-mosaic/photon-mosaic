@@ -85,7 +85,7 @@ class RegisterImaging(BasePreprocessor):
         for epoch_idx, parent_epoch in enumerate(imaging.epochs):
             self.add_epoch(registration_class(parent_epoch, motion, epoch_idx, **kwargs))
 
-        self._kwargs = dict(imaging=imaging, motion=motion, **kwargs)
+        self._kwargs = dict(imaging=imaging, motion=motion, method=method, **kwargs)
 
 
 class RegisterImagingEpoch(BasePreprocessorEpoch):

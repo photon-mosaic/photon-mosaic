@@ -87,6 +87,14 @@ class TestRegisterImaging:
         with pytest.raises(TypeError, match="registration_class"):
             RegisterImaging(imaging, motion, method="unregistered_test_backend")
 
+    def test_serialisation_keeps_the_method(self, imaging):
+        from spikeinterface.core.base import BaseExtractor
+
+        motion = DoublingMotion(imaging=imaging, displacements=[np.zeros((6, 1, 2))])
+        registered = RegisterImaging(imaging, motion, method="doubling_test_backend")
+        restored = BaseExtractor.from_dict(registered.to_dict())
+        assert isinstance(restored.epochs[0], DoublingEpoch)
+
     def test_kwargs_are_forwarded_to_the_epoch(self, imaging):
         motion = DoublingMotion(imaging=imaging, displacements=[np.zeros((6, 1, 2))])
         registered = RegisterImaging(imaging, motion, method="doubling_test_backend", flavour="test")
