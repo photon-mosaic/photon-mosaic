@@ -48,7 +48,7 @@ class BinaryImaging(BaseImaging):
         t_starts=None,
         file_offset=0,
     ):
-        BaseImaging.__init__(self, sampling_frequency, shape)
+        BaseImaging.__init__(self, sampling_frequency, shape, dtype)
 
         if isinstance(file_paths, list):
             # several epochs

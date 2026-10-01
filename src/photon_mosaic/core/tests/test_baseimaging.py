@@ -111,9 +111,19 @@ def test_random_imaging_repr_contains_expected_fields():
 def test_baseimaging_constructor_with_2d_dhape():
     shape = (50, 50)
     sampling_frequency = 15.0
-    base_imaging = BaseImaging(sampling_frequency=sampling_frequency, shape=shape)
+    base_imaging = BaseImaging(sampling_frequency=sampling_frequency, shape=shape, dtype="float32")
 
     assert base_imaging.shape == (50, 50, 1)
+
+
+def test_baseimaging_requires_dtype():
+    with pytest.raises(AssertionError, match="dtype must be specified"):
+        BaseImaging(sampling_frequency=30.0, shape=(8, 9), dtype=None)
+
+
+def test_baseimaging_rejects_invalid_dtype():
+    with pytest.raises(TypeError):
+        BaseImaging(sampling_frequency=30.0, shape=(8, 9), dtype="not_a_dtype")
 
 
 def test_baseimaging_multi_epoch_requires_epoch_index():

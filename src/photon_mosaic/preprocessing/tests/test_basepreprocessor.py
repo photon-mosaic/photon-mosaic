@@ -37,6 +37,16 @@ class TestBasePreprocessor:
         # Verify construction succeeds with an explicit dtype
         BasePreprocessor(imaging, dtype=np.float32)
 
+    def test_get_dtype_returns_custom_dtype(self, imaging):
+        # Verify that the custom dtype is correctly returned by get_dtype()
+        reg = BasePreprocessor(imaging, dtype=np.float32)
+        assert reg.get_dtype() == np.dtype(np.float32)
+
+    def test_get_dtype_defaults_to_parent_dtype(self, imaging):
+        # Verify that the default dtype is inherited from the parent imaging object
+        reg = BasePreprocessor(imaging)
+        assert reg.get_dtype() == imaging.get_dtype()
+
     def test_init_rejects_non_imaging(self):
         with pytest.raises(AssertionError, match="must be a BaseImaging"):
             BasePreprocessor("not_an_imaging_object")

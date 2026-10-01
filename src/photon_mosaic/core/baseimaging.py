@@ -19,7 +19,7 @@ class BaseImaging(BaseExtractor, TimeSeries):
     The `_main_ids` attribute is used here for multi-plane imaging objects.
     """
 
-    def __init__(self, sampling_frequency: float, shape: tuple | list | ArrayLike):
+    def __init__(self, sampling_frequency: float, shape: tuple | list | ArrayLike, dtype: DTypeLike):
         # Should we allow users to provide 2D shape (H, W) for single plane imaging?
         if len(shape) == 2:
             shape = (shape[0], shape[1], 1)
@@ -29,6 +29,8 @@ class BaseImaging(BaseExtractor, TimeSeries):
         self._sampling_frequency = float(sampling_frequency)
         self._shape = tuple(shape)  # Image is intended as a volume (H, W, planes)
         self._average_image = None
+        assert dtype is not None, "dtype must be specified"
+        self._dtype = np.dtype(dtype)
 
     def _repr_header(self, display_name=True):
         """Generate text representation of the BaseImaging object."""
@@ -281,9 +283,9 @@ class BaseImaging(BaseExtractor, TimeSeries):
         Returns
         -------
         dtype: dtype
-            Data type of the video.
+            Dtype passed to the constructor.
         """
-        return self.get_series(start_frame=0, end_frame=2, epoch_index=0).dtype
+        return self._dtype
 
     def get_num_pixels(self) -> int:
         """Get the number of pixels in the image.

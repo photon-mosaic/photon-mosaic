@@ -41,7 +41,9 @@ class SelectEpochImaging(BaseImaging):
     def __init__(self, imaging: BaseImaging, epoch_indices: int | list[int]):
         normalized_epoch_indices = _normalize_epoch_indices(epoch_indices, imaging.get_num_epochs())
 
-        BaseImaging.__init__(self, sampling_frequency=imaging.sampling_frequency, shape=imaging.shape)
+        BaseImaging.__init__(
+            self, sampling_frequency=imaging.sampling_frequency, shape=imaging.shape, dtype=imaging.get_dtype()
+        )
         imaging.copy_metadata(self)
 
         self._selected_epoch_indices = {}
@@ -134,7 +136,9 @@ class SplitEpochAtFramesImaging(BaseImaging):
         if any(boundaries[i] >= boundaries[i + 1] for i in range(len(boundaries) - 1)):
             raise ValueError(f"frame_boundaries must be strictly increasing; got {boundaries}")
 
-        BaseImaging.__init__(self, sampling_frequency=imaging.sampling_frequency, shape=imaging.shape)
+        BaseImaging.__init__(
+            self, sampling_frequency=imaging.sampling_frequency, shape=imaging.shape, dtype=imaging.get_dtype()
+        )
         imaging.copy_metadata(self)
 
         edges = [0, *boundaries, n_samples]
@@ -222,7 +226,12 @@ class FrameSliceImaging(BaseImaging):
         if end_frame <= start_frame:
             raise ValueError(f"start_frame must be smaller than end_frame; got {start_frame} and {end_frame}")
 
-        BaseImaging.__init__(self, sampling_frequency=parent_imaging.sampling_frequency, shape=parent_imaging.shape)
+        BaseImaging.__init__(
+            self,
+            sampling_frequency=parent_imaging.sampling_frequency,
+            shape=parent_imaging.shape,
+            dtype=parent_imaging.get_dtype(),
+        )
         parent_imaging.copy_metadata(self)
         self.add_epoch(_FrameRangeEpoch(parent_epoch, start_frame, end_frame))
 
@@ -403,7 +412,7 @@ class StackPlanesImaging(BaseImaging):
 
         planes_per_parent = [int(im.num_planes) for im in imagings]
         total_planes = sum(planes_per_parent)
-        BaseImaging.__init__(self, sampling_frequency=fs, shape=(height, width, total_planes))
+        BaseImaging.__init__(self, sampling_frequency=fs, shape=(height, width, total_planes), dtype=dtype)
 
         for epoch_index in range(num_epochs):
             parent_epochs = [im.epochs[epoch_index] for im in imagings]
