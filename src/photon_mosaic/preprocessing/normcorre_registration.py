@@ -1,31 +1,4 @@
-"""In-house NoRMCorre motion correction backend (``method="normcorre"``), following CaImAn.
-
-NoRMCorre (Pnevmatikakis & Giovannucci 2017) registers each frame to a template by
-phase correlation with sub-pixel refinement (Guizar-Sicairos et al. 2008), for the
-whole field of view (rigid) or per overlapping patch (piecewise rigid), and refines the
-template by registering temporal splits and taking the median of their means.
-
-The driver (:meth:`NormcorreMotion._compute`), the per-split step (:func:`_tile_and_correct`)
-and the replay (:meth:`RegisterNormcorreImagingEpoch._correct_plane`) reproduce CaImAn
-v1.13.2 (``240e1f2``, ``caiman/motion_correction.py`` and ``caiman/base/movies.py``) step by
-step, with nothing CaImAn does not do. The leaf kernels are stubs that raise
-``NotImplementedError`` and say what to implement and where CaImAn does it; jnormcorre
-v1.0.0 (``25f3442``) and masknmf (``50d77e0``) are cited where they implement the same step.
-All three are GPL; write from the papers and scikit-image's BSD ``phase_cross_correlation``,
-do not copy.
-
-Shifts stored on the motion object are the *correction* to apply, ``(y, x)`` in pixels, as
-CaImAn's ``shifts_rig`` / ``-x_shifts_els``. Epochs play the role of CaImAn's list of files:
-each one starts from the previous one's template. Applying the shifts to another channel
-needs no function of its own: ``register_motion(other_imaging, motion, method="normcorre")``.
-
-Not reproduced, by design: the memmap output and ``nonneg_movie`` (output bias only), the
-random ``num_splits_to_process_rig`` subset (CaImAn: "DO NOT MODIFY"; it would leave
-frames without shifts), ``remove_min`` on replay (a whole-movie operation), ``use_cuda``
-(deprecated), 3D (``is3D``; needs ``(frames, 3)`` displacements), the online algorithm and
-``dview``. The shared ``batch_size``, ``device``, ``debug`` and ``tmp_dir`` are not used:
-CaImAn reads one split at a time and has no device setting. Tracked in issue #79.
-"""
+"""NoRMCorre motion correction following CaImAn v1.13.2 (``240e1f2``); line numbers cite that version."""
 
 from __future__ import annotations
 
