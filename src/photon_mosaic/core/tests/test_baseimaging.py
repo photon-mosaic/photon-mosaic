@@ -116,6 +116,16 @@ def test_baseimaging_constructor_with_2d_dhape():
     assert base_imaging.shape == (50, 50, 1)
 
 
+def test_baseimaging_requires_dtype():
+    with pytest.raises(AssertionError, match="dtype must be specified"):
+        BaseImaging(sampling_frequency=30.0, shape=(8, 9), dtype=None)
+
+
+def test_baseimaging_rejects_invalid_dtype():
+    with pytest.raises(TypeError):
+        BaseImaging(sampling_frequency=30.0, shape=(8, 9), dtype="not_a_dtype")
+
+
 def test_baseimaging_multi_epoch_requires_epoch_index():
     sf = 10.0
     h, w = 3, 4
