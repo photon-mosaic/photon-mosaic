@@ -694,8 +694,23 @@ class DfOverFExtension(AnalyzerExtension):
       (``prctile_baseline=<float>``) or estimated automatically per ROI via a
       DCT-based KDE of the fluorescence distribution (``prctile_baseline=None``).
 
+    When the fluorescence was extracted against a ``method='cnmf'`` neuropil, the fit can't fully
+    separate a cell's baseline from the background: moving part of the baseline from ``C`` into
+    ``b, f`` (or back) fits the movie equally well, so ``C``'s own baseline is not reliable on its
+    own. With ``use_background=True`` (the default) the background per ROI ``B``
+    (``FluorescenceExtension.get_data(key='background')``) is then used as a second input, as in
+    CaImAn's ``detrend_df_f``::
+
+        dF/F = (C - C_baseline) / (B_baseline + C_baseline)
+
+    Baseline moved between ``C`` and the background shifts ``C_baseline`` and ``B_baseline`` by
+    opposite amounts, so their sum stays reliable. Both baselines use the same method, window and
+    (per ROI) percentile, the percentile being chosen from ``C``. Surround and no-neuropil
+    fluorescence are unaffected.
+
     The fitted baseline itself is kept alongside the dF/F traces, accessible via
-    ``self.data["f0"]`` (shape ``(n_frames, n_rois)``, matching ``self.data["df_over_f"]``).
+    ``self.data["f0"]`` (shape ``(n_frames, n_rois)``, matching ``self.data["df_over_f"]``). With a
+    CNMF background it is the denominator ``B_baseline + C_baseline``.
     """
 
     extension_name = "df_over_f"
@@ -709,6 +724,7 @@ class DfOverFExtension(AnalyzerExtension):
         win_baseline: float = 60.0,
         sig_baseline: float = 10.0,
         prctile_baseline: float | None = None,
+        use_background: bool = True,
         **params: Any,
     ) -> dict[str, Any]:
         """Set parameters for dF/F computation.
@@ -733,16 +749,38 @@ class DfOverFExtension(AnalyzerExtension):
             fluorescence distribution (CaImAn-style), falling back to the 50th
             percentile if estimation fails. If a float, that value is used
             directly for all ROIs. Default is ``None``.
+        use_background : bool, optional
+            If the fluorescence was extracted against a ``method='cnmf'`` neuropil, add its
+            background baseline to the denominator (see the class docstring). Ignored otherwise.
+            Default is ``True``.
         """
         return dict(
             method=method,
             win_baseline=win_baseline,
             sig_baseline=sig_baseline,
             prctile_baseline=prctile_baseline,
+            use_background=use_background,
         )
+
+    def _cnmf_background(self) -> np.ndarray | None:
+        """The fluorescence extension's CNMF background per ROI ``B``, or ``None`` if there is none.
+
+        Only a CNMF ``B`` qualifies: for surround, ``background`` holds the ring mean ``Fneu``, which
+        was already subtracted from the traces and is not a share of their baseline.
+        """
+        if not self.params.get("use_background", True):
+            return None
+        fluorescence = self.roi_analyzer.get_extension("fluorescence")
+        background = fluorescence.data.get("background")
+        if background is None or background.shape[1] == 0 or not self.roi_analyzer.has_extension("neuropil"):
+            return None
+        if self.roi_analyzer.get_extension("neuropil").params.get("method", "surround") != "cnmf":
+            return None
+        return background
 
     def _run(self, verbose: bool = False, **job_kwargs) -> None:
         F = self.roi_analyzer.get_extension("fluorescence").get_data()
+        B = self._cnmf_background()
         method = self.params["method"]
         if method == "maximin":  # maximin baseline estimation as in Suite2p
             from scipy.ndimage import gaussian_filter1d, maximum_filter1d, minimum_filter1d
@@ -750,27 +788,43 @@ class DfOverFExtension(AnalyzerExtension):
             fs = self.roi_analyzer.sampling_frequency
             win = int(self.params["win_baseline"] * fs)
             win += 1 if win % 2 == 0 else 0  # ensure odd window
-            F0 = gaussian_filter1d(F, sigma=self.params["sig_baseline"], axis=0)
-            F0 = minimum_filter1d(F0, size=win, axis=0)
-            F0 = maximum_filter1d(F0, size=win, axis=0)
+
+            def _maximin(x):
+                x = gaussian_filter1d(x, sigma=self.params["sig_baseline"], axis=0)
+                x = minimum_filter1d(x, size=win, axis=0)
+                return maximum_filter1d(x, size=win, axis=0)
+
+            F0 = _maximin(F)
+            B0 = None if B is None else _maximin(B)
         elif method in ("percentile", "running_percentile"):  # running percentile baseline as in CaImAn
             from concurrent.futures import ProcessPoolExecutor
 
             win = int(self.params["win_baseline"] * self.roi_analyzer.sampling_frequency)
             n_jobs = fix_job_kwargs(job_kwargs).get("n_jobs", 1)
             prctile_baseline = self.params["prctile_baseline"]
-            args = [(F[:, i].copy(), win, prctile_baseline) for i in range(F.shape[1])]
+            if B is None:
+                func: Any = _percentile_filter_roi
+                args: list[tuple] = [(F[:, i].copy(), win, prctile_baseline) for i in range(F.shape[1])]
+            else:
+                func = _percentile_filter_roi_and_background
+                args = [(F[:, i].copy(), B[:, i].copy(), win, prctile_baseline) for i in range(F.shape[1])]
             if n_jobs == 1:
-                cols = [_percentile_filter_roi(a) for a in args]
+                cols = [func(a) for a in args]
             else:
                 with ProcessPoolExecutor(max_workers=n_jobs) as ex:
-                    cols = list(ex.map(_percentile_filter_roi, args))
-            F0 = np.stack(cols, axis=1)
+                    cols = list(ex.map(func, args))
+            if B is None:
+                F0, B0 = np.stack(cols, axis=1), None
+            else:
+                F0 = np.stack([c for c, _ in cols], axis=1)
+                B0 = np.stack([b for _, b in cols], axis=1)
         else:
             raise ValueError(f"Unknown method: '{method}'. Supported: 'maximin', 'percentile'.")
 
-        self.data["df_over_f"] = ((F - F0) / (F0 + np.finfo(np.float32).eps)).astype(np.float32)
-        self.data["f0"] = F0.astype(np.float32)
+        # CaImAn's detrend_df_f: the numerator uses C's own baseline, the denominator adds B's.
+        denominator = F0 if B0 is None else F0 + B0
+        self.data["df_over_f"] = ((F - F0) / (denominator + np.finfo(np.float32).eps)).astype(np.float32)
+        self.data["f0"] = denominator.astype(np.float32)
 
     def _get_data(self, outputs="numpy"):
         """Return the computed dF/F traces.
@@ -1010,15 +1064,34 @@ def _percentile_filter_roi(args: tuple) -> np.ndarray:
           automatic KDE estimation from the first ``size`` frames of ``col``.
     """
     col, size, prctile_baseline = args
-    if prctile_baseline is None:
-        window = col if size >= len(col) else col[:size]
-        try:
-            prct = _kde_mode_percentile(window.astype(np.float64))
-        except Exception:
-            prct = 50.0
-    else:
-        prct = float(prctile_baseline)
+    return _rolling_percentile(col, size, _resolve_percentile(col, size, prctile_baseline))
 
+
+def _percentile_filter_roi_and_background(args: tuple) -> tuple[np.ndarray, np.ndarray]:
+    """Rolling percentile baselines of one ROI's trace and of its CNMF background, at one percentile.
+
+    Unpacks ``(col, background_col, size, prctile_baseline)``. As in CaImAn's ``detrend_df_f``, the
+    percentile is chosen from the trace alone (by KDE when ``prctile_baseline`` is ``None``) and
+    then applied to both, so the two baselines are directly comparable.
+    """
+    col, background_col, size, prctile_baseline = args
+    prct = _resolve_percentile(col, size, prctile_baseline)
+    return _rolling_percentile(col, size, prct), _rolling_percentile(background_col, size, prct)
+
+
+def _resolve_percentile(col: np.ndarray, size: int, prctile_baseline: float | None) -> float:
+    """The fixed ``prctile_baseline``, or (if ``None``) the KDE estimate from the first ``size`` frames."""
+    if prctile_baseline is not None:
+        return float(prctile_baseline)
+    window = col if size >= len(col) else col[:size]
+    try:
+        return _kde_mode_percentile(window.astype(np.float64))
+    except Exception:
+        return 50.0
+
+
+def _rolling_percentile(col: np.ndarray, size: int, prct: float) -> np.ndarray:
+    """Rolling ``prct`` percentile of ``col`` over a ``size``-frame window."""
     if size >= len(col):
         # Window covers the whole trace: skip scipy.ndimage's boundary-reflection
         # padding, whose behavior here isn't reliably reproducible across environments.
