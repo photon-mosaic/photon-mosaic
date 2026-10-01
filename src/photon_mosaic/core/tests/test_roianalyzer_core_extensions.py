@@ -1700,3 +1700,99 @@ def test_multi_extension_compute_matches_sequential(imaging, rois, method_params
         np.testing.assert_array_equal(
             together.get_extension("fluorescence").data[key], one_by_one.get_extension("fluorescence").data[key]
         )
+
+
+# --- DfOverFExtension with a CNMF background (item 3 of the #111 "Proposed split") -------------
+
+
+def _percentile_baselines(traces, win, prct):
+    from scipy.ndimage import percentile_filter
+
+    return np.stack([percentile_filter(traces[:, i], prct, size=win) for i in range(traces.shape[1])], axis=1)
+
+
+@pytest.fixture(scope="module")
+def cnmf_df_over_f_analyzer(cnmf_truth):
+    masks, movie, _, _, _ = cnmf_truth
+    return _cnmf_analyzer_and_fluorescence(masks, movie)[0]
+
+
+def test_df_over_f_default_uses_the_background(analyzer):
+    assert analyzer.get_default_extension_params("df_over_f")["use_background"] is True
+
+
+@pytest.mark.parametrize("prctile_baseline", [8.0, 50.0])
+def test_df_over_f_adds_the_cnmf_background_baseline_to_the_denominator(cnmf_df_over_f_analyzer, prctile_baseline):
+    # CaImAn's detrend_df_f: (C - C_baseline) / (B_baseline + C_baseline).
+    win_s = 2.0
+    ext = cnmf_df_over_f_analyzer.compute(
+        "df_over_f", method="percentile", win_baseline=win_s, prctile_baseline=prctile_baseline
+    )
+    fluorescence = cnmf_df_over_f_analyzer.get_extension("fluorescence")
+    C, B = fluorescence.get_data(), fluorescence.get_data(key="background")
+    win = int(win_s * SF)
+    c0, b0 = _percentile_baselines(C, win, prctile_baseline), _percentile_baselines(B, win, prctile_baseline)
+    np.testing.assert_allclose(ext.get_data(), (C - c0) / (b0 + c0), rtol=1e-4, atol=1e-6)
+    np.testing.assert_allclose(ext.data["f0"], b0 + c0, rtol=1e-5)
+
+
+def test_df_over_f_uses_the_percentile_chosen_from_c_for_b_too(cnmf_df_over_f_analyzer):
+    # With prctile_baseline=None the KDE picks a percentile per ROI from C alone, and that same
+    # percentile is applied to B -- never one estimated from B.
+    win_s = 2.0
+    ext = cnmf_df_over_f_analyzer.compute("df_over_f", method="percentile", win_baseline=win_s, prctile_baseline=None)
+    fluorescence = cnmf_df_over_f_analyzer.get_extension("fluorescence")
+    C, B = fluorescence.get_data(), fluorescence.get_data(key="background")
+    win = int(win_s * SF)
+    for i in range(CNMF_ROIS):
+        prct = _kde_mode_percentile(C[:win, i].astype(np.float64))
+        c0 = _percentile_baselines(C[:, i : i + 1], win, prct)[:, 0]
+        b0 = _percentile_baselines(B[:, i : i + 1], win, prct)[:, 0]
+        np.testing.assert_allclose(ext.data["f0"][:, i], b0 + c0, rtol=1e-5)
+
+
+@pytest.mark.parametrize("method", ["percentile", "maximin"])
+def test_df_over_f_is_unchanged_when_baseline_moves_between_c_and_b(cnmf_truth, method):
+    # The fit can't tell how much of a cell's baseline belongs in C and how much in the background.
+    # Moving a constant per ROI from C into B must leave dF/F as it was: C_baseline drops and
+    # B_baseline rises by the same amount, so the denominator does not move.
+    masks, movie, _, _, _ = cnmf_truth
+    analyzer, fluorescence = _cnmf_analyzer_and_fluorescence(masks, movie, neuropil_kwargs={"max_iter": 10})
+    kwargs = dict(method=method, win_baseline=2.0, prctile_baseline=20.0)
+    before = analyzer.compute("df_over_f", **kwargs).get_data().copy()
+
+    shift = np.linspace(10.0, 40.0, CNMF_ROIS, dtype=np.float32)[None, :]
+    fluorescence.data["fluorescence"] = fluorescence.data["fluorescence"] - shift
+    fluorescence.data["background"] = fluorescence.data["background"] + shift
+    after = analyzer.compute("df_over_f", **kwargs).get_data()
+    np.testing.assert_allclose(after, before, rtol=1e-4, atol=1e-5)
+
+    # Using C's baseline alone is thrown off by the same shift.
+    c_only = analyzer.compute("df_over_f", use_background=False, **kwargs).get_data()
+    assert np.abs(c_only - before).max() > 1e-2
+
+
+def test_df_over_f_use_background_false_ignores_it(cnmf_df_over_f_analyzer):
+    kwargs = dict(method="percentile", win_baseline=2.0, prctile_baseline=8.0)
+    ext = cnmf_df_over_f_analyzer.compute("df_over_f", use_background=False, **kwargs)
+    C = cnmf_df_over_f_analyzer.get_extension("fluorescence").get_data()
+    c0 = _percentile_baselines(C, int(2.0 * SF), 8.0)
+    np.testing.assert_allclose(ext.get_data(), (C - c0) / c0, rtol=1e-4, atol=1e-6)
+
+
+def test_df_over_f_ignores_the_surround_ring_mean(suite2p_rois, neuropil_imaging):
+    # For surround, `background` is Fneu, already subtracted from F; it is not part of F's baseline.
+    analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
+    analyzer.compute("neuropil", method="surround")
+    analyzer.compute("fluorescence")
+    kwargs = dict(method="percentile", prctile_baseline=8.0)
+    with_background = analyzer.compute("df_over_f", **kwargs).get_data().copy()
+    without = analyzer.compute("df_over_f", use_background=False, **kwargs).get_data()
+    np.testing.assert_array_equal(with_background, without)
+
+
+def test_df_over_f_with_background_parallel_matches_serial(cnmf_df_over_f_analyzer):
+    kwargs = dict(method="percentile", win_baseline=2.0, prctile_baseline=None)
+    serial = cnmf_df_over_f_analyzer.compute("df_over_f", n_jobs=1, **kwargs).get_data().copy()
+    parallel = cnmf_df_over_f_analyzer.compute("df_over_f", n_jobs=2, **kwargs).get_data()
+    np.testing.assert_allclose(serial, parallel, rtol=1e-6)
