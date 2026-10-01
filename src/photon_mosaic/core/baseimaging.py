@@ -29,7 +29,8 @@ class BaseImaging(BaseExtractor, TimeSeries):
         self._sampling_frequency = float(sampling_frequency)
         self._shape = tuple(shape)  # Image is intended as a volume (H, W, planes)
         self._average_image = None
-        self._dtype = np.dtype(dtype) if dtype is not None else None
+        assert dtype is not None, "dtype must be specified"
+        self._dtype = np.dtype(dtype)
 
     def _repr_header(self, display_name=True):
         """Generate text representation of the BaseImaging object."""
