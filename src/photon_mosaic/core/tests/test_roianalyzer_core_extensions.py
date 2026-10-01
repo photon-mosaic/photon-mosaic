@@ -5,6 +5,7 @@ import pytest
 
 from photon_mosaic.core import create_roi_analyzer, load_roi_analyzer
 from photon_mosaic.core.generators import generate_fluorescence, generate_random_imaging, generate_rois
+from photon_mosaic.core.numpyimaging import NumpyImaging, NumpyRois
 from photon_mosaic.core.roianalyzer_core_extensions import (
     FluorescenceNode,
     _build_surround_neuropil_masks,
@@ -1027,3 +1028,153 @@ def test_fluorescence_extension_use_neuropil_false_ignores_computed_extension(su
     expected = chunk_flat @ roi_masks_flat.T
 
     np.testing.assert_allclose(fluorescence, expected, rtol=1e-5)
+
+
+# ---------------------------------------------------------------------------
+# FluorescenceExtension: method='regression' / 'nnls'
+# ---------------------------------------------------------------------------
+
+# A hand-built ground truth rather than generate_imaging_with_rois: that generator's `background`
+# is a uniform, non-fluctuating scalar, so a low-rank fit on it is degenerate (f constant, b flat)
+# and could not validate anything. Here Y is literally C A.T + f b.T + noise.
+CNMF_H = CNMF_W = 24
+CNMF_FRAMES = 200
+CNMF_ROIS = 4
+CNMF_CENTERS = [(3, 3), (3, 15), (15, 3), (15, 15)]
+CNMF_SIDE = 4
+
+
+def _cnmf_masks(weighted=False):
+    masks = np.zeros((CNMF_ROIS, CNMF_H, CNMF_W), dtype=np.float32)
+    for i, (y, x) in enumerate(CNMF_CENTERS):
+        block = np.ones((CNMF_SIDE, CNMF_SIDE), dtype=np.float32)
+        if weighted:
+            ramp = np.linspace(0.4, 1.0, CNMF_SIDE, dtype=np.float32)
+            block = np.outer(ramp, ramp)
+        masks[i, y : y + CNMF_SIDE, x : x + CNMF_SIDE] = block
+    return masks
+
+
+def _cnmf_ground_truth(num_frames=CNMF_FRAMES, weighted=False, background_scale=1.0, seed=0):
+    """Return ``(masks, movie, traces_true, background_spatial_true, background_temporal_true)``.
+
+    ``movie`` is ``(num_frames, H, W, 1)``; the two background factors are ``(n_pixels, 1)`` and
+    ``(num_frames, 1)``.
+    """
+    from scipy.ndimage import gaussian_filter1d
+
+    rng = np.random.default_rng(seed)
+    masks = _cnmf_masks(weighted=weighted)
+    masks_flat = masks.reshape(CNMF_ROIS, -1)
+
+    traces = 100.0 + 50.0 * np.abs(gaussian_filter1d(rng.standard_normal((num_frames, CNMF_ROIS)), 3, axis=0))
+    traces = traces.astype(np.float32)
+
+    yy, xx = np.mgrid[0:CNMF_H, 0:CNMF_W]
+    spatial = background_scale * (50.0 + 30.0 * np.exp(-((yy - 8) ** 2 + (xx - 16) ** 2) / 50.0) + 0.5 * yy)
+    spatial = spatial.reshape(-1, 1).astype(np.float32)
+    temporal = (
+        (1.0 + 0.3 * np.sin(2 * np.pi * np.arange(num_frames) / num_frames) + 0.2 * np.arange(num_frames) / num_frames)
+        .reshape(num_frames, 1)
+        .astype(np.float32)
+    )
+
+    movie = traces @ masks_flat + temporal @ spatial.T
+    movie = (movie + rng.normal(0.0, 0.5, movie.shape)).astype(np.float32)
+    return masks, movie.reshape(num_frames, CNMF_H, CNMF_W, 1), traces, spatial, temporal
+
+
+@pytest.fixture(scope="module")
+def cnmf_truth():
+    return _cnmf_ground_truth()
+
+
+# --- integration with FluorescenceExtension --------------------------------
+
+
+def test_fluorescence_default_params(analyzer):
+    defaults = analyzer.get_default_extension_params("fluorescence")
+    assert defaults["method"] == "projection"
+    assert defaults["ridge"] == 1e-6
+
+
+def test_fluorescence_unknown_method_raises(analyzer):
+    with pytest.raises(ValueError, match="Unknown method"):
+        analyzer.compute("fluorescence", method="nope")
+
+
+def test_regression_matches_projection_for_nonoverlapping_masks(cnmf_truth):
+    # With non-overlapping masks A A.T is diagonal, so the least-squares traces are exactly the
+    # L2-rescaled projection -- for weighted masks too.
+    masks = _cnmf_masks(weighted=True)
+    _, movie, _, _, _ = cnmf_truth
+    analyzer = create_roi_analyzer(
+        NumpyRois(roi_image_masks=masks, sampling_frequency=SF),
+        NumpyImaging(movie, sampling_frequency=SF),
+        format="memory",
+    )
+    projection = analyzer.compute("fluorescence").get_data()
+    regression = analyzer.compute("fluorescence", method="regression").get_data()
+    np.testing.assert_allclose(regression, projection, rtol=1e-4, atol=1e-3)
+
+
+def _overlapping_problem(num_frames=40, seed=5):
+    """Two ROIs sharing a quarter of their pixels, with an exactly known movie ``C A.T``."""
+    rng = np.random.default_rng(seed)
+    masks = np.zeros((2, 12, 12), dtype=np.float32)
+    masks[0, 2:8, 2:8] = 1.0
+    masks[1, 5:11, 5:11] = 1.0
+    traces = rng.uniform(0.0, 10.0, (num_frames, 2)).astype(np.float32)
+    traces[::4, 1] = 0.0  # frames where the second ROI is silent
+    movie = (traces @ masks.reshape(2, -1)).reshape(num_frames, 12, 12, 1)
+    return masks, movie.astype(np.float32), traces
+
+
+@pytest.mark.parametrize("method", ["regression", "nnls"])
+def test_joint_methods_separate_overlapping_rois(method):
+    masks, movie, traces = _overlapping_problem()
+    analyzer = create_roi_analyzer(
+        NumpyRois(roi_image_masks=masks, sampling_frequency=SF),
+        NumpyImaging(movie, sampling_frequency=SF),
+        format="memory",
+    )
+    projection = analyzer.compute("fluorescence").get_data()
+    joint = analyzer.compute("fluorescence", method=method).get_data()
+    np.testing.assert_allclose(joint, traces, rtol=1e-4, atol=1e-3)
+    assert np.abs(projection - traces).max() > 1.0  # the crosstalk the joint solve removes
+
+
+def test_regression_with_surround_neuropil_matches_projection(suite2p_rois, neuropil_imaging):
+    # Surround is a two-step correction either way; for binary non-overlapping masks the regression
+    # traces equal the projection, so the subtracted results must too.
+    analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
+    analyzer.compute("neuropil", method="surround")
+    projection = analyzer.compute("fluorescence", neuropil_weight=0.7).get_data()
+    regression = analyzer.compute("fluorescence", neuropil_weight=0.7, method="regression").get_data()
+    np.testing.assert_allclose(regression, projection, rtol=1e-4, atol=1e-2)
+
+
+# --- FluorescenceNode-level tests ------------------------------------------
+
+
+@pytest.mark.parametrize("method_params", [{"method": "surround", "min_neuropil_pixels": 30}])
+def test_multi_extension_compute_matches_sequential(imaging, rois, method_params):
+    """The shared node-pipeline path must agree with computing one extension at a time.
+
+    It used to raise ``TypeError: 'NoneType' is not iterable`` because ``FluorescenceExtension``
+    never declared ``nodepipeline_variables``, so this whole path was dead and any post-gather
+    neuropil subtraction would have silently been skipped on it.
+    """
+    fluorescence_params = {"neuropil_weight": 0.5}
+
+    together = create_roi_analyzer(rois, imaging, format="memory")
+    together.compute({"neuropil": method_params, "fluorescence": fluorescence_params})
+
+    one_by_one = create_roi_analyzer(rois, imaging, format="memory")
+    one_by_one.compute("neuropil", **method_params)
+    one_by_one.compute("fluorescence", **fluorescence_params)
+
+    for key in ("fluorescence",):
+        np.testing.assert_array_equal(
+            together.get_extension("fluorescence").data[key], one_by_one.get_extension("fluorescence").data[key]
+        )

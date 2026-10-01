@@ -9,22 +9,55 @@ from .baseimaging import BaseImaging
 from .baserois import BaseRois
 from .roianalyzer import AnalyzerExtension, register_result_extension
 
+_FLUORESCENCE_METHODS = ("projection", "regression", "nnls")
+
 
 class FluorescenceExtension(AnalyzerExtension):
-    """Extension to extract fluorescence traces from ROIs."""
+    """Extension to extract fluorescence traces from ROIs.
+
+    Three extraction methods are supported:
+
+    - ``'projection'`` (default): each ROI's trace is the movie averaged over its own mask, each ROI
+      independently. Overlapping ROIs therefore pick up each other's signal.
+    - ``'regression'``: the least-squares solve of ``movie ~= C A`` for all ROIs at once, so
+      overlapping ROIs are separated. The sparse ``A A.T`` is factorized once and reused for every
+      chunk.
+    - ``'nnls'``: the same solve with ``C >= 0`` enforced (fluorescence is a photon count). Solved
+      frame by frame with :func:`scipy.optimize.nnls`, so it costs more per chunk than
+      ``'regression'``.
+    """
 
     extension_name = "fluorescence"
     depend_on: list[str] = []
     need_imaging = True
     use_nodepipeline = True
+    nodepipeline_variables = ["fluorescence"]
     need_job_kwargs = True
 
     @classmethod
     def get_optional_dependencies(cls, **params):
         return ["neuropil"]
 
-    def _set_params(self, use_neuropil=True, neuropil_weight=0.7):
-        return dict(use_neuropil=use_neuropil, neuropil_weight=neuropil_weight)
+    def _set_params(self, use_neuropil=True, neuropil_weight=0.7, method="projection", ridge=1e-6):
+        """Set parameters for fluorescence extraction.
+
+        Parameters
+        ----------
+        use_neuropil : bool, optional
+            Use the ``neuropil`` extension if it has been computed. Default is ``True``.
+        neuropil_weight : float, optional
+            Weight of the surround neuropil trace subtracted from each ROI's trace. Default is
+            ``0.7``.
+        method : str, optional
+            ``'projection'``, ``'regression'`` or ``'nnls'``; see the class docstring. Default is
+            ``'projection'``.
+        ridge : float, optional
+            Regularization added to each diagonal entry of the Gram matrix, relative to that entry,
+            for ``'regression'`` and ``'nnls'``. Default is ``1e-6``.
+        """
+        if method not in _FLUORESCENCE_METHODS:
+            raise ValueError(f"Unknown method: '{method}'. Supported: {_FLUORESCENCE_METHODS}.")
+        return dict(use_neuropil=use_neuropil, neuropil_weight=neuropil_weight, method=method, ridge=ridge)
 
     def _run(self, verbose=False, **job_kwargs):
         gather_mode = "memory"
@@ -54,6 +87,8 @@ class FluorescenceExtension(AnalyzerExtension):
                 self.roi_analyzer.rois,
                 neuropil=neuropil,
                 neuropil_weight=self.params["neuropil_weight"],
+                method=self.params.get("method", "projection"),
+                ridge=self.params.get("ridge", 1e-6),
             )
         ]
 
@@ -84,6 +119,8 @@ class FluorescenceNode(PipelineNode):
         rois: BaseRois,
         neuropil: np.ndarray | None = None,
         neuropil_weight: float = 0.7,
+        method: str = "projection",
+        ridge: float = 1e-6,
     ):
         """
         Pipeline node to extract fluorescence traces from ROIs, with optional neuropil subtraction.
@@ -106,6 +143,10 @@ class FluorescenceNode(PipelineNode):
             Should have shape (num_rois, height, width) or (height, width).
         neuropil_weight : float, optional
             Weight to apply to the neuropil signal before subtraction (default is 0.7).
+        method : str, optional
+            ``'projection'``, ``'regression'`` or ``'nnls'``; see :class:`FluorescenceExtension`.
+        ridge : float, optional
+            Relative diagonal regularization for ``'regression'`` and ``'nnls'`` (default ``1e-6``).
         """
         PipelineNode.__init__(
             self,
@@ -113,9 +154,12 @@ class FluorescenceNode(PipelineNode):
             parents=[],
             return_output=True,
         )
+        if method not in _FLUORESCENCE_METHODS:
+            raise ValueError(f"Unknown method: '{method}'. Supported: {_FLUORESCENCE_METHODS}.")
         self.rois = rois
         self.neuropil = neuropil
         self.neuropil_weight = neuropil_weight
+        self.method = method
 
         # Precompute flattened masks for efficient matrix multiplication. masks may be a
         # dense ndarray or a sparse array (see BaseRois.get_roi_image_masks) -- reshape must
@@ -171,6 +215,40 @@ class FluorescenceNode(PipelineNode):
         else:
             self._neuropil_flat = None
 
+        if method != "projection":
+            self._setup_joint_solve(masks, ridge)
+
+    def _setup_joint_solve(self, masks, ridge):
+        """Precompute everything the per-chunk solve of ``movie ~= C A`` reuses.
+
+        Each chunk forms ``chunk @ A.T`` and solves against the Gram ``A A.T`` (ROI-ROI overlaps),
+        which is as sparse as the overlaps are. ``'regression'`` factorizes it once.
+        """
+        import scipy.sparse as sp
+        from scipy.sparse.linalg import splu
+
+        # float64: with overlapping ROIs the traces come out of a difference of large, strongly
+        # correlated terms, so float32 right-hand sides lose too many digits.
+        self._masks_csr = _masks_to_sparse_matrix(masks).astype(np.float64)  # (N, n_pixels)
+        gram_aa = (self._masks_csr @ self._masks_csr.T).tocsc()  # (N, N), sparse
+
+        if self.method == "regression":
+            # Same per-diagonal-entry ridge as _ridge_regularize; an all-zero mask falls back to the
+            # mean diagonal so the factorization stays nonsingular.
+            diagonal = np.asarray(gram_aa.diagonal(), dtype=np.float64)
+            empty = diagonal <= 0
+            diagonal[empty] = float(diagonal[~empty].mean()) if (~empty).any() else 1.0
+            self._gram_aa_lu = splu((gram_aa + ridge * sp.diags(diagonal)).tocsc())
+            return
+
+        # nnls: scipy's nnls takes min ||M x - y||, not a Gram: write G = M.T M with M = sqrt(w) V.T,
+        # and then M.T y = r gives y = (V.T r) / sqrt(w).
+        eigvals, eigvecs = np.linalg.eigh(_ridge_regularize(gram_aa.toarray(), ridge))
+        floor = max(float(eigvals.max(initial=0.0)), 1.0) * np.finfo(np.float64).eps
+        sqrt_w = np.sqrt(np.maximum(eigvals, floor))
+        self._nnls_matrix = (eigvecs * sqrt_w).T
+        self._nnls_rhs_map = eigvecs / sqrt_w  # r @ this == y
+
     def get_dtype(self):
         return np.float32
 
@@ -179,20 +257,36 @@ class FluorescenceNode(PipelineNode):
         num_frames = chunk.shape[0]
         chunk_flat = chunk.reshape(num_frames, -1).astype(np.float32)  # (T, spatial)
 
-        # Weighted fluorescence per ROI: (T, N)
-        fluorescence = chunk_flat @ self._masks_flat.T
+        if self.method == "projection":
+            # Weighted fluorescence per ROI: (T, N)
+            fluorescence = chunk_flat @ self._masks_flat.T
+            # Neuropil subtraction, in the same L1/mean scale as self._masks_flat
+            if self._neuropil_flat is not None:
+                # (T, 1) for global or (T, N) for per-ROI
+                neuropil_trace = chunk_flat @ self._neuropil_flat.T
+                fluorescence -= self.neuropil_weight * neuropil_trace
+            # Rescale from L1 to the L2-normalized scale (see __init__) -- a no-op (factor 1) for
+            # binary masks (Suite2pRois and generate_rois's default).
+            fluorescence *= self._rescale_to_l2
+            return (fluorescence,)
 
-        # Neuropil subtraction, in the same L1/mean scale as self._masks_flat
+        rhs = np.asarray(self._masks_csr @ chunk_flat.T.astype(np.float64)).T  # (T, N)
+        if self.method == "regression":
+            traces = self._gram_aa_lu.solve(rhs.T).T  # rhs inv(A A.T), from the reused factorization
+        else:
+            from scipy.optimize import nnls
+
+            targets = rhs @ self._nnls_rhs_map
+            traces = np.empty((num_frames, rhs.shape[1]), dtype=np.float64)
+            for t in range(num_frames):
+                traces[t], _ = nnls(self._nnls_matrix, targets[t])
+
         if self._neuropil_flat is not None:
-            # (T, 1) for global or (T, N) for per-ROI
+            # Surround stays a two-step correction on the traces. They are already on the L2 scale
+            # and the ring trace on the L1 (mean) scale, hence the same rescale as the projection path.
             neuropil_trace = chunk_flat @ self._neuropil_flat.T
-            fluorescence -= self.neuropil_weight * neuropil_trace
-
-        # Rescale from L1 to the L2-normalized scale (see __init__) -- a no-op (factor 1) for
-        # binary masks (Suite2pRois and generate_rois's default).
-        fluorescence *= self._rescale_to_l2
-
-        return (fluorescence,)
+            traces = traces - self.neuropil_weight * neuropil_trace * self._rescale_to_l2
+        return (traces.astype(np.float32),)
 
 
 register_result_extension(FluorescenceExtension)
@@ -883,6 +977,44 @@ def _build_surround_neuropil_masks(
         ring_masks.append(sparse.COO(coords, weights, shape=shape))
 
     return sparse.GCXS.from_coo(sparse.stack(ring_masks, axis=0), compressed_axes=(0,))
+
+
+def _masks_to_sparse_matrix(masks):
+    """Flatten ROI image masks into a ``scipy.sparse`` CSR matrix of shape ``(n_rois, n_pixels)``.
+
+    Returns a ``scipy.sparse.csr_matrix``; scipy is imported lazily, hence the untyped signature.
+
+    Accepts whatever ``BaseRois.get_roi_image_masks()`` returns (dense ndarray or
+    :class:`sparse.SparseArray`) and keeps the mask *values* -- CNMF footprints are weighted, so
+    binarizing here would change the model being fit.
+    """
+    import scipy.sparse as sp
+
+    num_rois = masks.shape[0]
+    flat = masks.reshape((num_rois, -1))
+    if isinstance(flat, sparse.SparseArray):
+        coo = flat.tocoo()
+        rows, cols = coo.coords
+        return sp.csr_matrix(
+            (np.asarray(coo.data, dtype=np.float32), (rows, cols)),
+            shape=(num_rois, flat.shape[1]),
+        )
+    return sp.csr_matrix(np.asarray(flat, dtype=np.float32))
+
+
+def _ridge_regularize(gram, ridge: float):
+    """``gram`` with ``ridge`` times each diagonal entry added to that entry (see :func:`_ridge_inverse`).
+
+    A non-positive or non-finite diagonal entry (e.g. an all-zero mask) is regularized with the mean
+    of the valid ones instead, so the result stays positive definite.
+    """
+    gram = np.asarray(gram, dtype=np.float64)
+    diagonal = np.diag(gram).astype(np.float64).copy()
+    invalid = ~np.isfinite(diagonal) | (diagonal <= 0)
+    if invalid.any():
+        fallback = float(np.mean(diagonal[~invalid])) if (~invalid).any() else 1.0
+        diagonal[invalid] = fallback if fallback > 0 else 1.0
+    return gram + ridge * np.diag(diagonal)
 
 
 register_result_extension(NeuropilExtension)
