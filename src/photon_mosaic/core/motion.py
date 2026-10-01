@@ -1,9 +1,157 @@
-from typing import Any, Sequence
+from __future__ import annotations
+
+import importlib
+from typing import Any, Literal, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
 
 from photon_mosaic.core import BaseImaging
+
+# Editor autocomplete/typo-checking for the built-in methods. Not exhaustive:
+# any string registered via ``register_motion_class``/``register_registration_class``
+# (including third-party ones) is still accepted at runtime.
+KnownMotionMethod = Literal["suite2p", "jnormcorre"]
+
+# Method name -> module that defines (and registers) the backend's Motion
+# subclass. Only module *paths* live here, so core imports no backend: the
+# module is imported lazily the first time the method is requested.
+_builtin_motion_modules: dict[str, str] = {
+    "suite2p": "photon_mosaic.preprocessing.suite2p_registration",
+    "jnormcorre": "photon_mosaic.preprocessing.jnormcorre_registration",
+}
+
+# Method name -> Motion subclass, filled in by ``register_motion_class``.
+_registered_motion_classes: dict[str, type["Motion"]] = {}
+
+
+def register_motion_class(motion_class: type["Motion"]) -> type["Motion"]:
+    """Register a :class:`Motion` subclass under its ``method_name``.
+
+    Backend modules call this at import time so that
+    ``Motion.compute(..., method=...)`` can find them. Third-party backends can
+    call it too, which is what makes the set of methods extensible.
+
+    Parameters
+    ----------
+    motion_class : type[Motion]
+        Subclass defining ``method_name`` (and usually ``settings_class``).
+
+    Returns
+    -------
+    type[Motion]
+        The class, unchanged, so this can be used as a decorator.
+    """
+
+    name = motion_class.method_name
+    if not name:
+        raise ValueError(f"{motion_class.__name__} must define a non-empty 'method_name' to be registered.")
+    _registered_motion_classes[name] = motion_class
+    return motion_class
+
+
+def _get_motion_class(method: str) -> type["Motion"]:
+    """Return the :class:`Motion` subclass implementing ``method``.
+
+    Built-in backends are imported lazily on first use, so an optional
+    dependency is only required when its method is actually requested.
+    """
+
+    if method in _registered_motion_classes:
+        return _registered_motion_classes[method]
+
+    module_path = _builtin_motion_modules.get(method)
+    if module_path is None:
+        known = sorted(set(_registered_motion_classes) | set(_builtin_motion_modules))
+        raise ValueError(f"Unknown motion correction method '{method}'. Available methods: {known}.")
+
+    try:
+        importlib.import_module(module_path)
+    except ImportError as exc:
+        raise ImportError(
+            f"Motion correction method '{method}' requires optional dependencies that are not installed "
+            f"(failed to import '{module_path}': {exc})."
+        ) from exc
+
+    if method not in _registered_motion_classes:
+        raise ImportError(
+            f"Module '{module_path}' was imported but did not register a Motion class for method '{method}'."
+        )
+    return _registered_motion_classes[method]
+
+
+# Method name -> registration/epoch class, filled in by
+# ``register_registration_class``. Kept independent of
+# ``_registered_motion_classes``: a backend may register a ``Motion``
+# subclass without a registration class (e.g. it only produces diagnostics),
+# or register a registration class for motion produced elsewhere.
+_registered_registration_classes: dict[str, type] = {}
+
+
+def register_registration_class(method: str, registration_class: type) -> type:
+    """Register the class that applies motion computed by ``method``.
+
+    Backend modules call this at import time, independently of
+    :func:`register_motion_class`, so that
+    :class:`photon_mosaic.preprocessing.registration.RegisterImaging` can find
+    the class that knows how to apply their motion.
+
+    Returns
+    -------
+    type
+        ``registration_class``, unchanged, so this can be used as a decorator.
+    """
+
+    if not method:
+        raise ValueError("'method' must be a non-empty string to register a registration class.")
+    _registered_registration_classes[method] = registration_class
+    return registration_class
+
+
+def get_registration_class(method: str) -> type:
+    """Return the class that applies motion computed by ``method``.
+
+    Built-in backends are imported lazily on first use, mirroring
+    :func:`_get_motion_class`.
+    """
+
+    if method in _registered_registration_classes:
+        return _registered_registration_classes[method]
+
+    module_path = _builtin_motion_modules.get(method)
+    if module_path is not None:
+        try:
+            importlib.import_module(module_path)
+        except ImportError as exc:
+            raise ImportError(
+                f"Motion correction method '{method}' requires optional dependencies that are not installed "
+                f"(failed to import '{module_path}': {exc})."
+            ) from exc
+
+    if method not in _registered_registration_classes:
+        raise TypeError(
+            f"Motion correction method '{method}' did not register a 'registration_class', "
+            "so its motion cannot be applied."
+        )
+    return _registered_registration_classes[method]
+
+
+def _coerce_settings(settings: Any, settings_class: type | None) -> Any:
+    """Turn ``None`` / a dict / a settings instance into ``settings_class``.
+
+    Returns ``settings`` unchanged when ``settings_class`` is ``None`` (a
+    backend without a settings model).
+    """
+
+    if settings_class is None:
+        return settings
+    if settings is None:
+        return settings_class()
+    if isinstance(settings, settings_class):
+        return settings
+    if isinstance(settings, dict):
+        return settings_class(**settings)
+    raise TypeError(f"'settings' must be None, a dict or a {settings_class.__name__}, got {type(settings).__name__}.")
 
 
 class Motion:
@@ -13,7 +161,22 @@ class Motion:
     expected to produce. Backend-specific fields (e.g. Suite2P ``ops`` or
     block-wise non-rigid offsets) belong on dedicated subclasses such as
     ``Suite2PMotion``.
+
+    Subclasses declare two class attributes so that they can be reached
+    through :meth:`compute`: ``method_name`` (the string users pass as
+    ``method``) and ``settings_class`` (their pydantic settings model).
+
+    The class that knows how to apply the stored motion (a
+    ``BasePreprocessorEpoch``) is unrelated to ``Motion`` itself: a backend
+    registers it under the same ``method_name`` via
+    :func:`register_registration_class`, independently of whether or how it
+    registers its ``Motion`` subclass, and
+    :class:`photon_mosaic.preprocessing.registration.RegisterImaging` resolves
+    it via :func:`get_registration_class`.
     """
+
+    method_name: str | None = None
+    settings_class: type | None = None
 
     def __init__(
         self,
@@ -60,6 +223,74 @@ class Motion:
         self.corrected_badframes = corrected_badframes
         self.metadata = metadata if metadata is not None else {}
 
+    @classmethod
+    def compute(
+        cls,
+        imaging: BaseImaging,
+        method: KnownMotionMethod | str | None = None,
+        settings: Any = None,
+        badframes: NDArray | None = None,
+        **params: Any,
+    ) -> "Motion":
+        """Estimate motion for ``imaging`` with the requested backend.
+
+        Called on :class:`Motion` itself, ``method`` selects the backend
+        (default ``"suite2p"``); called on a subclass, that subclass is used and
+        ``method``, if given, must match its ``method_name``.
+
+        Parameters
+        ----------
+        imaging : BaseImaging
+            Imaging object containing one or more epochs/planes to register.
+        method : str | None, optional
+            Registration backend, e.g. ``"suite2p"``.
+        settings : BaseSettings | dict | None, optional
+            Backend settings. Dicts and ``None`` are coerced into the backend's
+            ``settings_class``.
+        badframes : NDArray | None, optional
+            Boolean array of shape ``(n_frames,)`` marking frames to exclude
+            from reference image computation.
+        **params : Any
+            Extra backend options, overriding ``settings``.
+
+        Returns
+        -------
+        Motion
+            A backend-specific :class:`Motion` subclass instance.
+        """
+
+        if method is not None and not isinstance(method, str):
+            raise TypeError(
+                f"'method' must be a string naming a registration backend, got {type(method).__name__}. "
+                "Settings must be passed as a keyword argument: compute_motion(imaging, settings=...)."
+            )
+
+        if cls is Motion:
+            target = _get_motion_class(method or "suite2p")
+        else:
+            if method is not None and method != cls.method_name:
+                raise ValueError(
+                    f"{cls.__name__} implements method '{cls.method_name}', but method='{method}' was requested. "
+                    "Call Motion.compute(...) to dispatch on 'method'."
+                )
+            target = cls
+
+        resolved_settings = _coerce_settings(settings, target.settings_class)
+        return target._compute(imaging, settings=resolved_settings, badframes=badframes, **params)
+
+    @classmethod
+    def _compute(
+        cls,
+        imaging: BaseImaging,
+        *,
+        settings: Any = None,
+        badframes: NDArray | None = None,
+        **params: Any,
+    ) -> "Motion":
+        """Backend-specific estimation. Implemented by each subclass."""
+
+        raise NotImplementedError(f"{cls.__name__} does not implement motion estimation.")
+
     @property
     def num_epochs(self) -> int:
         """Number of epochs represented in the stored displacements."""
@@ -83,3 +314,6 @@ class Motion:
         if plane_index is None:
             return disps[frame_indices]
         return disps[frame_indices, plane_index]
+
+
+compute_motion = Motion.compute
