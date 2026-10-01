@@ -42,8 +42,8 @@ class TestSuite2pDefaults:
     def test_snr_thresh_default(self, settings):
         assert settings.snr_thresh == pytest.approx(1.2)
 
-    def test_maxregshiftNR_default(self, settings):
-        assert settings.maxregshiftNR == 5
+    def test_max_nonrigid_shift_default(self, settings):
+        assert settings.max_nonrigid_shift == 5  # suite2p's maxregshiftNR
 
     def test_smooth_sigma_default(self, settings):
         assert settings.smooth_sigma == pytest.approx(1.15)

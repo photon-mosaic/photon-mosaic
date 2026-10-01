@@ -6,21 +6,14 @@ import numpy as np
 import pytest
 
 from photon_mosaic.core import Motion, generate_random_imaging, register_motion_class, register_registration_class
-from photon_mosaic.preprocessing import RegisterImaging, RegistrationSettings, register_motion
-from photon_mosaic.preprocessing.basepreprocessor import BasePreprocessorEpoch
+from photon_mosaic.preprocessing import RegisterImaging, RegisterImagingEpoch, RegistrationSettings, register_motion
 
 
-class DoublingEpoch(BasePreprocessorEpoch):
-    """Stand-in backend epoch: 'applies' motion by doubling the frames."""
+class DoublingEpoch(RegisterImagingEpoch):
+    """Stand-in backend epoch: 'applies' motion by doubling each plane."""
 
-    def __init__(self, parent_imaging_epoch, motion, epoch_index, **kwargs):
-        BasePreprocessorEpoch.__init__(self, parent_imaging_epoch)
-        self.motion = motion
-        self.epoch_index = epoch_index
-        self.kwargs = kwargs
-
-    def get_series(self, start_frame, end_frame, plane_indices=None):
-        return self.parent_imaging_epoch.get_series(start_frame, end_frame) * 2
+    def _correct_plane(self, plane_video, plane_index, start_frame, end_frame):
+        return plane_video * 2
 
 
 class DoublingMotion(Motion):
@@ -98,6 +91,51 @@ class TestRegisterImaging:
         motion = DoublingMotion(imaging=imaging, displacements=[np.zeros((6, 1, 2))])
         registered = RegisterImaging(imaging, motion, method="doubling_test_backend", flavour="test")
         assert registered.epochs[0].kwargs == {"flavour": "test"}
+
+
+class TestRegisterImagingEpoch:
+    """The shared bookkeeping of every backend's epoch class."""
+
+    @pytest.fixture()
+    def epoch(self):
+        im = generate_random_imaging(num_frames=6, height=8, width=9, num_planes=3, sampling_frequency=10.0, seed=2)
+        motion = DoublingMotion(imaging=im, displacements=[np.zeros((6, 3, 2))])
+        return DoublingEpoch(im.epochs[0], motion, 0), im
+
+    def test_output_shape_dtype_and_per_plane_dispatch(self, epoch):
+        ep, im = epoch
+        out = ep.get_series(1, 4)
+        assert out.shape == (3, 8, 9, 3) and out.dtype == np.float32
+        np.testing.assert_allclose(out, im.epochs[0].get_series(1, 4) * 2)
+
+    def test_plane_indices_int_slice_and_list(self, epoch):
+        ep, im = epoch
+        full = im.epochs[0].get_series(0, 6) * 2
+        np.testing.assert_allclose(ep.get_series(0, 6, plane_indices=2), full[..., 2:3])
+        np.testing.assert_allclose(ep.get_series(0, 6, plane_indices=slice(0, 2)), full[..., 0:2])
+        np.testing.assert_allclose(ep.get_series(0, 6, plane_indices=[2, 0]), full[..., [2, 0]])
+
+    def test_end_frame_past_end_warns_and_clamps(self, epoch, caplog):
+        ep, _ = epoch
+        with caplog.at_level("WARNING"):
+            out = ep.get_series(2, 60)
+        assert out.shape[0] == 4
+        assert any("exceeds recording length" in rec.message for rec in caplog.records)
+
+    def test_start_past_end_raises(self, epoch):
+        ep, _ = epoch
+        with pytest.raises(ValueError, match="past end_frame"):
+            ep.get_series(10, 20)
+
+    def test_empty_range_returns_empty(self, epoch):
+        ep, _ = epoch
+        assert ep.get_series(3, 3).shape == (0, 8, 9, 3)
+
+    def test_correct_plane_is_abstract(self, epoch):
+        _, im = epoch
+        motion = DoublingMotion(imaging=im, displacements=[np.zeros((6, 3, 2))])
+        with pytest.raises(NotImplementedError):
+            RegisterImagingEpoch(im.epochs[0], motion, 0).get_series(0, 2)
 
 
 def test_register_motion_is_alias():
