@@ -191,6 +191,56 @@ class TestImagingSeriesWidgetInit:
 
 
 # ---------------------------------------------------------------------------
+# ImagingSeriesWidget -- rendering as an image (no ipympl canvas)
+# ---------------------------------------------------------------------------
+
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+class TestImagingSeriesWidgetRendering:
+    """The figure is shown as a PNG, so it needs no matplotlib widget backend."""
+
+    @staticmethod
+    def _make_widget(imaging, **kwargs):
+        pytest.importorskip("ipywidgets")
+        return ImagingSeriesWidget(imaging, backend="ipywidgets", display=False, **kwargs)
+
+    def test_renders_a_png_without_an_interactive_backend(self, small_imaging):
+        # Agg is active (see top of file), i.e. no ``%matplotlib widget`` was ever set up.
+        w = self._make_widget(small_imaging)
+        assert bytes(w.image.value).startswith(PNG_MAGIC)
+        assert w.image in w.widget.children
+
+    def test_does_not_register_a_pyplot_figure(self, small_imaging):
+        import matplotlib.pyplot as plt
+
+        before = plt.get_fignums()
+        self._make_widget(small_imaging)
+        assert plt.get_fignums() == before
+
+    def test_changing_frame_re_renders_the_image(self, small_imaging):
+        w = self._make_widget(small_imaging)
+        first = bytes(w.image.value)
+        w.frame_slider.value = 7
+        assert w.current_frame == 7
+        assert bytes(w.image.value).startswith(PNG_MAGIC)
+        assert bytes(w.image.value) != first
+
+    def test_changing_colormap_re_renders_the_image(self, small_imaging):
+        w = self._make_widget(small_imaging, colormap="gray")
+        first = bytes(w.image.value)
+        w.colormap_dropdown.value = "plasma"
+        assert bytes(w.image.value) != first
+
+    def test_multi_view_renders_every_plane(self, small_imaging):
+        other = generate_random_imaging(num_frames=50, height=32, width=32, seed=7)
+        w = self._make_widget({"a": small_imaging, "b": other})
+        assert len(w.axes) == 2
+        assert set(w.images) == {"a", "b"}
+        assert bytes(w.image.value).startswith(PNG_MAGIC)
+
+
+# ---------------------------------------------------------------------------
 # ImagingSeriesWidget -- playback loop pacing
 # ---------------------------------------------------------------------------
 

@@ -1,7 +1,12 @@
+import io
+import threading
+
 import numpy as np
 from spikeinterface.widgets.base import BaseWidget, to_attr
 
 from photon_mosaic.core.baseimaging import BaseImaging
+
+_RENDER_DPI = 100
 
 
 class ImagingSeriesWidget(BaseWidget):
@@ -102,11 +107,8 @@ class ImagingSeriesWidget(BaseWidget):
 
     def plot_ipywidgets(self, data_plot, **backend_kwargs):
         """Interactive ipywidgets plot with video controls."""
-        import matplotlib.pyplot as plt
         from IPython.display import display
-        from spikeinterface.widgets.utils_ipywidgets import check_ipywidget_backend
-
-        check_ipywidget_backend()
+        from matplotlib.figure import Figure
 
         dp = to_attr(data_plot)
 
@@ -143,57 +145,55 @@ class ImagingSeriesWidget(BaseWidget):
 
         num_views = len(dp.view_names)
 
-        # Turn off interactive mode to prevent duplicate display
-        with plt.ioff():
-            # Create figure with multiple subplots if needed
-            if num_views > 1:
-                self.figure, self.axes = plt.subplots(1, num_views, figsize=(width_cm * num_views * cm, height_cm * cm))
-                if num_views == 1:
-                    self.axes = [self.axes]  # Make it a list for consistency
+        # The figure is drawn on a plain ``Figure`` (not through pyplot) and shown as a PNG
+        # in an ``ipywidgets.Image``. Unlike an interactive ``ipympl`` canvas this needs no
+        # matplotlib backend and no extra front-end module, so it renders in any notebook
+        # front end that supports ipywidgets (VS Code, JupyterLab, Colab, ...). Because it is
+        # never registered with pyplot, it is also never auto-displayed a second time.
+        self.figure = Figure(figsize=(width_cm * num_views * cm, height_cm * cm))
+        self.axes = list(self.figure.subplots(1, num_views, squeeze=False)[0])
+
+        # Store image objects and colorbars for each view
+        self.images = {}
+        self.colorbars = {}
+
+        for idx, view_name in enumerate(dp.view_names):
+            imaging = dp.imaging_dict[view_name]
+            ax = self.axes[idx]
+
+            # Get initial frame and create image
+            frame_data = imaging.get_series(self.current_frame, self.current_frame + 1, epoch_index=dp.epoch_index)
+            frame = frame_data[0]
+
+            # Create the image object with fixed colorbar range
+            im = ax.imshow(
+                frame,
+                cmap=dp.colormap,
+                vmin=self.global_vmin[view_name],
+                vmax=self.global_vmax[view_name],
+                aspect="auto",
+            )
+
+            self.images[view_name] = im
+
+            if dp.is_multi_view:
+                ax.set_title(f"{view_name}\nFrame {self.current_frame} | Time: {dp.times[self.current_frame]:.3f}s")
             else:
-                self.figure, ax = plt.subplots(figsize=(width_cm * cm, height_cm * cm))
-                self.axes = [ax]
+                ax.set_title(f"Frame {self.current_frame} | Time: {dp.times[self.current_frame]:.3f}s")
 
-            # Store image objects and colorbars for each view
-            self.images = {}
-            self.colorbars = {}
+            ax.axis("off")
 
-            for idx, view_name in enumerate(dp.view_names):
-                imaging = dp.imaging_dict[view_name]
-                ax = self.axes[idx]
+            # Add colorbar with fixed range
+            self.colorbars[view_name] = self.figure.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
 
-                # Get initial frame and create image
-                frame_data = imaging.get_series(self.current_frame, self.current_frame + 1, epoch_index=dp.epoch_index)
-                frame = frame_data[0]
-
-                # Create the image object with fixed colorbar range
-                im = ax.imshow(
-                    frame,
-                    cmap=dp.colormap,
-                    vmin=self.global_vmin[view_name],
-                    vmax=self.global_vmax[view_name],
-                    aspect="auto",
-                )
-
-                self.images[view_name] = im
-
-                if dp.is_multi_view:
-                    ax.set_title(f"{view_name}\nFrame {self.current_frame} | Time: {dp.times[self.current_frame]:.3f}s")
-                else:
-                    ax.set_title(f"Frame {self.current_frame} | Time: {dp.times[self.current_frame]:.3f}s")
-
-                ax.axis("off")
-
-                # Add colorbar with fixed range
-                self.colorbars[view_name] = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-
-            self.figure.tight_layout()
+        self.figure.tight_layout()
 
         # Create control widgets
         self._create_control_widgets(dp)
 
         # Setup layout
         self._setup_widget_layout()
+        self._refresh_image()
 
         # Setup observers
         self._setup_observers()
@@ -287,15 +287,30 @@ class ImagingSeriesWidget(BaseWidget):
             ]
         )
 
-        # Main layout: controls at top, matplotlib canvas below
+        # The figure is shown as a PNG image that ``_refresh_image`` re-renders on every update.
+        self.image = widgets.Image(format="png", layout=widgets.Layout(max_width="100%", height="auto"))
+        self._render_lock = threading.Lock()
+
+        # Main layout: controls at top, rendered figure below
         self.widget = widgets.VBox(
             [
                 playback_controls,
                 speed_controls,
                 display_controls,
-                self.figure.canvas,  # Use the matplotlib canvas directly
+                self.image,
             ]
         )
+
+    def _refresh_image(self):
+        """Render the figure to PNG and push it to the image widget.
+
+        Serialised with a lock because the playback thread and widget callbacks can both ask
+        for a redraw of the same figure at once.
+        """
+        with self._render_lock:
+            buffer = io.BytesIO()
+            self.figure.savefig(buffer, format="png", dpi=_RENDER_DPI)
+            self.image.value = buffer.getvalue()
 
     def _setup_observers(self):
         """Setup widget event observers."""
@@ -340,8 +355,7 @@ class ImagingSeriesWidget(BaseWidget):
         # Update time label
         self._update_time_label()
 
-        # Refresh the canvas
-        self.figure.canvas.draw_idle()
+        self._refresh_image()
 
     def _update_time_label(self):
         """Update time display label."""
