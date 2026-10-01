@@ -39,7 +39,7 @@ class RegisterImaging(BasePreprocessor):
     """Apply pre-computed motion correction on-the-fly, whatever the backend.
 
     Dispatch is by ``method`` (like :meth:`Motion.compute`), defaulting to
-    ``motion.method_name``, and resolved through
+    ``"suite2p"``, and resolved through
     :func:`photon_mosaic.core.get_registration_class`, so this class imports
     no backend itself.
     """
@@ -48,7 +48,7 @@ class RegisterImaging(BasePreprocessor):
         self,
         imaging: BaseImaging,
         motion: Motion,
-        method: KnownMotionMethod | str | None = None,
+        method: KnownMotionMethod | str = "suite2p",
         **kwargs: Any,
     ) -> None:
         """Build an imaging view that applies stored motion fields lazily."""
@@ -59,19 +59,7 @@ class RegisterImaging(BasePreprocessor):
                 f"Number of epochs in motion ({motion.num_epochs}) does not match imaging ({len(imaging.epochs)})"
             )
 
-        if method is not None and motion.method_name is not None and method != motion.method_name:
-            raise ValueError(
-                f"motion was computed with method '{motion.method_name}', but method='{method}' was requested."
-            )
-
-        resolved_method = method or motion.method_name
-        if resolved_method is None:
-            raise TypeError(
-                f"{type(motion).__name__} does not declare a 'method_name', so no registration_class can be "
-                "resolved for it."
-            )
-
-        registration_class = get_registration_class(resolved_method)
+        registration_class = get_registration_class(method)
 
         for epoch_idx, parent_epoch in enumerate(imaging.epochs):
             self.add_epoch(registration_class(parent_epoch, motion, epoch_idx, **kwargs))

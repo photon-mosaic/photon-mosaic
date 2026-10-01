@@ -78,7 +78,7 @@ class TestRegistrationSettings:
 class TestRegisterImaging:
     def test_applies_the_backend_registration_class(self, imaging):
         motion = DoublingMotion(imaging=imaging, displacements=[np.zeros((6, 1, 2))])
-        registered = RegisterImaging(imaging, motion)
+        registered = RegisterImaging(imaging, motion, method="doubling_test_backend")
 
         assert isinstance(registered.epochs[0], DoublingEpoch)
         expected = imaging.epochs[0].get_series(0, 6) * 2
@@ -87,16 +87,16 @@ class TestRegisterImaging:
     def test_epoch_count_mismatch_raises(self, imaging):
         motion = DoublingMotion(imaging=imaging, displacements=[np.zeros((6, 1, 2)), np.zeros((6, 1, 2))])
         with pytest.raises(ValueError, match="does not match imaging"):
-            RegisterImaging(imaging, motion)
+            RegisterImaging(imaging, motion, method="doubling_test_backend")
 
     def test_motion_without_registration_class_raises(self, imaging):
         motion = Motion(imaging=imaging, displacements=[np.zeros((6, 1, 2))])
         with pytest.raises(TypeError, match="registration_class"):
-            RegisterImaging(imaging, motion)
+            RegisterImaging(imaging, motion, method="unregistered_test_backend")
 
     def test_kwargs_are_forwarded_to_the_epoch(self, imaging):
         motion = DoublingMotion(imaging=imaging, displacements=[np.zeros((6, 1, 2))])
-        registered = RegisterImaging(imaging, motion, flavour="test")
+        registered = RegisterImaging(imaging, motion, method="doubling_test_backend", flavour="test")
         assert registered.epochs[0].kwargs == {"flavour": "test"}
 
 
