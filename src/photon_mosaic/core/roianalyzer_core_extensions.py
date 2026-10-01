@@ -20,23 +20,30 @@ class FluorescenceExtension(AnalyzerExtension):
 
     - ``'projection'`` (default): each ROI's trace is the movie averaged over its own mask, each ROI
       independently. Overlapping ROIs therefore pick up each other's signal.
-    - ``'regression'``: the least-squares solve of ``movie ~= C A`` for all ROIs at once, so
+    - ``'regression'``: the least-squares solve of ``movie ~= C A (+ f b)`` for all ROIs at once, so
       overlapping ROIs are separated. The sparse ``A A.T`` is factorized once and reused for every
-      chunk.
+      chunk, with ``b`` handled by a small ``gnb x gnb`` Schur-complement correction on top.
     - ``'nnls'``: the same solve with ``C >= 0`` enforced (fluorescence is a photon count). Solved
       frame by frame with :func:`scipy.optimize.nnls`, so it costs more per chunk than
       ``'regression'``.
+
+    When a :class:`NeuropilExtension` with ``method='cnmf'`` exists, its spatial background ``b`` is
+    appended to the design matrix and its timecourse ``f`` is solved for together with the traces
+    ``C``. That requires ``'regression'`` or ``'nnls'``. ``neuropil_weight`` is not used in that
+    case: ``C`` already excludes the modelled background.
 
     Computed data keys:
 
     ================  ======================  ======================================================
     Key               Shape                   Contents
     ================  ======================  ======================================================
-    ``fluorescence``  ``(n_frames, n_rois)``  the extracted traces, ``F - neuropil_weight * Fneu``
-                                              with a surround neuropil
-    ``background``    ``(n_frames, n_rois)``  the surround ring mean ``Fneu``, before
-                                              ``neuropil_weight``. ``(n_frames, 0)`` without a
-                                              neuropil.
+    ``fluorescence``  ``(n_frames, n_rois)``  the extracted traces: ``C`` for a CNMF neuropil,
+                                              ``F - neuropil_weight * Fneu`` for surround
+    ``background``    ``(n_frames, n_rois)``  CNMF: ``B = f b A.T``, the background projected onto
+                                              each ROI's own footprint (divided by ``||a_i||^2``,
+                                              i.e. in the units of ``C``). Surround: the ring mean
+                                              ``Fneu``, before ``neuropil_weight``. ``(n_frames, 0)``
+                                              without a neuropil.
     ================  ======================  ======================================================
     """
 
@@ -59,8 +66,8 @@ class FluorescenceExtension(AnalyzerExtension):
         use_neuropil : bool, optional
             Use the ``neuropil`` extension if it has been computed. Default is ``True``.
         neuropil_weight : float, optional
-            Weight of the surround neuropil trace subtracted from each ROI's trace. Default is
-            ``0.7``.
+            Weight of the surround neuropil trace subtracted from each ROI's trace. Not used with a
+            ``method='cnmf'`` neuropil (see the class docstring). Default is ``0.7``.
         method : str, optional
             ``'projection'``, ``'regression'`` or ``'nnls'``; see the class docstring. Default is
             ``'projection'``.
@@ -92,20 +99,21 @@ class FluorescenceExtension(AnalyzerExtension):
 
     def _get_pipeline_nodes(self):
         neuropil = None
+        background_spatial = None
         if self.params["use_neuropil"] and self.roi_analyzer.has_extension("neuropil"):
             ext = self.roi_analyzer.get_extension("neuropil")
             # .get() rather than [] so analyzers saved before 'method' existed still load.
             if ext.params.get("method", "surround") == "cnmf":
-                raise NotImplementedError(
-                    "FluorescenceExtension cannot use a method='cnmf' neuropil yet; pass use_neuropil=False."
-                )
-            neuropil = ext.get_data()
+                background_spatial = ext.get_data("background_spatial")
+            else:
+                neuropil = ext.get_data()
         return [
             FluorescenceNode(
                 self.roi_analyzer.imaging,
                 self.roi_analyzer.rois,
                 neuropil=neuropil,
                 neuropil_weight=self.params["neuropil_weight"],
+                background_spatial=background_spatial,
                 method=self.params.get("method", "projection"),
                 ridge=self.params.get("ridge", 1e-6),
             )
@@ -120,8 +128,8 @@ class FluorescenceExtension(AnalyzerExtension):
             ``'numpy'`` or ``'recording'`` (a SpikeInterface ``NumpyRecording``). Default is
             ``'numpy'``.
         key : str, optional
-            ``'fluorescence'`` (the traces) or ``'background'`` (the surround ring mean ``Fneu``; see
-            the class docstring). Default is ``'fluorescence'``.
+            ``'fluorescence'`` (the traces) or ``'background'`` (``B`` for a CNMF neuropil, ``Fneu``
+            for surround; see the class docstring). Default is ``'fluorescence'``.
         """
         if key not in ("fluorescence", "background"):
             raise KeyError(f"Unknown key: '{key}'. Supported: 'fluorescence', 'background'.")
@@ -158,6 +166,7 @@ class FluorescenceNode(PipelineNode):
         rois: BaseRois,
         neuropil: np.ndarray | None = None,
         neuropil_weight: float = 0.7,
+        background_spatial: np.ndarray | None = None,
         method: str = "projection",
         ridge: float = 1e-6,
     ):
@@ -182,6 +191,11 @@ class FluorescenceNode(PipelineNode):
             Should have shape (num_rois, height, width) or (height, width).
         neuropil_weight : float, optional
             Weight to apply to the neuropil signal before subtraction (default is 0.7).
+        background_spatial : np.ndarray, optional
+            Spatial background components ``b`` of shape ``(gnb, height, width[, planes])``, e.g.
+            from :class:`NeuropilExtension`'s ``method='cnmf'``. Appended to the design matrix and
+            solved for jointly with the traces; requires ``method='regression'`` or ``'nnls'``.
+            Mutually exclusive with ``neuropil``.
         method : str, optional
             ``'projection'``, ``'regression'`` or ``'nnls'``; see :class:`FluorescenceExtension`.
         ridge : float, optional
@@ -195,6 +209,13 @@ class FluorescenceNode(PipelineNode):
         )
         if method not in _FLUORESCENCE_METHODS:
             raise ValueError(f"Unknown method: '{method}'. Supported: {_FLUORESCENCE_METHODS}.")
+        if neuropil is not None and background_spatial is not None:
+            raise ValueError("Pass either `neuropil` (surround masks) or `background_spatial` (CNMF), not both.")
+        if background_spatial is not None and method == "projection":
+            raise ValueError(
+                "A method='cnmf' neuropil is solved jointly with the traces, which needs "
+                "FluorescenceExtension(method='regression') or method='nnls', not 'projection'."
+            )
         self.rois = rois
         self.neuropil = neuropil
         self.neuropil_weight = neuropil_weight
@@ -254,35 +275,76 @@ class FluorescenceNode(PipelineNode):
         else:
             self._neuropil_flat = None
 
+        self._gnb = 0 if background_spatial is None else int(background_spatial.shape[0])
         if method != "projection":
-            self._setup_joint_solve(masks, ridge)
+            self._setup_joint_solve(masks, background_spatial, ridge)
 
-    def _setup_joint_solve(self, masks, ridge):
-        """Precompute everything the per-chunk solve of ``movie ~= C A`` reuses.
+    def _setup_joint_solve(self, masks, background_spatial, ridge):
+        """Precompute everything the per-chunk solve of ``movie ~= C A + f b`` reuses.
 
-        Each chunk forms ``chunk @ A.T`` and solves against the Gram ``A A.T`` (ROI-ROI overlaps),
-        which is as sparse as the overlaps are. ``'regression'`` factorizes it once.
+        The design is ``D = [A.T, b.T]`` (``n_pixels x (n_rois + gnb)``); each chunk forms
+        ``chunk @ D`` and solves against ``D.T D``. That Gram is an arrowhead matrix: the ``A A.T``
+        block (ROI-ROI overlaps) is exactly as sparse as without ``b``, while the ``A b.T`` border is
+        dense (``b`` is broad, so every ROI overlaps it). ``'regression'`` therefore factorizes the
+        sparse ``A A.T`` once and handles ``b`` through the ``gnb x gnb`` Schur complement
+        ``S = b b.T - (A b.T).T inv(A A.T) (A b.T)`` (block elimination / Sherman-Morrison-Woodbury).
         """
         import scipy.sparse as sp
+        from scipy.linalg import pinvh
         from scipy.sparse.linalg import splu
 
-        # float64: with overlapping ROIs the traces come out of a difference of large, strongly
-        # correlated terms, so float32 right-hand sides lose too many digits.
+        # float64: the traces come out of a difference of large, strongly correlated terms (A and b
+        # are both positive and overlap), so float32 right-hand sides lose too many digits.
         self._masks_csr = _masks_to_sparse_matrix(masks).astype(np.float64)  # (N, n_pixels)
+        num_rois = self._masks_csr.shape[0]
         gram_aa = (self._masks_csr @ self._masks_csr.T).tocsc()  # (N, N), sparse
+        if self._gnb:
+            b = np.asarray(background_spatial, dtype=np.float64).reshape(self._gnb, -1).T  # (n_pixels, gnb)
+            if b.shape[0] != self._masks_csr.shape[1]:
+                raise ValueError(
+                    f"background_spatial has {b.shape[0]} pixels per component, "
+                    f"the ROI masks {self._masks_csr.shape[1]}"
+                )
+            gram_ab = np.asarray(self._masks_csr @ b, dtype=np.float64)  # (N, gnb)
+            gram_bb = b.T @ b
+        else:
+            b = np.zeros((self._masks_csr.shape[1], 0))
+            gram_ab = np.zeros((num_rois, 0))
+            gram_bb = np.zeros((0, 0))
+        self._background = b
+        self._gram_ab = gram_ab
+
+        # B = f b A.T, the background projected onto each cell's own footprint (as CaImAn's
+        # detrend_df_f does), divided by ||a_i||^2 to put it in the units of C: C is on the L2 scale
+        # (movie ~= C A), where CaImAn gets the same by unit-L2-normalizing A instead.
+        own_norm = np.asarray(gram_aa.diagonal(), dtype=np.float64)
+        empty = own_norm <= 0
+        own_norm[empty] = 1.0  # an all-zero mask has A b.T == 0, so its B stays 0
+        self._background_to_rois = gram_ab.T / own_norm  # (gnb, N)
 
         if self.method == "regression":
-            # Same per-diagonal-entry ridge as _ridge_regularize; an all-zero mask falls back to the
-            # mean diagonal so the factorization stays nonsingular.
-            diagonal = np.asarray(gram_aa.diagonal(), dtype=np.float64)
-            empty = diagonal <= 0
-            diagonal[empty] = float(diagonal[~empty].mean()) if (~empty).any() else 1.0
+            # Same per-diagonal-entry ridge as _ridge_regularize, applied to each block; an all-zero
+            # mask falls back to the mean diagonal so the factorization stays nonsingular.
+            diagonal = own_norm.copy()
+            diagonal[empty] = float(own_norm[~empty].mean()) if (~empty).any() else 1.0
             self._gram_aa_lu = splu((gram_aa + ridge * sp.diags(diagonal)).tocsc())
+            self._aa_inv_ab = self._gram_aa_lu.solve(gram_ab) if self._gnb else gram_ab  # (N, gnb)
+            schur = _ridge_regularize(gram_bb, ridge) - gram_ab.T @ self._aa_inv_ab  # (gnb, gnb)
+            self._schur_inv = pinvh(schur) if self._gnb else schur
             return
 
-        # nnls: scipy's nnls takes min ||M x - y||, not a Gram: write G = M.T M with M = sqrt(w) V.T,
-        # and then M.T y = r gives y = (V.T r) / sqrt(w).
-        eigvals, eigvecs = np.linalg.eigh(_ridge_regularize(gram_aa.toarray(), ridge))
+        # nnls: only C is constrained, so f is eliminated first. Given C, the best f is
+        #   f = (Y b - C A b) inv(b.T b),
+        # which leaves an NNLS problem in C alone with Gram S (the Schur complement of b.T b) and
+        # right-hand side r = Y A.T - Y b inv(b.T b) (A b).T.
+        gram_aa = gram_aa.toarray()
+        gram_bb_inv = _ridge_inverse(gram_bb, ridge)
+        self._gram_bb_inv = gram_bb_inv
+        self._rhs_correction = gram_bb_inv @ gram_ab.T  # (gnb, N): r = rhs_a - rhs_b @ this
+        schur = _ridge_regularize(gram_aa - gram_ab @ gram_bb_inv @ gram_ab.T, ridge)
+        # scipy's nnls takes min ||M x - y||, not a Gram: write S = M.T M with M = sqrt(w) V.T, and
+        # then M.T y = r gives y = (V.T r) / sqrt(w).
+        eigvals, eigvecs = np.linalg.eigh(schur)
         floor = max(float(eigvals.max(initial=0.0)), 1.0) * np.finfo(np.float64).eps
         sqrt_w = np.sqrt(np.maximum(eigvals, floor))
         self._nnls_matrix = (eigvecs * sqrt_w).T
@@ -310,16 +372,25 @@ class FluorescenceNode(PipelineNode):
             fluorescence *= self._rescale_to_l2
             return fluorescence, self._persisted_neuropil(neuropil_trace, num_frames)
 
-        rhs = np.asarray(self._masks_csr @ chunk_flat.T.astype(np.float64)).T  # (T, N)
+        rhs_a = np.asarray(self._masks_csr @ chunk_flat.T.astype(np.float64)).T  # (T, N)
+        rhs_b = _project_float64(chunk_flat, self._background)  # (T, gnb)
         if self.method == "regression":
-            traces = self._gram_aa_lu.solve(rhs.T).T  # rhs inv(A A.T), from the reused factorization
+            # Block elimination of [C, f] [[A A.T, A b.T], [(A b.T).T, b b.T]] = [rhs_a, rhs_b]: f from
+            # the small Schur system, then C from the reused sparse A A.T factorization.
+            aa_inv_rhs = self._gram_aa_lu.solve(rhs_a.T).T  # rhs_a inv(A A.T)
+            temporal = (rhs_b - aa_inv_rhs @ self._gram_ab) @ self._schur_inv
+            traces = aa_inv_rhs - temporal @ self._aa_inv_ab.T
         else:
             from scipy.optimize import nnls
 
-            targets = rhs @ self._nnls_rhs_map
-            traces = np.empty((num_frames, rhs.shape[1]), dtype=np.float64)
+            targets = (rhs_a - rhs_b @ self._rhs_correction) @ self._nnls_rhs_map
+            traces = np.empty((num_frames, rhs_a.shape[1]), dtype=np.float64)
             for t in range(num_frames):
                 traces[t], _ = nnls(self._nnls_matrix, targets[t])
+            temporal = (rhs_b - traces @ self._gram_ab) @ self._gram_bb_inv
+
+        if self._gnb:
+            return traces.astype(np.float32), (temporal @ self._background_to_rois).astype(np.float32)
 
         neuropil_trace = None
         if self._neuropil_flat is not None:
