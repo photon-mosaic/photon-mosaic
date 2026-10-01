@@ -34,3 +34,8 @@ repos:
     -   id: codespell
         args: [--ignore-words-list=nd]
         exclude: '\.ipynb$'
+
+-   repo: https://github.com/kynan/nbstripout
+    rev: 0.9.1
+    hooks:
+    -   id: nbstripout

@@ -105,10 +105,23 @@ class TestCreateMemory:
         assert analyzer.get_total_samples() == 100
 
     def test_get_dtype(self, analyzer):
-        assert analyzer.get_dtype() == np.float64
+        assert analyzer.get_dtype() == np.float32
 
     def test_is_read_only(self, analyzer):
         assert not analyzer.is_read_only()
+
+    def test_create_memory_with_sparse_masks(self, imaging):
+        """create_roi_analyzer should work with sparse-backed ROIs (e.g. Suite2p output)
+        without forcing an implicit (and error-prone) densification -- see photon-mosaic#103."""
+        import sparse
+
+        sparse_rois = generate_rois(num_rois=5, height=64, width=64, sampling_frequency=30.0, seed=0, sparse=True)
+
+        analyzer = create_roi_analyzer(sparse_rois, imaging, format="memory")
+        assert analyzer.get_num_rois() == 5
+        masks = analyzer.rois.get_roi_image_masks()
+        assert isinstance(masks, sparse.SparseArray)
+        np.testing.assert_array_equal(masks.todense(), sparse_rois.get_roi_image_masks().todense())
 
 
 class TestValidation:

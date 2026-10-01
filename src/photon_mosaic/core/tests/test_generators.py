@@ -156,13 +156,9 @@ def test_generate_rois_invalid_radius_range_raises_assertion():
 # ── generate_fluorescence tests ──
 
 
-def test_generate_fluorescence_returns_fluorescence_traces():
-    result = generate_fluorescence(num_frames=200, num_rois=3, seed=0)
-    assert isinstance(result, FluorescenceData)
-
-
 def test_generate_fluorescence_output_shapes_and_dtype():
     result = generate_fluorescence(num_frames=200, num_rois=3, seed=0)
+    assert isinstance(result, FluorescenceData)
     assert result.traces.shape == (200, 3)
     assert result.spikes.shape == (200, 3)
     assert result.clean_traces.shape == (200, 3)
@@ -177,9 +173,9 @@ def test_generate_fluorescence_spikes_are_binary():
     assert set(unique).issubset({0.0, 1.0})
 
 
-def test_generate_fluorescence_clean_traces_equal_traces_without_noise_or_bleaching():
-    result = generate_fluorescence(num_frames=300, num_rois=2, noise_std=0.0, bleaching_tau=None, seed=2)
-    np.testing.assert_array_equal(result.traces, result.clean_traces)
+def test_generate_fluorescence_traces_equal_clean_traces_plus_one_without_noise_or_bleaching():
+    result = generate_fluorescence(num_frames=300, num_rois=2, noise_std=0.0, seed=2)
+    np.testing.assert_array_equal(result.traces, result.clean_traces + 1.0)
 
 
 def test_generate_fluorescence_noise_changes_traces():
@@ -190,14 +186,14 @@ def test_generate_fluorescence_noise_changes_traces():
 
 
 def test_generate_fluorescence_bleaching_attenuates_trace():
-    result = generate_fluorescence(num_frames=500, num_rois=1, bleaching_tau=5.0, seed=4)
+    result = generate_fluorescence(num_frames=500, num_rois=1, bleaching_time=5.0, seed=4)
     # Last quarter should be weaker than first quarter on average
     assert result.traces[:125, 0].mean() > result.traces[375:, 0].mean()
 
 
 def test_generate_fluorescence_is_reproducible():
-    r1 = generate_fluorescence(num_frames=200, num_rois=3, noise_std=0.1, bleaching_tau=30.0, seed=42)
-    r2 = generate_fluorescence(num_frames=200, num_rois=3, noise_std=0.1, bleaching_tau=30.0, seed=42)
+    r1 = generate_fluorescence(num_frames=200, num_rois=3, noise_std=0.1, bleaching_time=30.0, seed=42)
+    r2 = generate_fluorescence(num_frames=200, num_rois=3, noise_std=0.1, bleaching_time=30.0, seed=42)
     np.testing.assert_array_equal(r1.traces, r2.traces)
     np.testing.assert_array_equal(r1.spikes, r2.spikes)
     np.testing.assert_array_equal(r1.clean_traces, r2.clean_traces)
@@ -213,7 +209,7 @@ def test_generate_fluorescence_different_seeds_differ():
 
 
 def test_generate_imaging_with_rois_returns_correct_types_and_shapes():
-    rois, imaging = generate_imaging_with_rois(
+    rois, imaging, _ = generate_imaging_with_rois(
         num_frames=50,
         height=30,
         width=40,
@@ -231,29 +227,93 @@ def test_generate_imaging_with_rois_returns_correct_types_and_shapes():
 
 
 def test_generate_imaging_with_rois_adds_fluorescence_signal():
-    """The imaging data should be brighter than pure random noise due to injected bumps."""
-    # Generate plain random imaging with the same derived seeds
-    rng = np.random.default_rng(42)
-    imaging_seed = int(rng.integers(0, 2**31))
+    """The imaging data should be brighter under ROIs than the same background alone.
 
-    plain = generate_random_imaging(
-        num_frames=100,
-        height=30,
-        width=40,
-        sampling_frequency=10.0,
-        seed=imaging_seed,
+    Compared against a same-background, zero-ROI-contribution reference
+    (`baseline_range=(0.0, 0.0)`) rather than an unrelated plain-noise movie: at dim,
+    realistic defaults, injected ROI signal can be smaller than an arbitrary comparison
+    movie's own incidental mean (e.g. `generate_random_imaging`'s uniform-noise mean of
+    ~0.5), which isn't what this test means to check. `noise_std=0.0` on both calls makes
+    the comparison deterministic, isolating the ROI signal's own contribution.
+    """
+    kwargs = dict(num_frames=100, height=30, width=40, num_rois=5, radius_range=(3, 5), seed=42, noise_std=0.0)
+    _, no_bumps, _ = generate_imaging_with_rois(**kwargs, baseline_range=(0.0, 0.0))
+    _, with_bumps, _ = generate_imaging_with_rois(**kwargs)
+    assert with_bumps.get_series().mean() > no_bumps.get_series().mean()
+
+
+def test_generate_imaging_with_rois_noise_std_scales_background():
+    """Increasing noise_std should increase the video's overall standard deviation."""
+    kwargs = dict(num_frames=200, height=20, width=20, num_rois=3, radius_range=(3, 5), seed=1)
+    _, quiet, _ = generate_imaging_with_rois(**kwargs, noise_std=0.01)
+    _, loud, _ = generate_imaging_with_rois(**kwargs, noise_std=5.0)
+    assert loud.get_series().std() > quiet.get_series().std()
+
+
+def test_generate_imaging_with_rois_dff_scale_independent_of_noise_std():
+    """Recovered dF/F's scale relative to clean_traces should not depend on noise_std.
+
+    Correlation alone wouldn't catch a regression here (it's scale-invariant), so this
+    compares std(dF/F) / std(clean_traces) at very different noise_std values instead --
+    if F0 baseline scaling were broken, this ratio would scale with ~1/noise_std (~40x
+    difference between the two noise levels tested here) instead of staying flat.
+    """
+    from photon_mosaic.core import create_roi_analyzer
+
+    kwargs = dict(num_frames=1000, height=20, width=20, num_rois=2, radius_range=(3, 5), seed=1)
+    ratios = {}
+    for noise_std in (0.05, 2.0):
+        rois, imaging, ground_truth = generate_imaging_with_rois(**kwargs, noise_std=noise_std)
+        analyzer = create_roi_analyzer(rois, imaging, format="memory")
+        analyzer.compute("fluorescence")
+        analyzer.compute("df_over_f", method="percentile")
+        dff = analyzer.get_extension("df_over_f").get_data()
+        ratios[noise_std] = dff[:, 0].std() / ground_truth.clean_traces[:, 0].std()
+
+    assert 0.3 < ratios[0.05] / ratios[2.0] < 3.0
+
+
+def test_generate_imaging_with_rois_poisson_noise_variance_matches_mean():
+    """noise_std='poisson' should give background pixels variance ~= mean (shot noise)."""
+    rois, imaging, _ = generate_imaging_with_rois(
+        num_frames=2000, height=20, width=20, num_rois=2, radius_range=(3, 5), seed=1, noise_std="poisson"
     )
-    _, with_bumps = generate_imaging_with_rois(
-        num_frames=100,
-        height=30,
-        width=40,
-        num_rois=5,
-        radius_range=(3, 5),
-        sampling_frequency=10.0,
-        seed=42,
-    )
-    # The injected signal should increase the mean
-    assert with_bumps.get_series().mean() > plain.get_series().mean()
+    video = imaging.epochs[0]._video
+    outside_any_roi = rois.get_roi_image_masks().sum(axis=0) == 0
+    background_pixels = video[:, outside_any_roi]
+    assert background_pixels.mean() > 0
+    assert 0.5 < background_pixels.var() / background_pixels.mean() < 2.0
+
+
+def test_generate_imaging_with_rois_poisson_noise_default_dff_recovery():
+    """At the default (photon-count-scale) parameters, Poisson noise shouldn't prevent
+    recovering dF/F close to clean_traces, comparable to the Gaussian default."""
+    from photon_mosaic.core import create_roi_analyzer
+
+    rois, imaging, ground_truth = generate_imaging_with_rois(num_frames=2000, num_rois=3, seed=0, noise_std="poisson")
+    analyzer = create_roi_analyzer(rois, imaging, format="memory")
+    analyzer.compute("fluorescence")
+    analyzer.compute("df_over_f")
+    dff = analyzer.get_extension("df_over_f").get_data()
+    for roi_idx in range(3):
+        corr = np.corrcoef(dff[:, roi_idx], ground_truth.clean_traces[:, roi_idx])[0, 1]
+        assert corr > 0.8
+
+
+def test_generate_imaging_with_rois_background_bleaches_with_signal():
+    """Background should decay under `bleaching_time`, just like the ROI signal, since it
+    mostly represents genuine (bleachable) fluorescence (e.g. neuropil) rather than
+    non-bleaching dark counts. Without bleaching, background should stay flat."""
+    kwargs = dict(num_frames=3000, height=20, width=20, num_rois=2, radius_range=(3, 5), noise_std=0.0, seed=1)
+    rois, imaging_bleached, _ = generate_imaging_with_rois(**kwargs, bleaching_time=30.0)
+    _, imaging_flat, _ = generate_imaging_with_rois(**kwargs)  # bleaching_time defaults to inf
+
+    outside_any_roi = rois.get_roi_image_masks().sum(axis=0) == 0
+    bg_bleached = imaging_bleached.epochs[0]._video[:, outside_any_roi]
+    bg_flat = imaging_flat.epochs[0]._video[:, outside_any_roi]
+
+    assert bg_bleached[-100:].mean() < 0.5 * bg_bleached[:100].mean()
+    assert bg_flat[-100:].mean() == pytest.approx(bg_flat[:100].mean())
 
 
 def test_generate_imaging_with_rois_is_reproducible():
@@ -266,8 +326,8 @@ def test_generate_imaging_with_rois_is_reproducible():
         sampling_frequency=10.0,
         seed=99,
     )
-    rois1, im1 = generate_imaging_with_rois(**kwargs)
-    rois2, im2 = generate_imaging_with_rois(**kwargs)
+    rois1, im1, _ = generate_imaging_with_rois(**kwargs)
+    rois2, im2, _ = generate_imaging_with_rois(**kwargs)
 
     np.testing.assert_array_equal(im1.get_series(), im2.get_series())
     np.testing.assert_array_equal(
@@ -277,7 +337,7 @@ def test_generate_imaging_with_rois_is_reproducible():
 
 
 def test_generate_imaging_with_rois_multiplane():
-    rois, imaging = generate_imaging_with_rois(
+    rois, imaging, _ = generate_imaging_with_rois(
         num_frames=40,
         height=30,
         width=30,
@@ -304,13 +364,13 @@ def test_generate_imaging_with_rois_multiplane_is_reproducible():
         sampling_frequency=10.0,
         seed=7,
     )
-    _, im1 = generate_imaging_with_rois(**kwargs)
-    _, im2 = generate_imaging_with_rois(**kwargs)
+    _, im1, _ = generate_imaging_with_rois(**kwargs)
+    _, im2, _ = generate_imaging_with_rois(**kwargs)
     np.testing.assert_array_equal(im1.get_series(), im2.get_series())
 
 
 def test_generate_imaging_with_rois_weighted():
-    rois, imaging = generate_imaging_with_rois(
+    rois, imaging, _ = generate_imaging_with_rois(
         num_frames=50,
         height=30,
         width=40,
@@ -335,9 +395,9 @@ def test_generate_imaging_with_rois_decay_affects_trace():
         sampling_frequency=10.0,
         seed=55,
     )
-    _, im_short = generate_imaging_with_rois(decay_seconds=0.5, **kwargs)
-    _, im_long = generate_imaging_with_rois(decay_seconds=5.0, **kwargs)
+    _, im_short, _ = generate_imaging_with_rois(decay_time=0.5, **kwargs)
+    _, im_long, _ = generate_imaging_with_rois(decay_time=5.0, **kwargs)
 
-    # Both should have signal added (mean above 0.5 which is the random baseline mean)
-    assert im_short.get_series().mean() > 0.5
-    assert im_long.get_series().mean() > 0.5
+    # Both should have visible injected signal well above the dark background
+    assert im_short.get_series().max() > 1.0
+    assert im_long.get_series().max() > 1.0

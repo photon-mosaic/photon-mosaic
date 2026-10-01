@@ -9,6 +9,7 @@ NumpyRois
 """
 
 import numpy as np
+import sparse
 from numpy.typing import ArrayLike
 
 from .baseimaging import BaseImaging, BaseImagingEpoch
@@ -53,13 +54,14 @@ class NumpyImaging(BaseImaging):
 
         # Check that all shapes and number of planes are consistent across epochs
         shapes = []
-        for video in videos:
+        for i, video in enumerate(videos):
             if len(video.shape) not in [3, 4]:
                 raise ValueError(
                     "'timeseries' must be a 3D or 4D numpy array (num_frames, height, width, [num_planes])"
                 )
             if len(video.shape) == 3:
-                video = video[:, :, :, np.newaxis]  # Add a planes dimension
+                videos[i] = video[:, :, :, np.newaxis]  # Add a planes dimension
+
             shapes.append(video.shape[1:])
         if not all(shape == shapes[0] for shape in shapes):
             raise ValueError("All epochs must have the same image shape (height, width, planes)")
@@ -74,6 +76,7 @@ class NumpyImaging(BaseImaging):
         BaseImaging.__init__(self, shape=shapes[0], sampling_frequency=sampling_frequency, dtype=videos[0].dtype)
 
         for video, time_vector in zip(videos, time_vectors):
+            assert len(video.shape) == 4, "Video must be a 4D numpy array (num_frames, height, width, num_planes)"
             self.add_epoch(
                 NumpyImagingEpoch(
                     video=video,
@@ -140,7 +143,7 @@ class NumpyImagingEpoch(BaseImagingEpoch):
 
 
 class NumpyRois(BaseRois):
-    """A ROIs object specified by numpy arrays for masks and traces."""
+    """A ROIs object specified by numpy or sparse pydata arrays for masks and traces."""
 
     def __init__(
         self,
@@ -148,12 +151,12 @@ class NumpyRois(BaseRois):
         sampling_frequency: float,
         roi_ids: ArrayLike | None = None,
     ):
-        """Create a NumpyRois object from numpy arrays.
+        """Create a NumpyRois object from numpy or sparse pydata arrays.
 
         Parameters
         ----------
         roi_image_masks : ArrayLike
-            Numpy array representing the image masks for each ROI
+            Numpy or sparse (e.g. `sparse.GCXS`) array representing the image masks for each ROI.
             Accepted dimensions are: (num_rois x height x width) for single-plane and
             (num_rois x height x width x num_planes) for multi-plane.
         sampling_frequency : float
@@ -162,7 +165,9 @@ class NumpyRois(BaseRois):
             Optional array of ROI IDs. If None, IDs will be assigned as integers from 0 to num_rois-1.
         """
         num_rois = roi_image_masks.shape[0]
-        mask_shape = roi_image_masks[0].shape
+        # `.shape[1:]` avoids `roi_image_masks[0].shape`, which triggers a multi-second numba
+        # JIT compile on sparse arrays and crashes outright on an empty (0-ROI) array.
+        mask_shape = roi_image_masks.shape[1:]
         if len(mask_shape) not in [2, 3]:
             raise ValueError("Each ROI mask must be a 2D (height x width) or 3D (height x width x planes) array")
 
@@ -182,8 +187,11 @@ class NumpyRois(BaseRois):
             "sampling_frequency": sampling_frequency,
             "roi_ids": roi_ids,
         }
+        if isinstance(roi_image_masks, sparse.SparseArray):
+            # sparse arrays aren't handled by spikeinterface's JSON encoder; fall back to pickle.
+            self._serializability["json"] = False
 
-    def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> list[np.ndarray]:
+    def get_roi_image_masks(self, roi_ids: list[int | str] | None = None) -> np.ndarray | sparse.SparseArray:
         """Get the image masks for specific ROIs.
 
         Parameters
@@ -193,7 +201,7 @@ class NumpyRois(BaseRois):
 
         Returns
         -------
-        list[np.ndarray]
+        np.ndarray | sparse.SparseArray
             The image masks for the specified ROIs.
         """
         if roi_ids is None:

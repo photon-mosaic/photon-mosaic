@@ -12,17 +12,19 @@ import json
 from pathlib import Path
 
 import numpy as np
+import sparse
 
 from .baserois import BaseRois
 
 
 class BinaryRois(BaseRois):
-    """ROI extractor backed by .npy files on disk.
+    """ROI extractor backed by .npy or .npz files on disk.
 
     Parameters
     ----------
     file_path : str or Path
-        Path to the .npy file containing image masks (num_rois, height, width[, planes]).
+        Path to the file containing image masks (num_rois, height, width[, planes]) --
+        ``.npy`` for a dense array, ``.npz`` for a sparse `pydata/sparse` array.
     sampling_frequency : float
         Sampling frequency of the ROIs in Hz.
     roi_ids : ArrayLike
@@ -51,7 +53,10 @@ class BinaryRois(BaseRois):
         }
 
     def get_roi_image_masks(self, roi_ids=None):
-        masks = np.load(self._file_path)
+        if self._file_path.suffix == ".npz":
+            masks = sparse.load_npz(self._file_path)
+        else:
+            masks = np.load(self._file_path)
         if roi_ids is None:
             return masks
         roi_indices = self.ids_to_indices(roi_ids)
@@ -62,7 +67,7 @@ class BinaryFolderRois(BinaryRois):
     """ROI extractor that loads from a folder saved by ``BaseRois.save()``.
 
     The folder must contain:
-    - ``roi_image_masks.npy`` — the mask data
+    - ``roi_image_masks.npy`` (dense) or ``roi_image_masks.npz`` (sparse) — the mask data
     - ``roi_ids.npy`` — the ROI IDs
     - ``metadata.json`` — sampling_frequency and shape
     - ``binary.json`` — provenance file (written by ``BaseRois.save()``)
@@ -84,7 +89,8 @@ class BinaryFolderRois(BinaryRois):
             metadata = json.load(f)
 
         roi_ids = np.load(folder_path / "roi_ids.npy")
-        file_path = folder_path / "roi_image_masks.npy"
+        npz_path = folder_path / "roi_image_masks.npz"
+        file_path = npz_path if npz_path.is_file() else folder_path / "roi_image_masks.npy"
 
         BinaryRois.__init__(
             self,

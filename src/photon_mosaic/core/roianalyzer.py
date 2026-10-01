@@ -272,9 +272,11 @@ class RoiAnalyzer:
         else:
             imaging_attributes = imaging_attributes.copy()
 
-        # Make an in-memory copy of rois for fast access
+        # Make an in-memory copy of rois for fast access. Pass image masks through as-is
+        # (dense ndarray or sparse array) -- wrapping in np.array() would raise for a sparse
+        # array (which refuses implicit densification via __array__) instead of copying it.
         rois_copy = NumpyRois(
-            roi_image_masks=np.array(rois.get_roi_image_masks()),
+            roi_image_masks=rois.get_roi_image_masks(),
             sampling_frequency=rois.sampling_frequency,
             roi_ids=np.array(rois.roi_ids),
         )
@@ -1606,10 +1608,15 @@ class AnalyzerExtension:
                         df_group.create_dataset(name=col, data=col_data)
                     df_group.attrs["dataframe"] = True
                 else:
+                    # Wrap via an object array assignment rather than np.array([data], dtype=object):
+                    # the latter still invokes data.__array__ for array-like objects (e.g. sparse
+                    # arrays), which either densifies unexpectedly or raises outright.
+                    boxed = np.empty(1, dtype=object)
+                    boxed[0] = data
                     try:
                         group.create_dataset(
                             name=name,
-                            data=np.array([data], dtype=object),
+                            data=boxed,
                             object_codec=numcodecs.Pickle(),
                         )
                     except Exception:
@@ -1643,4 +1650,7 @@ class AnalyzerExtension:
 
 _builtin_extensions: dict[str, str] = {
     "fluorescence": "photon_mosaic.core",
+    "df_over_f": "photon_mosaic.core",
+    "deconvolution": "photon_mosaic.core",
+    "neuropil": "photon_mosaic.core",
 }

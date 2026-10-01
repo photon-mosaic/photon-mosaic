@@ -116,6 +116,7 @@ class ImagingSeriesWidget(BaseWidget):
         self.is_playing = False
         self.play_thread = None
         self.playback_fps = min(10.0, dp.frame_rate)  # Default playback speed
+        self._playback_last_time: float | None = None  # set by _start_playback/_on_fps_changed
 
         # Sample up to 100 frames to compute a global vmin/vmax for the colormap.
         num_samples = min(100, dp.num_frames)
@@ -359,10 +360,12 @@ class ImagingSeriesWidget(BaseWidget):
     def _start_playback(self):
         """Start video playback in a separate thread."""
         import threading
+        import time
 
         self.is_playing = True
         self.play_button.description = "⏸ Pause"
         self.play_button.button_style = "warning"
+        self._playback_last_time = time.monotonic()
 
         # Start playback thread
         self.play_thread = threading.Thread(target=self._playback_loop)
@@ -376,17 +379,41 @@ class ImagingSeriesWidget(BaseWidget):
         self.play_button.button_style = "success"
 
     def _playback_loop(self):
-        """Main playback loop running in separate thread."""
+        """Main playback loop running in separate thread.
+
+        Paced by elapsed wall-clock time rather than a fixed per-iteration increment: each
+        redraw involves a full figure re-render plus a Jupyter comm/websocket round trip, which
+        can take longer than ``1 / playback_fps``. A naive ``current_frame += 1`` on a fixed
+        timer would race ahead of what's actually reached the browser -- since ipywidgets only
+        syncs the latest value, whichever intermediate frames never got flushed are silently
+        dropped, with no control over which ones. Instead, each iteration computes how many
+        frames *should* have elapsed since the last actual advance and jumps straight there --
+        deliberately skipping frames (evenly, by real elapsed time) so playback speed stays
+        correct under load, rather than an uncontrolled, backpressure-dependent frame drop.
+        ``self._playback_last_time`` advances by the exact duration of the frames just
+        consumed, not to ``now`` -- carrying over any leftover fraction of a frame period
+        instead of discarding it, so playback doesn't drift behind the requested rate over a
+        long session. ``_on_fps_changed`` resets it directly, so a rate change only governs
+        time elapsed from that point on rather than retroactively reinterpreting time already
+        accrued under the old rate.
+        """
         import time
 
         dp = to_attr(self.data_plot)
 
         while self.is_playing and self.current_frame < dp.num_frames - 1:
-            time.sleep(1.0 / self.playback_fps)
-            if self.is_playing:  # Check again in case it was stopped
-                self.current_frame += 1
+            now = time.monotonic()
+            frames_elapsed = int((now - self._playback_last_time) * self.playback_fps)
+            if self.is_playing and frames_elapsed > 0:  # Check again in case it was stopped
+                self.current_frame = min(self.current_frame + frames_elapsed, dp.num_frames - 1)
+                self._playback_last_time += frames_elapsed / self.playback_fps
                 # Update slider and display
                 self.frame_slider.value = self.current_frame
+                if self.current_frame >= dp.num_frames - 1:
+                    # Reached the end -- stop immediately rather than waiting out one more poll
+                    # interval (up to 2.5s at the FPS slider's minimum, 0.1).
+                    break
+            time.sleep(1.0 / (4 * self.playback_fps))
         # Stop when reaching the end
         if self.current_frame >= dp.num_frames - 1:
             self._stop_playback()
@@ -398,7 +425,13 @@ class ImagingSeriesWidget(BaseWidget):
 
     def _on_fps_changed(self, change):
         """Handle FPS slider change."""
+        import time
+
         self.playback_fps = change["new"]
+        # Reset the pacing reference so the new rate only applies to time elapsed from here on --
+        # otherwise _playback_loop would apply it to time that already elapsed under the old rate,
+        # producing an incorrect frame jump right at the moment of the change.
+        self._playback_last_time = time.monotonic()
 
     def _on_display_changed(self, change):
         """Handle display parameter changes (colormap, contrast)."""
