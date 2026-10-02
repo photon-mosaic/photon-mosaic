@@ -109,6 +109,31 @@ class ZarrImaging(BaseImaging):
 
     @staticmethod
     def write_imaging(imaging: BaseImaging, folder_path: str, verbose=False, **kwargs):
+        """
+        Write imaging data to a Zarr folder.
+
+        Parameters
+        ----------
+        imaging : BaseImaging
+            Imaging object to write.
+        folder_path : str
+            Destination folder path for the Zarr store.
+        verbose : bool, default: False
+            Whether to print verbose output during writing.
+        **kwargs
+            Additional keyword arguments, including ``storage_options``.
+
+        Returns
+        -------
+        ZarrImaging
+            A :class:`ZarrImaging` instance opened from ``folder_path``.
+
+        Notes
+        -----
+        Implemented as a static method so it can be called by
+        :meth:`BaseImaging.save` without instantiating :class:`ZarrImaging`.
+
+        """
         import zarr
 
         storage_options = kwargs.get("storage_options", None)

@@ -276,6 +276,37 @@ class BinaryFolderImaging(BinaryImaging):
         dtype=None,
         **job_kwargs,
     ):
+        """Write imaging data to a folder in binary format.
+
+        Each epoch is written to its own `.raw` file.
+
+        Parameters
+        ----------
+        imaging : BaseImaging
+            Imaging object to write.
+        folder_path : str | Path
+            Destination folder where binary files are saved.
+        verbose : bool, default: False
+            If ``True``, enables verbose output during writing.
+        overwrite : bool, default: False
+            If ``True``, removes an existing destination folder before writing.
+        dtype : dtype, optional
+            Data type used to store trace data. If ``None``, uses
+            ``imaging.get_dtype()``.
+        **job_kwargs
+            Additional keyword arguments forwarded to
+            :func:`spikeinterface.core.time_series_tools.write_binary`.
+
+        Returns
+        -------
+        Path
+            Path to the written `BinaryFolderImaging`.
+
+        Notes
+        -----
+        Implemented as a static method so it can be called by
+        :meth:`BaseImaging.save` without instantiating :class:`BinaryImaging`.
+        """
         from spikeinterface.core.time_series_tools import write_binary
 
         folder_path = Path(folder_path)
