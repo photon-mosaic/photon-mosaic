@@ -4,8 +4,9 @@ import numpy as np
 from numpy.typing import ArrayLike, DTypeLike
 from spikeinterface.core.base import BaseExtractor
 from spikeinterface.core.core_tools import convert_bytes_to_str, convert_seconds_to_str
+from spikeinterface.core.job_tools import split_job_kwargs
 from spikeinterface.core.time_series import TimeSeries, TimeSeriesSegment
-from spikeinterface.core.time_series_tools import get_chunks, write_binary
+from spikeinterface.core.time_series_tools import get_chunks
 
 
 class BaseImaging(BaseExtractor, TimeSeries):
@@ -26,6 +27,7 @@ class BaseImaging(BaseExtractor, TimeSeries):
         assert len(shape) == 3, "Shape must be a tuple/list/array of length 3 (height, width, planes)"
         num_planes = shape[2]
         BaseExtractor.__init__(self, range(0, num_planes))
+        TimeSeries.__init__(self)
         self._sampling_frequency = float(sampling_frequency)
         self._shape = tuple(shape)  # Image is intended as a volume (H, W, planes)
         self._average_image = None
@@ -180,8 +182,8 @@ class BaseImaging(BaseExtractor, TimeSeries):
     def get_sampling_frequency(self):
         return self._sampling_frequency
 
-    def get_sample_size_in_bytes(self):
-        return self.get_num_pixels() * np.dtype(self.get_dtype()).itemsize
+    def get_sample_size_in_bytes(self, dtype=None):
+        return self.get_num_pixels() * np.dtype(self.get_dtype() if dtype is None else dtype).itemsize
 
     def get_shape(self, segment_index: int | None = None) -> tuple:
         """Get the shape of the imaging data as (num_samples, height, width, planes).
@@ -406,61 +408,119 @@ class BaseImaging(BaseExtractor, TimeSeries):
             raise NotImplementedError
         return {}
 
-    def _save(self, format="binary", verbose: bool = False, **save_kwargs):  # pragma: no cover
-        from spikeinterface.core.job_tools import split_job_kwargs
+    def save(self, format: str = "binary", verbose: bool = False, **save_kwargs):
+        """
+        Save a `BaseImaging` object to a specified format:
 
+        * "binary"
+        * "zarr"
+
+        Parameters
+        ----------
+        format : str, default: "binary"
+            The format to save the imaging in. Options are:
+
+            - "binary": Saves the imaging in binary format.
+            - "zarr": Saves the imaging in Zarr format.
+        verbose : bool, default: False
+            If True, prints additional information during the save process.
+        **save_kwargs : dict
+            Additional keyword arguments specific to the chosen format.
+            All formats support job_kwargs for parallel processing
+            (see `si.get_global_job_kwargs()` for default values).
+
+            * "binary" format:
+                - folder : str or Path
+                    The folder where the binary files will be saved.
+                - overwrite : bool, default: False
+                    If True, existing files in the folder will be overwritten.
+                - dtype : str, optional
+                    The data type to use for saving the imaging. If not provided, the imaging's dtype
+                    will be used.
+            * "zarr" format:
+                - folder : str or Path
+                    The folder where the Zarr files will be saved.
+                - overwrite: bool, default: False
+                    If True, the folder is removed if it already exists
+                - storage_options: dict or None, default: None
+                    Storage options for zarr `store`. E.g., if "s3://" or "gcs://" they can
+                    provide authentication methods, etc.
+                    For cloud storage locations, this should not be None (in case of default values, use an empty dict)
+                - dtype: np.dtype or None, default: None
+                    The dtype to use for the video datasets. If None, the imaging's dtype is used
+                - compressor: numcodecs.Codec or None, default: None
+                    Global compressor. If None, Blosc-zstd, level 5, with bit shuffle is used
+                - filters: list[numcodecs.Codec] or None, default: None
+                    Global filters for zarr (global)
+                - compressor_by_dataset: dict or None, default: None
+                    Optional compressor per dataset:
+
+                        - videos
+                        - times
+
+                    If None, the global compressor is used
+                - filters_by_dataset: dict or None, default: None
+                    Optional filters per dataset:
+
+                        - videos
+                        - times
+
+                    If None, the global filters are used
+                - extra_chunks: dict or None, default: None
+                    Extra chunk specification passed to the zarr writer
+
+        Returns
+        -------
+        Baseimaging
+            The saved imaging object in the specified format.
+        """
         kwargs, job_kwargs = split_job_kwargs(save_kwargs)
 
         if format == "binary":
-            folder = kwargs["folder"]
-            file_paths = [folder / f"video_cached_seg{i}.raw" for i in range(self.get_num_epochs())]
-            dtype = kwargs.get("dtype", None) or self.get_dtype()
-            t_starts = self._get_t_starts()
+            if "folder" not in kwargs:
+                raise ValueError("Missing folder in imaging.save(folder='...')")
 
-            write_binary(self, file_paths=file_paths, dtype=dtype, verbose=verbose, **job_kwargs)
+            from .binaryimaging import BinaryFolderImaging
 
-            from .binaryimaging import BinaryFolderImaging, BinaryImaging
-
-            # This is created so it can be saved as json because the `BinaryFolderImaging` requires it loading
-            # See the __init__ of `BinaryFolderImaging`
-            binary_imaging = BinaryImaging(
-                file_paths=file_paths,
-                sampling_frequency=self.get_sampling_frequency(),
-                shape=self.shape,
-                dtype=dtype,
-                t_starts=t_starts,
-                file_offset=0,
+            folder = kwargs.pop("folder")
+            cached = BinaryFolderImaging.write_imaging(
+                self, folder_path=folder, verbose=verbose, **kwargs, **job_kwargs
             )
-            binary_imaging.dump(folder / "binary.json", relative_to=folder)
-
-            cached = BinaryFolderImaging(folder_path=folder)
-
-        elif format == "memory":
-            raise NotImplementedError
         elif format == "zarr":
-            import zarr
+            if "folder" not in kwargs:
+                raise ValueError("Missing folder in imaging.save(folder='...')")
+            folder_path = kwargs.pop("folder")
 
-            from .zarrimaging import ZarrImaging, add_imaging_to_zarr_group
+            from .zarrimaging import ZarrImaging
 
-            zarr_path = kwargs["zarr_path"]
-            storage_options = kwargs.get("storage_options", None)
-            zarr_root = zarr.open(str(zarr_path), mode="w", storage_options=storage_options)
-            add_imaging_to_zarr_group(self, zarr_root, **kwargs, **job_kwargs)
-
-            cached = ZarrImaging(zarr_path)
-        elif format == "nwb":
-            raise NotImplementedError
+            cached = ZarrImaging.write_imaging(self, folder_path=folder_path, verbose=verbose, **kwargs, **job_kwargs)
 
         else:
             raise ValueError(f"format {format} not supported")
 
-        for epoch_index in range(self.get_num_epochs()):
-            if self.has_time_vector(epoch_index):
-                # the use of get_times is preferred since timestamps are converted to array
-                time_vector = self.get_times(segment_index=epoch_index)
-                cached.set_times(time_vector, segment_index=epoch_index)
-
         return cached
+
+    def _extra_metadata_to_dict(self, dump_dict):
+        super()._extra_metadata_to_dict(dump_dict)
+
+        # Add times_kwargs if the recording has been modified in memory (e.g. by set_times / shift_times / reset_times)
+        if self._time_info_modified:
+            dump_dict["times_kwargs"] = []
+            for segment_index in range(self.get_num_segments()):
+                times_kwargs = self.segments[segment_index].get_times_kwargs()
+                dump_dict["times_kwargs"].append(times_kwargs)
+
+    def _extra_metadata_from_dict(self, dump_dict):
+        super()._extra_metadata_from_dict(dump_dict)
+
+        if "times_kwargs" in dump_dict:
+            # When serializing, dump timestamps information because this could have been
+            # set in memory
+            times_kwargs_list = dump_dict["times_kwargs"]
+            for segment_index, times_kwargs in enumerate(times_kwargs_list):
+                self.segments[segment_index]._sampling_frequency = times_kwargs["sampling_frequency"]
+                self.segments[segment_index]._t_start = times_kwargs["t_start"]
+                self.segments[segment_index]._time_vector = times_kwargs["time_vector"]
 
 
 class BaseImagingEpoch(TimeSeriesSegment):

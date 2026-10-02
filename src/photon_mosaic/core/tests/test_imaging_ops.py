@@ -134,10 +134,10 @@ def test_frame_slice_keeps_the_parent_timeline():
     imaging = generate_random_imaging(num_frames=(20,), height=3, width=3, sampling_frequency=10.0, seed=42)
 
     # a parent with no t_start is treated as starting at zero
-    assert frame_slice(imaging, 5, 10).epochs[0].t_start == pytest.approx(0.5)
+    assert frame_slice(imaging, 5, 10).epochs[0]._t_start == pytest.approx(0.5)
 
-    imaging.epochs[0].t_start = 100.0
-    assert frame_slice(imaging, 5, 10).epochs[0].t_start == pytest.approx(100.5)
+    imaging.epochs[0]._t_start = 100.0
+    assert frame_slice(imaging, 5, 10).epochs[0]._t_start == pytest.approx(100.5)
 
 
 def test_frame_slice_can_name_an_epoch_of_a_multi_epoch_parent():
