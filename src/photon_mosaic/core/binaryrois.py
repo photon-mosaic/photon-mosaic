@@ -141,6 +141,8 @@ class BinaryFolderRois(BinaryRois):
         -----
         Implemented as a static method so it can be called by
         :meth:`BaseRois.save` without instantiating :class:`BinaryFolderRois`.
+
+        This is its only intended use.
         """
         folder_path = Path(folder_path)
         if folder_path.is_dir():

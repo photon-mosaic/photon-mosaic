@@ -148,6 +148,8 @@ class ZarrRois(BaseRois):
         -----
         Implemented as a static method so it can be called by
         :meth:`BaseRois.save` without instantiating :class:`ZarrRois`.
+
+        This is its only intended use.
         """
         import zarr
         from spikeinterface.core.core_tools import retrieve_importing_provenance

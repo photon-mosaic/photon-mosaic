@@ -306,6 +306,8 @@ class BinaryFolderImaging(BinaryImaging):
         -----
         Implemented as a static method so it can be called by
         :meth:`BaseImaging.save` without instantiating :class:`BinaryImaging`.
+
+        This is its only intended use.
         """
         from spikeinterface.core.time_series_tools import write_binary
 

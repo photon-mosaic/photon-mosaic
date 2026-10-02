@@ -133,6 +133,7 @@ class ZarrImaging(BaseImaging):
         Implemented as a static method so it can be called by
         :meth:`BaseImaging.save` without instantiating :class:`ZarrImaging`.
 
+        This is its only intended use.
         """
         import zarr
 
