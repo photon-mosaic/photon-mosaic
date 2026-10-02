@@ -122,6 +122,33 @@ class ZarrRois(BaseRois):
         storage_options: dict | None = None,
         **kwargs,
     ):
+        """Write ROI data to a Zarr store and return a reloaded ROIs.
+
+        Parameters
+        ----------
+        rois : BaseRois
+            ROIs instance to write.
+        folder_path : str or pathlib.Path
+            Output path for the Zarr store.
+        overwrite : bool, default: False
+            If ``True``, overwrite an existing store at ``folder_path``.
+        storage_options : dict or None, default: None
+            Optional storage options passed to Zarr I/O.
+        **kwargs
+            Additional dataset creation options forwarded to
+            :func:`add_rois_to_zarr_group` (for example, compression/chunking
+            options).
+
+        Returns
+        -------
+        ZarrRois
+            A :class:`ZarrRois` instance opened from the written store.
+
+        Notes
+        -----
+        Implemented as a static method so it can be called by
+        :meth:`BaseRois.save` without instantiating :class:`ZarrRois`.
+        """
         import zarr
         from spikeinterface.core.core_tools import retrieve_importing_provenance
 

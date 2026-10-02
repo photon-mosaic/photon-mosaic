@@ -121,6 +121,27 @@ class BinaryFolderRois(BinaryRois):
         folder_path: str | Path,
         overwrite: bool = False,
     ):
+        """Write ROI data as binary into a folder and return a reloaded ROIs.
+
+        Parameters
+        ----------
+        rois : BaseRois
+            ROIs instance to write.
+        folder_path : str or pathlib.Path
+            Output path for the Zarr store.
+        overwrite : bool, default: False
+            If ``True``, overwrite an existing store at ``folder_path``.
+
+        Returns
+        -------
+        BinaryFolderRois
+            A :class:`BinaryFolderRois` instance.
+
+        Notes
+        -----
+        Implemented as a static method so it can be called by
+        :meth:`BaseRois.save` without instantiating :class:`BinaryFolderRois`.
+        """
         folder_path = Path(folder_path)
         if folder_path.is_dir():
             if not overwrite:
