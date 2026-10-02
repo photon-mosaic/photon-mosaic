@@ -412,7 +412,6 @@ class BaseImaging(BaseExtractor, TimeSeries):
 
         * "binary"
         * "zarr"
-        * "memory" (not implemented)
 
         Parameters
         ----------
@@ -421,7 +420,6 @@ class BaseImaging(BaseExtractor, TimeSeries):
 
             - "binary": Saves the imaging in binary format.
             - "zarr": Saves the imaging in Zarr format.
-            - "memory": Saves the imaging in memory (shared memory or numpy array).
         verbose : bool, default: False
             If True, prints additional information during the save process.
         **save_kwargs : dict
@@ -468,10 +466,6 @@ class BaseImaging(BaseExtractor, TimeSeries):
                     If None, the global filters are used
                 - extra_chunks: dict or None, default: None
                     Extra chunk specification passed to the zarr writer
-            * "memory" format:
-                - sharedmem : bool, default: True
-                    If True, the imaging is saved in shared memory. If False, it is saved as
-                    a numpy array in memory.
 
         Returns
         -------
@@ -498,18 +492,6 @@ class BaseImaging(BaseExtractor, TimeSeries):
             from .zarrimaging import ZarrImaging
 
             cached = ZarrImaging.write_imaging(self, folder_path=folder_path, verbose=verbose, **kwargs, **job_kwargs)
-        elif format == "memory":
-            # if kwargs.get("sharedmem", True):
-            #     from .numpyextractors import SharedMemoryRecording
-
-            #     cached = SharedMemoryRecording.from_recording(
-            #         self, with_metadata=True, with_time_vector=True, **job_kwargs
-            #     )
-            # else:
-            #     from spikeinterface.core import NumpyRecording
-
-            #     cached = NumpyRecording.from_recording(self, with_metadata=True, with_time_vector=True, **job_kwargs)
-            raise NotImplementedError("Memory format is not implemented yet.")
 
         else:
             raise ValueError(f"format {format} not supported")
