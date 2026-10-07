@@ -121,8 +121,13 @@ class TestComputeMotionSuite2p:
         assert motion.num_epochs == 1
         assert motion.displacements[0].shape == (6, 1, 2)
 
+        # The raw input is not registered; the registration output is
+        assert imaging.is_registered is False
+        registered_imaging = RegisterSuite2PImaging(imaging, motion)
+        assert registered_imaging.is_registered is True
+
         # Applying the computed motion should restore the unshifted template (first frame)
-        registered = RegisterSuite2PImaging(imaging, motion).epochs[0].get_series(0, 6)
+        registered = registered_imaging.epochs[0].get_series(0, 6)
         np.testing.assert_allclose(registered, registered[0:1].repeat(6, axis=0), atol=1e-3)
 
     def test_kwargs_override_settings_and_batching(self):
