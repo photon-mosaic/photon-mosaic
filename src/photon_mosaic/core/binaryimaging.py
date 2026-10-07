@@ -1,9 +1,17 @@
 import json
 import mmap
+import shutil
 import warnings
 from pathlib import Path
 
 import numpy as np
+from spikeinterface.core.core_tools import (
+    load_annotations_from_folder,
+    load_properties_from_folder,
+    save_annotations_to_folder,
+    save_extractor_provenance,
+    save_properties_to_folder,
+)
 
 from .baseimaging import BaseImaging, BaseImagingEpoch
 
@@ -22,16 +30,12 @@ class BinaryImaging(BaseImaging):
         Image height, width, and optionally number of planes
     dtype : str or dtype
         The dtype of the binary file
-    num_planes : int, default: 1
-        Number of planes in the imaging data
-    plane_ids : list[int] | None, default: None
-        List of plane IDs. If None, defaults to [0, 1, ..., num_planes]
-    time_axis : int, default: 0
-        The axis of the time dimension
     t_starts : None or list of float, default: None
         Times in seconds of the first sample for each epoch. If None, defaults to 0 for all epochs.
     file_offset : int, default: 0
         Number of bytes in the file to offset by during memmap instantiation.
+    file_timestamps_paths : str or Path or list, default: None
+        Path to the binary file containing timestamps for each segment. If None, timestamps are not loaded
 
     Returns
     -------
@@ -47,6 +51,7 @@ class BinaryImaging(BaseImaging):
         dtype,
         t_starts=None,
         file_offset=0,
+        file_timestamps_paths: str | Path | list[str | Path] | None = None,
     ):
         BaseImaging.__init__(self, sampling_frequency, shape, dtype)
 
@@ -63,18 +68,24 @@ class BinaryImaging(BaseImaging):
 
         dtype = np.dtype(dtype)
 
+        if file_timestamps_paths is None:
+            timestamps_path_list: list[str | Path] | None = None
+        elif isinstance(file_timestamps_paths, list):
+            timestamps_path_list = file_timestamps_paths
+        else:
+            timestamps_path_list = [file_timestamps_paths]
+
         for i, file_path in enumerate(file_path_list):
             if t_starts is None:
                 t_start = None
             else:
                 t_start = t_starts[i]
+            if timestamps_path_list is None:
+                file_timestamps_path = None
+            else:
+                file_timestamps_path = timestamps_path_list[i]
             imaging_epoch = BinaryImagingEpoch(
-                file_path,
-                sampling_frequency,
-                t_start,
-                shape,
-                dtype,
-                file_offset,
+                file_path, sampling_frequency, t_start, shape, dtype, file_offset, file_timestamps_path
             )
             self.add_epoch(imaging_epoch)
 
@@ -113,7 +124,7 @@ class BinaryImaging(BaseImaging):
 
 
 class BinaryImagingEpoch(BaseImagingEpoch):
-    def __init__(self, file_path, sampling_frequency, t_start, shape, dtype, file_offset):
+    def __init__(self, file_path, sampling_frequency, t_start, shape, dtype, file_offset, file_timestamps_path):
         BaseImagingEpoch.__init__(self, sampling_frequency=sampling_frequency, t_start=t_start)
         self.shape = shape
         self.dtype = np.dtype(dtype)
@@ -123,6 +134,8 @@ class BinaryImagingEpoch(BaseImagingEpoch):
         self.bytes_per_sample = np.prod(shape) * self.dtype.itemsize
         self.data_size_in_bytes = Path(file_path).stat().st_size - file_offset
         self.num_samples = self.data_size_in_bytes // self.bytes_per_sample
+        if file_timestamps_path is not None:
+            self._time_vector = np.memmap(file_timestamps_path, dtype="float64", mode="r", shape=(self.num_samples,))
 
     def get_num_samples(self) -> int:
         """Returns the number of samples in this signal block
@@ -235,8 +248,9 @@ class BinaryFolderImaging(BinaryImaging):
 
         BinaryImaging.__init__(self, **d["kwargs"])
 
-        folder_metadata = folder_path
-        self.load_metadata_from_folder(folder_metadata)
+        # Load properties and annotations
+        load_properties_from_folder(folder_path / "properties", self)
+        load_annotations_from_folder(folder_path, self)
 
         self._kwargs = dict(folder_path=str(Path(folder_path).absolute()))
         self._bin_kwargs = d["kwargs"]
@@ -252,6 +266,111 @@ class BinaryFolderImaging(BinaryImaging):
             file_offset=self._bin_kwargs["file_offset"],
         )
         return d
+
+    @staticmethod
+    def write_imaging(
+        imaging: BaseImaging,
+        folder_path: str | Path,
+        verbose: bool = False,
+        overwrite: bool = False,
+        dtype=None,
+        **job_kwargs,
+    ):
+        """Write imaging data to a folder in binary format.
+
+        Each epoch is written to its own `.raw` file.
+
+        Parameters
+        ----------
+        imaging : BaseImaging
+            Imaging object to write.
+        folder_path : str | Path
+            Destination folder where binary files are saved.
+        verbose : bool, default: False
+            If ``True``, enables verbose output during writing.
+        overwrite : bool, default: False
+            If ``True``, removes an existing destination folder before writing.
+        dtype : dtype, optional
+            Data type used to store trace data. If ``None``, uses
+            ``imaging.get_dtype()``.
+        **job_kwargs
+            Additional keyword arguments forwarded to
+            :func:`spikeinterface.core.time_series_tools.write_binary`.
+
+        Returns
+        -------
+        Path
+            Path to the written `BinaryFolderImaging`.
+
+        Notes
+        -----
+        Implemented as a static method so it can be called by
+        :meth:`BaseImaging.save` without instantiating :class:`BinaryImaging`.
+
+        This is its only intended use.
+        """
+        from spikeinterface.core.time_series_tools import write_binary
+
+        folder_path = Path(folder_path)
+        if folder_path.is_dir():
+            if not overwrite:
+                raise FileExistsError(f"Folder {folder_path} already exists. Use overwrite=True to overwrite it.")
+            else:
+                shutil.rmtree(folder_path)
+        folder_path.mkdir(exist_ok=False, parents=True)
+
+        file_paths = [folder_path / f"traces_cached_seg{i}.raw" for i in range(imaging.get_num_epochs())]
+        if dtype is None:
+            dtype = imaging.get_dtype()
+        # Check if there are any time vectors
+        t_starts = imaging.get_segment_t_starts()
+        if imaging.has_any_time_vector():
+            file_timestamps_paths: list[str | Path] | None = [
+                folder_path / f"times_cached_seg{i}.raw" for i in range(imaging.get_num_epochs())
+            ]
+        else:
+            file_timestamps_paths = None
+
+        write_binary(
+            imaging,
+            file_paths=file_paths,
+            file_timestamps_paths=file_timestamps_paths,
+            dtype=dtype,
+            verbose=verbose,
+            **job_kwargs,
+        )
+
+        save_extractor_provenance(folder_path, imaging)
+        save_properties_to_folder(folder_path / "properties", imaging)
+        save_annotations_to_folder(folder_path, imaging)
+
+        # This is created so it can be saved as json because the `BinaryFolderRecording` requires it loading
+        # See the __init__
+        binary_imaging = BinaryImaging(
+            file_paths=file_paths,
+            file_timestamps_paths=file_timestamps_paths,
+            shape=imaging.shape,
+            sampling_frequency=imaging.get_sampling_frequency(),
+            dtype=dtype,
+            t_starts=t_starts,
+            file_offset=0,
+        )
+        binary_imaging.dump(folder_path / "binary.json", relative_to=folder_path)
+
+        # Create the si_folder file to make the load() easier until version 0.105.0
+        # All properties, annotations, and probe information are already saved in the folder,
+        # so we don't need to include them in the si_folder.json
+        cached = BinaryFolderImaging(folder_path=folder_path)
+        si_folder_path = folder_path / "si_folder.json"
+        cached.dump_to_json(
+            file_path=si_folder_path,
+            relative_to=folder_path,
+            include_properties=False,
+            include_annotations=False,
+            include_extra_metadata=False,
+        )
+
+        return cached
 
 
 read_binary_folder = BinaryFolderImaging

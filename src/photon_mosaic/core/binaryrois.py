@@ -9,10 +9,18 @@ BinaryFolderRois
 """
 
 import json
+import shutil
 from pathlib import Path
 
 import numpy as np
 import sparse
+from spikeinterface.core.core_tools import (
+    load_annotations_from_folder,
+    load_properties_from_folder,
+    save_annotations_to_folder,
+    save_extractor_provenance,
+    save_properties_to_folder,
+)
 
 from .baserois import BaseRois
 
@@ -100,7 +108,80 @@ class BinaryFolderRois(BinaryRois):
             shape=tuple(metadata["shape"]),
         )
 
-        self.load_metadata_from_folder(folder_path)
+        # Load properties and annotations
+        load_properties_from_folder(folder_path / "properties", self)
+        load_annotations_from_folder(folder_path, self)
 
         # Override _kwargs so serialisation round-trips through BinaryFolderRois
         self._kwargs = dict(folder_path=str(folder_path.absolute()))
+
+    @staticmethod
+    def write_rois(
+        rois: BaseRois,
+        folder_path: str | Path,
+        overwrite: bool = False,
+    ):
+        """Write ROI data as binary into a folder and return a reloaded ROIs.
+
+        Parameters
+        ----------
+        rois : BaseRois
+            ROIs instance to write.
+        folder_path : str or pathlib.Path
+            Output path for the Zarr store.
+        overwrite : bool, default: False
+            If ``True``, overwrite an existing store at ``folder_path``.
+
+        Returns
+        -------
+        BinaryFolderRois
+            A :class:`BinaryFolderRois` instance.
+
+        Notes
+        -----
+        Implemented as a static method so it can be called by
+        :meth:`BaseRois.save` without instantiating :class:`BinaryFolderRois`.
+
+        This is its only intended use.
+        """
+        folder_path = Path(folder_path)
+        if folder_path.is_dir():
+            if not overwrite:
+                raise FileExistsError(f"Folder {folder_path} already exists. Use overwrite=True to overwrite it.")
+            else:
+                shutil.rmtree(folder_path)
+        folder_path.mkdir(exist_ok=False, parents=True)
+
+        image_masks = rois.get_roi_image_masks()
+        if isinstance(image_masks, sparse.SparseArray):
+            # np.save doesn't understand sparse arrays; sparse.save_npz stores the
+            # data/coords/shape directly instead of densifying.
+            mask_file = folder_path / "roi_image_masks.npz"
+            sparse.save_npz(mask_file, image_masks)
+        else:
+            mask_file = folder_path / "roi_image_masks.npy"
+            np.save(mask_file, image_masks)
+        np.save(folder_path / "roi_ids.npy", np.array(rois.roi_ids))
+
+        metadata = dict(
+            sampling_frequency=float(rois.sampling_frequency),
+            shape=list(rois.shape),
+        )
+        with open(folder_path / "metadata.json", "w") as f:
+            json.dump(metadata, f, indent=4)
+
+        binary_rois = BinaryRois(
+            file_path=mask_file,
+            sampling_frequency=rois.sampling_frequency,
+            roi_ids=rois.roi_ids,
+            shape=rois.shape,
+        )
+        binary_rois.dump(folder_path / "binary.json", relative_to=folder_path)
+
+        save_extractor_provenance(folder_path, rois)
+        save_properties_to_folder(folder_path, rois)
+        save_annotations_to_folder(folder_path, rois)
+
+        cached = BinaryFolderRois(folder_path=folder_path)
+
+        return cached

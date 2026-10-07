@@ -18,7 +18,7 @@ def get_imaging_attributes(imaging: BaseImaging) -> dict:
     """
     num_epochs = imaging.get_num_epochs()
     num_samples = [imaging.get_num_frames(epoch_index=i) for i in range(num_epochs)]
-    t_starts = imaging._get_t_starts()
+    t_starts = imaging.get_segment_t_starts()
 
     return dict(
         sampling_frequency=float(imaging.sampling_frequency),
