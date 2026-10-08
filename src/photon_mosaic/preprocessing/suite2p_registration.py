@@ -307,8 +307,7 @@ class Suite2PMotion(Motion):
         ``Motion`` object and applied lazily by ``RegisterSuite2PImagingEpoch``.
 
         Called through :meth:`photon_mosaic.core.Motion.compute` (or its
-        ``compute_motion`` / ``compute_motion_suite2p`` aliases), which resolves
-        ``settings`` before calling this.
+        ``compute_motion`` alias), which resolves ``settings`` before calling this.
 
         Parameters
         ----------
@@ -588,6 +587,3 @@ class RegisterSuite2PImagingEpoch(BasePreprocessorEpoch):
 
 register_motion_class(Suite2PMotion)
 register_registration_class("suite2p", RegisterSuite2PImagingEpoch)
-
-compute_motion_suite2p = Suite2PMotion.compute
-register_suite2p = RegisterSuite2PImaging

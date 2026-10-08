@@ -9,8 +9,6 @@ from photon_mosaic.preprocessing.suite2p_registration import (
     RegisterSuite2PImagingEpoch,
     Suite2PMotion,
     Suite2pRegistrationSettings,
-    compute_motion_suite2p,
-    register_suite2p,
 )
 
 
@@ -116,7 +114,9 @@ class TestComputeMotionSuite2p:
         imaging = _make_shifted_imaging(
             num_frames=6, num_planes=1, height=12, width=12, shifts=shifts, sampling_frequency=10.0
         )
-        motion = compute_motion_suite2p(imaging, settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=False))
+        motion = compute_motion(
+            imaging, method="suite2p", settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=False)
+        )
         assert isinstance(motion, Suite2PMotion)
         assert isinstance(motion, Motion)
         assert motion.num_epochs == 1
@@ -132,7 +132,7 @@ class TestComputeMotionSuite2p:
             num_frames=8, num_planes=1, height=12, width=12, shifts=shifts, sampling_frequency=10.0
         )
         settings = Suite2pRegistrationSettings(batch_size=6)
-        motion = compute_motion_suite2p(imaging, settings=settings, batch_size=3)
+        motion = compute_motion(imaging, method="suite2p", settings=settings, batch_size=3)
         assert motion.displacements[0].shape == (8, 1, 2)
 
     def test_multi_epoch_single_plane_alignment(self):
@@ -143,7 +143,9 @@ class TestComputeMotionSuite2p:
         imaging = _make_shifted_imaging(
             num_frames=(5, 4), num_planes=1, height=12, width=12, shifts=shifts, sampling_frequency=10.0
         )
-        motion = compute_motion_suite2p(imaging, settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=False))
+        motion = compute_motion(
+            imaging, method="suite2p", settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=False)
+        )
 
         assert motion.num_epochs == 2
         assert motion.displacements[0].shape == (5, 1, 2)
@@ -177,7 +179,9 @@ class TestComputeMotionSuite2p:
             sampling_frequency=10.0,
         )
 
-        motion = compute_motion_suite2p(imaging, settings=Suite2pRegistrationSettings(batch_size=2, nonrigid=False))
+        motion = compute_motion(
+            imaging, method="suite2p", settings=Suite2pRegistrationSettings(batch_size=2, nonrigid=False)
+        )
         assert motion.displacements[0].shape == (4, 3, 2)
         assert motion.displacements[1].shape == (3, 3, 2)
         assert len(motion.reference) == 3
@@ -238,7 +242,9 @@ class TestRegisterSuite2PImagingEpoch:
 
     @pytest.fixture()
     def motion(self, imaging):
-        return compute_motion_suite2p(imaging, settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=False))
+        return compute_motion(
+            imaging, method="suite2p", settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=False)
+        )
 
     def test_construction(self, imaging, motion):
         parent_epoch = imaging.epochs[0]
@@ -266,7 +272,9 @@ class TestRegisterSuite2PImagingEpoch:
         imaging = _make_shifted_imaging(
             num_frames=5, num_planes=3, height=12, width=12, shifts=shifts, sampling_frequency=10.0
         )
-        motion = compute_motion_suite2p(imaging, settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=False))
+        motion = compute_motion(
+            imaging, method="suite2p", settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=False)
+        )
         parent_epoch = imaging.epochs[0]
         epoch = RegisterSuite2PImagingEpoch(parent_epoch, motion, 0)
 
@@ -281,7 +289,9 @@ class TestRegisterSuite2PImagingEpoch:
         imaging = _make_shifted_imaging(
             num_frames=5, num_planes=3, height=12, width=12, shifts=shifts, sampling_frequency=10.0
         )
-        motion = compute_motion_suite2p(imaging, settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=False))
+        motion = compute_motion(
+            imaging, method="suite2p", settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=False)
+        )
         parent_epoch = imaging.epochs[0]
         epoch = RegisterSuite2PImagingEpoch(parent_epoch, motion, 0)
 
@@ -326,7 +336,7 @@ class TestGenericEntryPoints:
     def test_compute_motion_matches_the_suite2p_entry_point(self, imaging):
         settings = Suite2pRegistrationSettings(batch_size=3, nonrigid=False)
         generic = compute_motion(imaging, method="suite2p", settings=settings)
-        specific = compute_motion_suite2p(imaging, settings=settings)
+        specific = Suite2PMotion.compute(imaging, settings=settings)
 
         assert isinstance(generic, Suite2PMotion)
         np.testing.assert_allclose(generic.displacements[0], specific.displacements[0])
@@ -351,10 +361,5 @@ class TestGenericEntryPoints:
         assert get_registration_class("suite2p") is RegisterSuite2PImagingEpoch
 
 
-def test_register_suite2p_is_alias():
-    assert register_suite2p is RegisterSuite2PImaging
+def test_register_suite2p_imaging_is_the_generic_class():
     assert issubclass(RegisterSuite2PImaging, RegisterImaging)
-
-
-def test_compute_motion_suite2p_is_alias():
-    assert compute_motion_suite2p.__func__ is Suite2PMotion.compute.__func__
