@@ -369,17 +369,17 @@ class TestSharedSettingsOnSuite2p:
         shifts = [[(0, 0), (0, 0), (1, 0), (1, 0), (0, 1), (0, 1)]]
         return _make_shifted_imaging(num_frames=6, num_planes=1, height=12, width=12, shifts=shifts)
 
-    def test_indices_crop_estimates_the_same_rigid_shifts(self, imaging):
+    def test_bounds_crop_estimates_the_same_rigid_shifts(self, imaging):
         settings = dict(batch_size=3, nonrigid=False)
         full = compute_motion(imaging, method="suite2p", settings=settings)
-        cropped = compute_motion(imaging, method="suite2p", settings={**settings, "indices": ((2, 10), (2, 10))})
+        cropped = compute_motion(imaging, method="suite2p", settings={**settings, "bounds": ((2, 10), (2, 10))})
         np.testing.assert_array_equal(cropped.displacements[0], full.displacements[0])
         assert cropped.reference[0].shape == (8, 8)
         assert cropped.yranges[0][0] == full.yranges[0][0]
 
-    def test_indices_with_nonrigid_is_rejected(self, imaging):
+    def test_bounds_with_nonrigid_is_rejected(self, imaging):
         with pytest.raises(ValueError, match="rigid registration only"):
-            compute_motion(imaging, method="suite2p", settings={"nonrigid": True, "indices": ((2, 10), (2, 10))})
+            compute_motion(imaging, method="suite2p", settings={"nonrigid": True, "bounds": ((2, 10), (2, 10))})
 
 
 def test_register_suite2p_imaging_is_the_generic_class():

@@ -337,13 +337,13 @@ class Suite2PMotion(Motion):
         if "maxregshiftNR" in params:
             raise ValueError("'maxregshiftNR' is now 'max_nonrigid_shift'.")
         ops.update(params)
-        indices = ops["indices"]
-        if indices is not None and ops["nonrigid"]:
+        bounds = ops["bounds"]
+        if bounds is not None and ops["nonrigid"]:
             raise ValueError(
-                "'indices' (an estimation crop) is supported by the suite2p backend for rigid registration only: "
+                "'bounds' (an estimation crop) is supported by the suite2p backend for rigid registration only: "
                 "its non-rigid block geometry is defined on the frame the shifts are applied to."
             )
-        estimation_region = (slice(None), slice(None)) if indices is None else (slice(*indices[0]), slice(*indices[1]))
+        estimation_region = (slice(None), slice(None)) if bounds is None else (slice(*bounds[0]), slice(*bounds[1]))
 
         device = torch.device(ops.get("device", "cpu"))
 

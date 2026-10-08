@@ -47,10 +47,11 @@ class RegistrationSettings(BaseSettings):
         description="Maximum pixels a block/patch shift may deviate from the frame's rigid shift "
         "(suite2p 'maxregshiftNR', CaImAn 'max_deviation_rigid').",
     )
-    indices: tuple[tuple[int | None, int | None], tuple[int | None, int | None]] | None = Field(
+    bounds: tuple[tuple[int | None, int | None], tuple[int | None, int | None]] | None = Field(
         default=None,
         description="Region of the field of view used to *estimate* motion, as ((y0, y1), (x0, x1)) slice "
-        "bounds; None uses the full frame. Shifts are applied to the full frame regardless.",
+        "bounds; None uses the full frame. Shifts are applied to the full frame regardless "
+        "(CaImAn 'indices').",
     )
 
     model_config = ConfigDict(env_prefix="REGISTRATION_", case_sensitive=False, env_file=".env")
