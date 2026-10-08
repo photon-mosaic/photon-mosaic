@@ -12,6 +12,7 @@ from .roianalyzer import AnalyzerExtension, register_result_extension
 
 _FLUORESCENCE_METHODS = ("projection", "regression", "nnls")
 _NEUROPIL_SOURCES = ("neuropil", "background")
+_NEUROPIL_METHODS = ("surround",)
 
 
 class FluorescenceExtension(AnalyzerExtension):
@@ -452,7 +453,7 @@ class FluorescenceNode(PipelineNode):
 class NeuropilExtension(AnalyzerExtension):
     """Extension to model the neuropil / background contaminating each ROI's fluorescence.
 
-    Two methods are supported:
+    Only ``method='surround'`` is currently supported:
 
     - ``'surround'``: Suite2p-style neuropil mask -- the region surrounding each ROI (excluding
       pixels belonging to any ROI), rectangular by default or circular when ``circular=True``,
@@ -470,11 +471,6 @@ class NeuropilExtension(AnalyzerExtension):
       volumetric ROI spanning multiple planes is not yet supported (would need a true 3D
       "shell" neuropil mask, e.g. as in `Suite3D <https://www.biorxiv.org/content/10.1101/2025.03.26.645628v2.full>`_
       (`code <https://github.com/alihaydaroglu/suite3d>`_), rather than this per-plane approach).
-
-    - ``'projection'``: Simple projection-based neuropil estimate. Computes the mean fluorescence
-      of the pixels surrounding each ROI (excluding the ROI itself) and uses it as the neuropil
-      signal. This is a lightweight alternative to the ``'surround'`` method, suitable for quick
-      estimates when a full ring mask is not necessary.
 
     Once computed, this extension is picked up automatically by :class:`FluorescenceExtension`
     (see its ``use_neuropil`` param) -- just call ``roi_analyzer.compute("neuropil")`` before
@@ -522,6 +518,8 @@ class NeuropilExtension(AnalyzerExtension):
         """
         if params:
             raise TypeError(f"_set_params() got unexpected keyword argument(s): {sorted(params)}")
+        if method not in _NEUROPIL_METHODS:
+            raise ValueError(f"Unknown method: '{method}'. Supported: {_NEUROPIL_METHODS}.")
         return dict(
             method=method,
             inner_neuropil_radius=inner_neuropil_radius,
