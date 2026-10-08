@@ -59,6 +59,11 @@ class TestRegistrationSettings:
         monkeypatch.setenv("SUITE2P_REGISTRATION_DEVICE", "cuda")
         assert Suite2pRegistrationSettings().device == "cuda"
 
+    def test_shared_nonrigid_defaults_are_suite2p_s(self):
+        settings = RegistrationSettings()
+        assert settings.nonrigid is True
+        assert settings.max_nonrigid_shift == 5
+
     def test_suite2p_settings_inherit_the_shared_fields(self):
         from photon_mosaic.preprocessing import Suite2pRegistrationSettings
 

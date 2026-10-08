@@ -38,12 +38,12 @@ class RegistrationSettings(BaseSettings):
         description="Torch device for registration: 'cpu', 'cuda', or 'mps'.",
     )
     nonrigid: bool = Field(
-        default=False,
+        default=True,
         description="Correct each block/patch of the field of view separately on top of the rigid shift "
         "(suite2p 'nonrigid', CaImAn 'pw_rigid').",
     )
     max_nonrigid_shift: int = Field(
-        default=3,
+        default=5,
         description="Maximum pixels a block/patch shift may deviate from the frame's rigid shift "
         "(suite2p 'maxregshiftNR', CaImAn 'max_deviation_rigid').",
     )

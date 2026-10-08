@@ -40,16 +40,11 @@ class Suite2pRegistrationSettings(RegistrationSettings):
         "frame max(width and height). This will be ignored if force_refImg is set to True",
     )
     force_refImg: bool = Field(default=True, description="Force the use of an external reference image")
-    nonrigid: bool = Field(default=True, description="Whether to use non-rigid registration")  # shared field
     block_size: list = Field(default_factory=lambda: [128, 128], description="Block size for non-rigid registration.")
     snr_thresh: float = Field(
         default=1.2,
         description="if any nonrigid block is below this threshold, it gets smoothed "
         "until above this threshold. 1.0 results in no smoothing",
-    )
-    max_nonrigid_shift: int = Field(
-        default=5,
-        description="maximum pixel shift allowed for nonrigid, relative to rigid (suite2p calls this maxregshiftNR)",
     )
     outlier_detrend_window: float = Field(
         default=3.0,
