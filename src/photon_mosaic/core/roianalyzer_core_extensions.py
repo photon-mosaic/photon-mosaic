@@ -11,6 +11,7 @@ from .baserois import BaseRois
 from .roianalyzer import AnalyzerExtension, register_result_extension
 
 _FLUORESCENCE_METHODS = ("projection", "regression", "nnls")
+_NEUROPIL_SOURCES = ("neuropil", "background")
 
 
 class FluorescenceExtension(AnalyzerExtension):
@@ -27,17 +28,18 @@ class FluorescenceExtension(AnalyzerExtension):
       frame by frame with :func:`scipy.optimize.nnls`, so it costs more per chunk than
       ``'regression'``.
 
-    When a :class:`NeuropilExtension` with ``method='cnmf'`` exists, its spatial background ``b`` is
-    appended to the design matrix and its timecourse ``f`` is solved for together with the traces
-    ``C``. That requires ``'regression'`` or ``'nnls'``. ``neuropil_weight`` is not used in that
-    case: ``C`` already excludes the modelled background.
+    When a :class:`BackgroundExtension` exists, its spatial background ``b`` is appended to the
+    design matrix and its timecourse ``f`` is solved for together with the traces ``C``. That
+    requires ``'regression'`` or ``'nnls'``. ``neuropil_weight`` is not used in that case: ``C``
+    already excludes the modelled background. With both a :class:`NeuropilExtension` and a
+    :class:`BackgroundExtension` computed, ``neuropil_source`` picks which one to use.
 
     Computed data keys:
 
     ================  ======================  ======================================================
     Key               Shape                   Contents
     ================  ======================  ======================================================
-    ``fluorescence``  ``(n_frames, n_rois)``  the extracted traces: ``C`` for a CNMF neuropil,
+    ``fluorescence``  ``(n_frames, n_rois)``  the extracted traces: ``C`` for a CNMF background,
                                               ``F - neuropil_weight * Fneu`` for surround
     ``background``    ``(n_frames, n_rois)``  CNMF: ``B = f b A.T``, the background projected onto
                                               each ROI's own footprint (divided by ``||a_i||^2``,
@@ -56,28 +58,60 @@ class FluorescenceExtension(AnalyzerExtension):
 
     @classmethod
     def get_optional_dependencies(cls, **params):
-        return ["neuropil"]
+        return list(_NEUROPIL_SOURCES)
 
-    def _set_params(self, use_neuropil=True, neuropil_weight=0.7, method="projection", ridge=1e-6):
+    def _set_params(
+        self, use_neuropil=True, neuropil_weight=0.7, method="projection", ridge=1e-6, neuropil_source=None
+    ):
         """Set parameters for fluorescence extraction.
 
         Parameters
         ----------
         use_neuropil : bool, optional
-            Use the ``neuropil`` extension if it has been computed. Default is ``True``.
+            Use the ``neuropil`` or ``background`` extension if one has been computed. Default is
+            ``True``.
         neuropil_weight : float, optional
             Weight of the surround neuropil trace subtracted from each ROI's trace. Not used with a
-            ``method='cnmf'`` neuropil (see the class docstring). Default is ``0.7``.
+            CNMF background (see the class docstring). Default is ``0.7``.
         method : str, optional
             ``'projection'``, ``'regression'`` or ``'nnls'``; see the class docstring. Default is
             ``'projection'``.
         ridge : float, optional
             Regularization added to each diagonal entry of the Gram matrix, relative to that entry,
             for ``'regression'`` and ``'nnls'``. Default is ``1e-6``.
+        neuropil_source : str or None, optional
+            ``'neuropil'`` (surround masks) or ``'background'`` (CNMF ``b``). ``None`` (the default)
+            uses whichever of the two has been computed, and raises if both have.
         """
         if method not in _FLUORESCENCE_METHODS:
             raise ValueError(f"Unknown method: '{method}'. Supported: {_FLUORESCENCE_METHODS}.")
-        return dict(use_neuropil=use_neuropil, neuropil_weight=neuropil_weight, method=method, ridge=ridge)
+        if neuropil_source is not None and neuropil_source not in _NEUROPIL_SOURCES:
+            raise ValueError(f"Unknown neuropil_source: '{neuropil_source}'. Supported: {_NEUROPIL_SOURCES}.")
+        return dict(
+            use_neuropil=use_neuropil,
+            neuropil_weight=neuropil_weight,
+            method=method,
+            ridge=ridge,
+            neuropil_source=neuropil_source,
+        )
+
+    def _neuropil_source(self):
+        """The extension the traces are corrected with: ``'neuropil'``, ``'background'`` or ``None``."""
+        if not self.params["use_neuropil"]:
+            return None
+        available = [name for name in _NEUROPIL_SOURCES if self.roi_analyzer.has_extension(name)]
+        # .get() rather than [] so analyzers saved before 'neuropil_source' existed still load.
+        source = self.params.get("neuropil_source")
+        if source is None:
+            if len(available) > 1:
+                raise ValueError(
+                    "Both 'neuropil' and 'background' are computed; pass "
+                    "neuropil_source='neuropil' or neuropil_source='background' to choose one."
+                )
+            return available[0] if available else None
+        if source not in available:
+            raise ValueError(f"neuropil_source='{source}', but the '{source}' extension has not been computed.")
+        return source
 
     def _run(self, verbose=False, **job_kwargs):
         gather_mode = "memory"
@@ -100,13 +134,11 @@ class FluorescenceExtension(AnalyzerExtension):
     def _get_pipeline_nodes(self):
         neuropil = None
         background_spatial = None
-        if self.params["use_neuropil"] and self.roi_analyzer.has_extension("neuropil"):
-            ext = self.roi_analyzer.get_extension("neuropil")
-            # .get() rather than [] so analyzers saved before 'method' existed still load.
-            if ext.params.get("method", "surround") == "cnmf":
-                background_spatial = ext.get_data("background_spatial")
-            else:
-                neuropil = ext.get_data()
+        source = self._neuropil_source()
+        if source == "neuropil":
+            neuropil = self.roi_analyzer.get_extension("neuropil").get_data()
+        elif source == "background":
+            background_spatial = self.roi_analyzer.get_extension("background").get_data()
         return [
             FluorescenceNode(
                 self.roi_analyzer.imaging,
@@ -193,7 +225,7 @@ class FluorescenceNode(PipelineNode):
             Weight to apply to the neuropil signal before subtraction (default is 0.7).
         background_spatial : np.ndarray, optional
             Spatial background components ``b`` of shape ``(gnb, height, width[, planes])``, e.g.
-            from :class:`NeuropilExtension`'s ``method='cnmf'``. Appended to the design matrix and
+            from :class:`BackgroundExtension`'s ``method='cnmf'``. Appended to the design matrix and
             solved for jointly with the traces; requires ``method='regression'`` or ``'nnls'``.
             Mutually exclusive with ``neuropil``.
         method : str, optional
@@ -213,7 +245,7 @@ class FluorescenceNode(PipelineNode):
             raise ValueError("Pass either `neuropil` (surround masks) or `background_spatial` (CNMF), not both.")
         if background_spatial is not None and method == "projection":
             raise ValueError(
-                "A method='cnmf' neuropil is solved jointly with the traces, which needs "
+                "A CNMF background is solved jointly with the traces, which needs "
                 "FluorescenceExtension(method='regression') or method='nnls', not 'projection'."
             )
         self.rois = rois
@@ -415,7 +447,6 @@ class FluorescenceNode(PipelineNode):
         return (neuropil_trace * self._rescale_to_l2).astype(np.float32)
 
 
-_NEUROPIL_PRIMARY_DATA_KEY = {"surround": "neuropil_masks", "cnmf": "background_spatial"}
 
 
 class NeuropilExtension(AnalyzerExtension):
@@ -440,58 +471,21 @@ class NeuropilExtension(AnalyzerExtension):
       "shell" neuropil mask, e.g. as in `Suite3D <https://www.biorxiv.org/content/10.1101/2025.03.26.645628v2.full>`_
       (`code <https://github.com/alihaydaroglu/suite3d>`_), rather than this per-plane approach).
 
-    - ``'cnmf'``: CNMF-style low-rank background. Fits ``Y ~= C A.T + f b.T`` with the ROI
-      footprints ``A`` held **fixed** at ``rois.get_roi_image_masks()``, and stores only the
-      ``gnb`` spatial background components ``b``. The traces ``C`` and the background
-      timecourses ``f`` over all frames are then solved for together by
-      :class:`FluorescenceExtension` (``method='regression'`` or ``'nnls'``), which has to read
-      the whole movie anyway. Unlike ``'surround'`` this needs no suite2p and no CaImAn -- only
-      the masks and the movie -- so it works on CaImAn and Suite2p ROIs alike, and (unlike a ring
-      mask) it can represent background that fluctuates over time. Weighted and binary masks are
-      both accepted.
-
-      Computed data key: ``background_spatial``, ``(gnb, Ly, Lx, n_planes)``, not per ROI. It is
-      dense (the components are spatially broad, so sparsity would not pay), L2-normalised per
-      component and ordered by descending temporal energy -- otherwise ``b`` would only be
-      determined up to a per-component positive factor and an ordering.
-
-      Cost: one streaming pass over the movie to gather the frame subsample the fit runs on. Peak
-      memory is dominated by that subsample (``subsample_frames x n_pixels``) plus one chunk.
-
-      **The trace/background split has an exact gauge freedom.** For any ``alpha``,
-
-      .. code-block:: text
-
-          b -> b + A alpha        C -> C - f alpha.T
-
-      leaves ``C A.T + f b.T`` *bit-for-bit* unchanged, so the data cannot distinguish them: what is
-      not identifiable is precisely ``b`` restricted to ROI-support pixels, and the component of
-      each trace lying along ``f``. Everything else is. In practice that means ``f``, the background
-      away from ROIs, and each trace *after* the ``f`` direction is projected out are all recovered
-      to within noise, while a trace's absolute offset and slow ``f``-shaped drift are not pinned
-      down. Non-negativity narrows the family but does not collapse it. This is the classic CNMF
-      neuropil/trace tradeoff -- this extension gives a far better-conditioned background estimate
-      than a ring mask, but does not resolve the gauge.
-
-      A single ``b`` is shared across epochs, so it assumes the spatial background structure is
-      constant across them (``f`` still absorbs per-frame amplitude changes).
+    - ``'projection'``: Simple projection-based neuropil estimate. Computes the mean fluorescence
+      of the pixels surrounding each ROI (excluding the ROI itself) and uses it as the neuropil
+      signal. This is a lightweight alternative to the ``'surround'`` method, suitable for quick
+      estimates when a full ring mask is not necessary.
 
     Once computed, this extension is picked up automatically by :class:`FluorescenceExtension`
     (see its ``use_neuropil`` param) -- just call ``roi_analyzer.compute("neuropil")`` before
     ``roi_analyzer.compute("fluorescence")``. ``'surround'`` feeds an
     ``F - neuropil_weight * Fneu`` subtraction, with the ring mask applied to the movie inside
     :class:`FluorescenceNode`; it needs no change to the design matrix, since the ring is spatially
-    disjoint from its ROI. ``'cnmf'`` hands the node ``b`` as extra columns of its design matrix,
-    which needs ``FluorescenceExtension(method='regression')`` or ``method='nnls'``. Either way the
-    per-ROI neuropil trace (``Fneu`` or ``B``) is persisted, as ``get_data(key='background')`` on
-    the fluorescence extension.
+    disjoint from its ROI. 
     """
 
     extension_name = "neuropil"
     depend_on: list[str] = []
-    # Deliberately False even though method='cnmf' reads the movie: flipping it would newly break
-    # method='surround' on analyzers with no imaging attached, which works today by design. The
-    # cnmf branch checks for imaging itself in _run.
     need_imaging = False
     use_nodepipeline = False
     need_job_kwargs = True
@@ -503,16 +497,6 @@ class NeuropilExtension(AnalyzerExtension):
         min_neuropil_pixels: int = 350,
         circular: bool = False,
         lam_percentile: float = 50.0,
-        gnb: int = 1,
-        max_iter: int = 20,
-        tol: float = 1e-4,
-        highpass_sigma: float | None = 20.0,
-        lowpass_sigma: float | None = 1.0,
-        init_method: str = "ramp",
-        nonneg_background: bool = True,
-        nonneg_traces: bool = False,
-        ridge: float = 1e-6,
-        subsample_frames: int | None = 1000,
         **params: Any,
     ) -> dict[str, Any]:
         """Set parameters for neuropil mask computation.
@@ -535,6 +519,93 @@ class NeuropilExtension(AnalyzerExtension):
             Percentile threshold used to decide which weighted pixels count as "ROI" pixels,
             excluded from every ROI's ring. Only used with ``method='surround'``. Default is
             ``50.0``.
+        """
+        if params:
+            raise TypeError(f"_set_params() got unexpected keyword argument(s): {sorted(params)}")
+        return dict(
+            method=method,
+            inner_neuropil_radius=inner_neuropil_radius,
+            min_neuropil_pixels=min_neuropil_pixels,
+            circular=circular,
+            lam_percentile=lam_percentile,
+        )
+
+    def _run(self, verbose: bool = False, **job_kwargs: Any) -> None:
+        method = self.params["method"]
+        rois = self.roi_analyzer.rois
+
+        if method == "surround":
+            masks = rois.get_roi_image_masks()
+            self.data["neuropil_masks"] = _build_surround_neuropil_masks(
+                masks,
+                inner_neuropil_radius=self.params["inner_neuropil_radius"],
+                min_neuropil_pixels=self.params["min_neuropil_pixels"],
+                circular=self.params["circular"],
+                lam_percentile=self.params["lam_percentile"],
+            )
+
+    def _get_data(self):
+        """Return a computed neuropil result.
+
+        Returns
+        -------
+        sparse.GCXS or np.ndarray or dict
+            For ``method='surround'``, a ``sparse.GCXS`` of shape ``(n_rois, Ly, Lx)`` -- or
+            ``(n_rois, Ly, Lx, n_planes)`` for multi-plane ROIs. Each ROI's ring pixels sum to 1.0
+            (an unweighted mean over the ring, matching suite2p's own ``Fneu`` convention), except
+            ROIs whose ring ended up empty (e.g. fully surrounded by other ROIs), which get an
+            all-zero row. 
+        """
+        return self.data["neuropil_masks"]
+
+    def _select_extension_data(self, roi_ids):
+        roi_indices = self.roi_analyzer.rois.ids_to_indices(roi_ids)
+        return {"neuropil_masks": self.data["neuropil_masks"][roi_indices]}
+
+class BackgroundExtension(AnalyzerExtension):
+    """Extension to estimate a low-rank background over the whole field of view.
+
+    Only ``method='cnmf'`` is currently supported: a CNMF-style background ``b`` of ``gnb`` spatial
+    components, fitted from the movie and the ROI masks. ``get_data()`` returns ``b``, of shape
+    ``(gnb, Ly, Lx, n_planes)``. It is not per ROI.
+
+    Once computed, this extension is picked up automatically by :class:`FluorescenceExtension`
+    (see its ``use_neuropil`` and ``neuropil_source`` params) -- just call
+    ``roi_analyzer.compute("background")`` before ``roi_analyzer.compute("fluorescence")``.
+
+    The fluorescence extension gets ``b`` as extra columns of its design matrix, which needs
+    ``FluorescenceExtension(method='regression')`` or ``method='nnls'``. The resulting per-ROI
+    background ``B`` is persisted as ``get_data(key='background')`` on the fluorescence extension.
+    """
+
+    extension_name = "background"
+    depend_on: list[str] = []
+    need_imaging = True
+    use_nodepipeline = False
+    need_job_kwargs = True
+
+    def _set_params(
+        self,
+        method: str = "cnmf",
+        gnb: int = 1,
+        max_iter: int = 20,
+        tol: float = 1e-4,
+        highpass_sigma: float | None = 20.0,
+        lowpass_sigma: float | None = 1.0,
+        init_method: str = "ramp",
+        nonneg_background: bool = True,
+        nonneg_traces: bool = False,
+        ridge: float = 1e-6,
+        subsample_frames: int | None = 1000,
+        **params: Any,
+    ) -> dict[str, Any]:
+        """Set parameters for background estimation.
+
+        Parameters
+        ----------
+        method : str, optional
+            Background estimation method. Only ``'cnmf'`` (Constrained Non-negative Matrix Factorization)
+            is currently supported. Default is ``'cnmf'``.
         gnb : int, optional
             Number of low-rank background components to fit. Only used with ``method='cnmf'``.
             Default is ``1``, which also makes the fit deterministic and the non-negativity
@@ -575,21 +646,18 @@ class NeuropilExtension(AnalyzerExtension):
         """
         if params:
             raise TypeError(f"_set_params() got unexpected keyword argument(s): {sorted(params)}")
-        if method == "cnmf":
-            if gnb < 1:
-                raise ValueError(f"gnb must be >= 1, got {gnb}")
-            if init_method not in _CNMF_INIT_METHODS:
-                raise ValueError(f"Unknown init_method: '{init_method}'. Supported: {_CNMF_INIT_METHODS}.")
-            if subsample_frames is not None and subsample_frames < 2:
-                raise ValueError(f"subsample_frames must be None or >= 2, got {subsample_frames}")
-            if max_iter < 1:
-                raise ValueError(f"max_iter must be >= 1, got {max_iter}")
+        if method != "cnmf":
+            raise ValueError(f"Unknown method: '{method}'. Supported: 'cnmf'.")
+        if gnb < 1:
+            raise ValueError(f"gnb must be >= 1, got {gnb}")
+        if init_method not in _CNMF_INIT_METHODS:
+            raise ValueError(f"Unknown init_method: '{init_method}'. Supported: {_CNMF_INIT_METHODS}.")
+        if subsample_frames is not None and subsample_frames < 2:
+            raise ValueError(f"subsample_frames must be None or >= 2, got {subsample_frames}")
+        if max_iter < 1:
+            raise ValueError(f"max_iter must be >= 1, got {max_iter}")
         return dict(
             method=method,
-            inner_neuropil_radius=inner_neuropil_radius,
-            min_neuropil_pixels=min_neuropil_pixels,
-            circular=circular,
-            lam_percentile=lam_percentile,
             gnb=gnb,
             max_iter=max_iter,
             tol=tol,
@@ -602,83 +670,46 @@ class NeuropilExtension(AnalyzerExtension):
             subsample_frames=subsample_frames,
         )
 
+
     def _run(self, verbose: bool = False, **job_kwargs: Any) -> None:
-        method = self.params["method"]
         rois = self.roi_analyzer.rois
+        from spikeinterface.core.job_tools import ensure_chunk_size
 
-        if method == "surround":
-            masks = rois.get_roi_image_masks()
-            self.data["neuropil_masks"] = _build_surround_neuropil_masks(
-                masks,
-                inner_neuropil_radius=self.params["inner_neuropil_radius"],
-                min_neuropil_pixels=self.params["min_neuropil_pixels"],
-                circular=self.params["circular"],
-                lam_percentile=self.params["lam_percentile"],
-            )
-        elif method == "cnmf":
-            # Checked here rather than via need_imaging -- see the class attributes above.
-            if not (self.roi_analyzer.has_imaging() or self.roi_analyzer.has_temporary_imaging()):
-                raise ValueError("NeuropilExtension(method='cnmf') requires the imaging")
-            from spikeinterface.core.job_tools import ensure_chunk_size
+        imaging = self.roi_analyzer.imaging
+        job_kwargs = fix_job_kwargs(job_kwargs)
+        chunk_size = ensure_chunk_size(imaging, **job_kwargs)
+        self.data["background_spatial"] = _fit_cnmf_background(
+            imaging,
+            rois.get_roi_image_masks(),
+            gnb=self.params["gnb"],
+            max_iter=self.params["max_iter"],
+            tol=self.params["tol"],
+            highpass_sigma=self.params["highpass_sigma"],
+            lowpass_sigma=self.params["lowpass_sigma"],
+            init_method=self.params["init_method"],
+            nonneg_background=self.params["nonneg_background"],
+            nonneg_traces=self.params["nonneg_traces"],
+            ridge=self.params["ridge"],
+            subsample_frames=self.params["subsample_frames"],
+            chunk_size=chunk_size,
+            verbose=verbose,
+        )
 
-            imaging = self.roi_analyzer.imaging
-            job_kwargs = fix_job_kwargs(job_kwargs)
-            chunk_size = ensure_chunk_size(imaging, **job_kwargs)
-            self.data["background_spatial"] = _fit_cnmf_background(
-                imaging,
-                rois.get_roi_image_masks(),
-                gnb=self.params["gnb"],
-                max_iter=self.params["max_iter"],
-                tol=self.params["tol"],
-                highpass_sigma=self.params["highpass_sigma"],
-                lowpass_sigma=self.params["lowpass_sigma"],
-                init_method=self.params["init_method"],
-                nonneg_background=self.params["nonneg_background"],
-                nonneg_traces=self.params["nonneg_traces"],
-                ridge=self.params["ridge"],
-                subsample_frames=self.params["subsample_frames"],
-                chunk_size=chunk_size,
-                verbose=verbose,
-            )
-        else:
-            raise ValueError(f"Unknown method: '{method}'. Supported: 'surround', 'cnmf'.")
-
-    def _get_data(self, key: str | None = None):
-        """Return a computed neuropil result.
-
-        Parameters
-        ----------
-        key : str or None, optional
-            Which stored array to return. ``None`` (the default) returns the method's primary
-            output: ``'neuropil_masks'`` for ``method='surround'``, ``'background_spatial'`` for
-            ``method='cnmf'``.
+    def _get_data(self):
+        """Return the spatial background.
 
         Returns
         -------
-        sparse.GCXS or np.ndarray or dict
-            For ``method='surround'``, a ``sparse.GCXS`` of shape ``(n_rois, Ly, Lx)`` -- or
-            ``(n_rois, Ly, Lx, n_planes)`` for multi-plane ROIs. Each ROI's ring pixels sum to 1.0
-            (an unweighted mean over the ring, matching suite2p's own ``Fneu`` convention), except
-            ROIs whose ring ended up empty (e.g. fully surrounded by other ROIs), which get an
-            all-zero row. For ``method='cnmf'``, ``b`` of shape ``(gnb, Ly, Lx, n_planes)``.
+        np.ndarray
+            ``b``, of shape ``(gnb, Ly, Lx, n_planes)``.
         """
-        if key is None:
-            key = _NEUROPIL_PRIMARY_DATA_KEY[self.params.get("method", "surround")]
-        if key not in self.data:
-            raise KeyError(f"No '{key}' in neuropil data; available keys: {sorted(self.data)}")
-        return self.data[key]
+        return self.data["background_spatial"]
 
     def _select_extension_data(self, roi_ids):
-        roi_indices = self.roi_analyzer.rois.ids_to_indices(roi_ids)
-        if self.params.get("method", "surround") == "cnmf":
-            # Every key must be returned: copy() assigns the result straight over `data`, so an
-            # omitted key would be silently dropped. The spatial background is a property of the
-            # whole field of view, so it passes through unsliced.
-            return {
-                "background_spatial": self.data["background_spatial"],
-            }
-        return {"neuropil_masks": self.data["neuropil_masks"][roi_indices]}
-
+        # Every key must be returned: copy() assigns the result straight over `data`, so an
+        # omitted key would be silently dropped. The spatial background is a property of the
+        # whole field of view, so it passes through unsliced.
+        return {"background_spatial": self.data["background_spatial"]}
 
 class DfOverFExtension(AnalyzerExtension):
     """Extension to compute dF/F (relative fluorescence change) from fluorescence traces.
@@ -694,10 +725,10 @@ class DfOverFExtension(AnalyzerExtension):
       (``prctile_baseline=<float>``) or estimated automatically per ROI via a
       DCT-based KDE of the fluorescence distribution (``prctile_baseline=None``).
 
-    When the fluorescence was extracted against a ``method='cnmf'`` neuropil, the fit can't fully
-    separate a cell's baseline from the background: moving part of the baseline from ``C`` into
-    ``b, f`` (or back) fits the movie equally well, so ``C``'s own baseline is not reliable on its
-    own. With ``use_background=True`` (the default) the background per ROI ``B``
+    When the fluorescence was extracted against a CNMF background (:class:`BackgroundExtension`),
+    the fit can't fully separate a cell's baseline from the background: moving part of the baseline
+    from ``C`` into ``b, f`` (or back) fits the movie equally well, so ``C``'s own baseline is not
+    reliable on its own. With ``use_background=True`` (the default) the background per ROI ``B``
     (``FluorescenceExtension.get_data(key='background')``) is then used as a second input, as in
     CaImAn's ``detrend_df_f``::
 
@@ -750,7 +781,7 @@ class DfOverFExtension(AnalyzerExtension):
             percentile if estimation fails. If a float, that value is used
             directly for all ROIs. Default is ``None``.
         use_background : bool, optional
-            If the fluorescence was extracted against a ``method='cnmf'`` neuropil, add its
+            If the fluorescence was extracted against a CNMF background, add its
             background baseline to the denominator (see the class docstring). Ignored otherwise.
             Default is ``True``.
         """
@@ -772,9 +803,9 @@ class DfOverFExtension(AnalyzerExtension):
             return None
         fluorescence = self.roi_analyzer.get_extension("fluorescence")
         background = fluorescence.data.get("background")
-        if background is None or background.shape[1] == 0 or not self.roi_analyzer.has_extension("neuropil"):
+        if background is None or background.shape[1] == 0:
             return None
-        if self.roi_analyzer.get_extension("neuropil").params.get("method", "surround") != "cnmf":
+        if fluorescence._neuropil_source() != "background":
             return None
         return background
 
@@ -1330,6 +1361,7 @@ def _build_surround_neuropil_masks(
     return sparse.GCXS.from_coo(sparse.stack(ring_masks, axis=0), compressed_axes=(0,))
 
 
+
 _CNMF_INIT_METHODS = ("ramp", "svd")
 
 
@@ -1766,5 +1798,6 @@ def _fit_cnmf_background(
 
 register_result_extension(FluorescenceExtension)
 register_result_extension(NeuropilExtension)
+register_result_extension(BackgroundExtension)
 register_result_extension(DfOverFExtension)
 register_result_extension(DeconvolutionExtension)
