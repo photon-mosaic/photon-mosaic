@@ -209,13 +209,33 @@ def test_concatenate_epochs_joins_all_epochs_into_one():
     full = np.concatenate([imaging.get_series(epoch_index=i) for i in range(3)], axis=0)
 
     concatenated = concatenate_epochs(imaging)
+    direct = ConcatenateImaging(imaging)
 
     assert isinstance(concatenated, ConcatenateImaging)
     assert concatenated.get_num_epochs() == 1
     assert concatenated.epochs[0].get_num_samples() == 18
     np.testing.assert_array_equal(concatenated.get_series(), full)
+    np.testing.assert_array_equal(direct.get_series(), full)
     np.testing.assert_array_equal(concatenated.get_series(start_frame=3, end_frame=12), full[3:12])
     np.testing.assert_array_equal(concatenated.get_series(start_frame=5, end_frame=8), full[5:8])
+
+
+def test_concatenate_epochs_joins_epochs_from_multiple_imagings():
+    imaging_a = generate_random_imaging(num_frames=(4, 6), height=3, width=5, sampling_frequency=10.0, seed=58)
+    imaging_b = generate_random_imaging(num_frames=(7, 3), height=3, width=5, sampling_frequency=10.0, seed=59)
+    epochs = [
+        imaging.get_series(epoch_index=epoch_index)
+        for imaging in (imaging_a, imaging_b)
+        for epoch_index in range(imaging.get_num_epochs())
+    ]
+    full = np.concatenate(epochs, axis=0)
+
+    concatenated = concatenate_epochs([imaging_a, imaging_b])
+
+    assert concatenated.get_num_epochs() == 1
+    assert concatenated.epochs[0].get_num_samples() == 20
+    np.testing.assert_array_equal(concatenated.get_series(), full)
+    np.testing.assert_array_equal(concatenated.get_series(start_frame=8, end_frame=15), full[8:15])
 
 
 def test_append_imaging_orders_epochs_from_list():
