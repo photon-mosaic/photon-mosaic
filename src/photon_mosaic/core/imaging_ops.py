@@ -280,12 +280,29 @@ class _ConcatenatedEpoch(BaseImagingEpoch):
         return self._offsets[-1]
 
     def get_series(self, start_frame, end_frame, plane_indices=None):
-        parts = []
-        for epoch, offset, size in zip(self._parent_epochs, self._offsets, self._sizes):
-            lo, hi = max(start_frame - offset, 0), min(end_frame - offset, size)
-            if lo < hi:
-                parts.append(epoch.get_series(lo, hi, plane_indices))
-        return np.concatenate(parts, axis=0) if len(parts) > 1 else parts[0]
+        assert start_frame < end_frame, f"start_frame {start_frame} must be < end_frame {end_frame}"
+
+        # _offsets is sorted, so bisect to the parent epochs overlapping the request.
+        first = np.searchsorted(self._offsets, start_frame, side="right") - 1
+        stop = np.searchsorted(self._offsets, end_frame, side="left")
+
+        if stop - first == 1:  # request inside one epoch: no copy
+            offset = self._offsets[first]
+            return self._parent_epochs[first].get_series(start_frame - offset, end_frame - offset, plane_indices)
+
+        # One probe frame gives the spatial shape and dtype shared by all epochs.
+        probe_frame = start_frame - self._offsets[first]
+        probe = self._parent_epochs[first].get_series(probe_frame, probe_frame + 1, plane_indices)
+        out = np.empty((end_frame - start_frame, *probe.shape[1:]), dtype=probe.dtype)
+
+        pos = 0
+        for i in range(first, stop):
+            # Requested frames clipped to parent epoch i, in that epoch's own numbering.
+            lo = max(start_frame - self._offsets[i], 0)
+            hi = min(end_frame - self._offsets[i], self._sizes[i])
+            out[pos : pos + hi - lo] = self._parent_epochs[i].get_series(lo, hi, plane_indices)
+            pos += hi - lo
+        return out
 
 
 class ConcatenateImaging(BaseImaging):
