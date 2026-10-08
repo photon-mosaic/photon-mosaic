@@ -262,6 +262,154 @@ def frame_slice(
     )
 
 
+class _ConcatenatedEpoch(BaseImagingEpoch):
+    """Lazy epoch joining several parent epochs end to end along time."""
+
+    def __init__(self, parent_epochs: Sequence[BaseImagingEpoch]):
+        first = parent_epochs[0]
+        BaseImagingEpoch.__init__(  # type: ignore[call-arg]
+            self,
+            sampling_frequency=first._sampling_frequency,
+            t_start=getattr(first, "_t_start", None),
+        )
+        self._parent_epochs = list(parent_epochs)
+        self._sizes = [e.get_num_samples() for e in self._parent_epochs]
+        self._offsets = np.cumsum([0, *self._sizes]).tolist()
+
+    def get_num_samples(self) -> int:
+        return self._offsets[-1]
+
+    def get_series(self, start_frame, end_frame, plane_indices=None):
+        assert start_frame < end_frame, f"start_frame {start_frame} must be < end_frame {end_frame}"
+
+        # _offsets is sorted, so bisect to the parent epochs overlapping the request.
+        first = np.searchsorted(self._offsets, start_frame, side="right") - 1
+        last = np.searchsorted(self._offsets, end_frame, side="left")
+
+        if last - first == 1:  # request inside one epoch: no copy
+            offset = self._offsets[first]
+            return self._parent_epochs[first].get_series(start_frame - offset, end_frame - offset, plane_indices)
+
+        # One probe frame gives the spatial shape and dtype shared by all epochs.
+        probe_frame = start_frame - self._offsets[first]
+        probe = self._parent_epochs[first].get_series(probe_frame, probe_frame + 1, plane_indices)
+        out = np.empty((end_frame - start_frame, *probe.shape[1:]), dtype=probe.dtype)
+
+        pos = 0
+        for i in range(first, last):
+            # Requested frames clipped to parent epoch i, in that epoch's own numbering.
+            lo = max(start_frame - self._offsets[i], 0)
+            hi = min(end_frame - self._offsets[i], self._sizes[i])
+            out[pos : pos + hi - lo] = self._parent_epochs[i].get_series(lo, hi, plane_indices)
+            pos += hi - lo
+        return out
+
+
+class ConcatenateImaging(BaseImaging):
+    """Imaging proxy joining all epochs of one or several input imaging objects into one epoch along time.
+
+    Epoch data is accessed lazily in input order; ``t_start`` is the first epoch's from the first input.
+    """
+
+    def __init__(self, imagings: list[BaseImaging] | BaseImaging):
+        if isinstance(imagings, BaseImaging):
+            imagings = [imagings]
+        elif not isinstance(imagings, list):
+            raise TypeError("imagings must be a BaseImaging or a list of BaseImaging objects")
+        if not imagings:
+            raise ValueError("concatenate_epochs requires at least one imaging object")
+        for input_index, imaging in enumerate(imagings):
+            if not isinstance(imaging, BaseImaging):
+                raise TypeError(f"Input {input_index} is not a BaseImaging (got {type(imaging).__name__})")
+
+        imagings = imagings.copy()  # shallow copy, in case modified after call
+        reference = imagings[0]
+        for input_index, imaging in enumerate(imagings[1:], start=1):
+            if tuple(imaging.shape) != tuple(reference.shape):
+                raise ValueError(
+                    f"Input {input_index} shape {imaging.shape} disagrees with input 0 ({reference.shape})"
+                )
+            if imaging.sampling_frequency != reference.sampling_frequency:
+                raise ValueError(
+                    f"Input {input_index} sampling frequency {imaging.sampling_frequency} disagrees with input 0 "
+                    f"({reference.sampling_frequency})"
+                )
+            if np.dtype(imaging.get_dtype()) != np.dtype(reference.get_dtype()):
+                raise ValueError(
+                    f"Input {input_index} dtype {imaging.get_dtype()} disagrees with input 0 ({reference.get_dtype()})"
+                )
+
+        BaseImaging.__init__(
+            self,
+            sampling_frequency=reference.sampling_frequency,
+            shape=reference.shape,
+            dtype=reference.get_dtype(),
+        )
+        reference.copy_metadata(self)
+        parent_epochs = [epoch for imaging in imagings for epoch in imaging.epochs]
+        self.add_epoch(_ConcatenatedEpoch(parent_epochs))
+
+        self._parents = imagings
+        self._kwargs = {"parent_imagings": imagings}
+
+
+def concatenate_epochs(imagings: list[BaseImaging] | BaseImaging) -> ConcatenateImaging:
+    """Return a single-epoch proxy joining all input epochs in order."""
+    return ConcatenateImaging(imagings=imagings)
+
+
+class AppendImaging(BaseImaging):
+    """Imaging proxy whose epochs are those of each input, in list order.
+
+    Inputs must share shape, sampling frequency and dtype. Nothing is copied.
+    """
+
+    def __init__(self, imagings: list[BaseImaging]):
+        if not isinstance(imagings, list):
+            raise TypeError("imagings must be a list of BaseImaging objects")
+        if len(imagings) < 2:
+            raise ValueError("append_imaging requires at least two imaging objects")
+        for input_index, imaging in enumerate(imagings):
+            if not isinstance(imaging, BaseImaging):
+                raise TypeError(f"Input {input_index} is not a BaseImaging (got {type(imaging).__name__})")
+
+        imagings = imagings.copy()  # shallow copy, in case modified after call
+        reference = imagings[0]
+        for input_index, imaging in enumerate(imagings[1:], start=1):
+            if tuple(imaging.shape) != tuple(reference.shape):
+                raise ValueError(
+                    f"Input {input_index} shape {imaging.shape} disagrees with input 0 ({reference.shape})"
+                )
+            if imaging.sampling_frequency != reference.sampling_frequency:
+                raise ValueError(
+                    f"Input {input_index} sampling frequency {imaging.sampling_frequency} disagrees with input 0 "
+                    f"({reference.sampling_frequency})"
+                )
+            if np.dtype(imaging.get_dtype()) != np.dtype(reference.get_dtype()):
+                raise ValueError(
+                    f"Input {input_index} dtype {imaging.get_dtype()} disagrees with input 0 ({reference.get_dtype()})"
+                )
+
+        BaseImaging.__init__(
+            self,
+            sampling_frequency=reference.sampling_frequency,
+            shape=reference.shape,
+            dtype=reference.get_dtype(),
+        )
+        reference.copy_metadata(self)
+        for imaging in imagings:
+            for epoch in imaging.epochs:
+                self.add_epoch(epoch)
+
+        self._parents = imagings
+        self._kwargs = {"parent_imagings": imagings}
+
+
+def append_imaging(imagings: list[BaseImaging]) -> AppendImaging:
+    """Return a proxy with the epochs of each imaging object in list order."""
+    return AppendImaging(imagings=imagings)
+
+
 class _StackedPlanesEpoch(BaseImagingEpoch):
     """Lazy epoch whose planes are gathered from several parent epochs.
 

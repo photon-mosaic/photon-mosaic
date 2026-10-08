@@ -3,10 +3,14 @@ import pytest
 
 from photon_mosaic.core.generators import generate_random_imaging
 from photon_mosaic.core.imaging_ops import (
+    AppendImaging,
+    ConcatenateImaging,
     FrameSliceImaging,
     SelectEpochImaging,
     SplitEpochAtFramesImaging,
     StackPlanesImaging,
+    append_imaging,
+    concatenate_epochs,
     frame_slice,
     split_epoch_at_frames,
     split_epochs,
@@ -198,6 +202,76 @@ def test_frame_slice_refuses_to_guess_the_epoch():
     # a single-epoch parent is unambiguous, so it needs no epoch_index
     single = generate_random_imaging(num_frames=(6,), height=3, width=3, sampling_frequency=10.0, seed=49)
     np.testing.assert_array_equal(frame_slice(single, 1, 4).get_series(), single.get_series()[1:4])
+
+
+def test_concatenate_epochs_joins_all_epochs_into_one():
+    imaging = generate_random_imaging(num_frames=(4, 6, 8), height=3, width=5, sampling_frequency=10.0, seed=50)
+    full = np.concatenate([imaging.get_series(epoch_index=i) for i in range(3)], axis=0)
+
+    concatenated = concatenate_epochs(imaging)
+    direct = ConcatenateImaging(imaging)
+
+    assert isinstance(concatenated, ConcatenateImaging)
+    assert concatenated.get_num_epochs() == 1
+    assert concatenated.epochs[0].get_num_samples() == 18
+    np.testing.assert_array_equal(concatenated.get_series(), full)
+    np.testing.assert_array_equal(direct.get_series(), full)
+    np.testing.assert_array_equal(concatenated.get_series(start_frame=3, end_frame=12), full[3:12])
+    np.testing.assert_array_equal(concatenated.get_series(start_frame=5, end_frame=8), full[5:8])
+
+
+def test_concatenate_epochs_joins_epochs_from_multiple_imagings():
+    imaging_a = generate_random_imaging(num_frames=(4, 6), height=3, width=5, sampling_frequency=10.0, seed=58)
+    imaging_b = generate_random_imaging(num_frames=(7, 3), height=3, width=5, sampling_frequency=10.0, seed=59)
+    epochs = [
+        imaging.get_series(epoch_index=epoch_index)
+        for imaging in (imaging_a, imaging_b)
+        for epoch_index in range(imaging.get_num_epochs())
+    ]
+    full = np.concatenate(epochs, axis=0)
+
+    concatenated = concatenate_epochs([imaging_a, imaging_b])
+
+    assert concatenated.get_num_epochs() == 1
+    assert concatenated.epochs[0].get_num_samples() == 20
+    np.testing.assert_array_equal(concatenated.get_series(), full)
+    np.testing.assert_array_equal(concatenated.get_series(start_frame=8, end_frame=15), full[8:15])
+
+
+def test_append_imaging_orders_epochs_from_list():
+    a = generate_random_imaging(num_frames=(4, 6), height=3, width=5, sampling_frequency=10.0, seed=51)
+    b = generate_random_imaging(num_frames=(7,), height=3, width=5, sampling_frequency=10.0, seed=52)
+    c = generate_random_imaging(num_frames=(2, 3), height=3, width=5, sampling_frequency=10.0, seed=53)
+
+    appended = append_imaging([a, b, c])
+
+    assert isinstance(appended, AppendImaging)
+    assert appended.get_num_epochs() == 5
+    np.testing.assert_array_equal(appended.get_series(epoch_index=1), a.get_series(epoch_index=1))
+    np.testing.assert_array_equal(appended.get_series(epoch_index=2), b.get_series(epoch_index=0))
+    np.testing.assert_array_equal(appended.get_series(epoch_index=3), c.get_series(epoch_index=0))
+    np.testing.assert_array_equal(appended.get_series(epoch_index=4), c.get_series(epoch_index=1))
+
+
+def test_append_imaging_rejects_mismatched_inputs():
+    a = generate_random_imaging(num_frames=(4,), height=3, width=5, sampling_frequency=10.0, seed=53)
+    wrong_shape = generate_random_imaging(num_frames=(4,), height=4, width=5, sampling_frequency=10.0, seed=54)
+    wrong_fs = generate_random_imaging(num_frames=(4,), height=3, width=5, sampling_frequency=20.0, seed=55)
+
+    with pytest.raises(ValueError):
+        _ = append_imaging([a, wrong_shape])
+    with pytest.raises(ValueError):
+        _ = append_imaging([a, wrong_fs])
+
+
+def test_append_imaging_requires_a_list_of_at_least_two_objects():
+    a = generate_random_imaging(num_frames=(4,), height=3, width=5, sampling_frequency=10.0, seed=56)
+    b = generate_random_imaging(num_frames=(4,), height=3, width=5, sampling_frequency=10.0, seed=57)
+
+    with pytest.raises(TypeError, match="list"):
+        _ = append_imaging((a, b))
+    with pytest.raises(ValueError, match="at least two"):
+        _ = append_imaging([a])
 
 
 def test_frame_slice_round_trips_through_a_dict():
