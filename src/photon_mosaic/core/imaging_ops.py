@@ -373,7 +373,7 @@ class AppendImaging(BaseImaging):
             if not isinstance(imaging, BaseImaging):
                 raise TypeError(f"Input {input_index} is not a BaseImaging (got {type(imaging).__name__})")
 
-        imagings = imagings.copy()
+        imagings = imagings.copy()  # shallow copy, in case modified after call
         reference = imagings[0]
         for input_index, imaging in enumerate(imagings[1:], start=1):
             if tuple(imaging.shape) != tuple(reference.shape):
