@@ -218,16 +218,19 @@ def test_concatenate_epochs_joins_all_epochs_into_one():
     np.testing.assert_array_equal(concatenated.get_series(start_frame=5, end_frame=8), full[5:8])
 
 
-def test_append_imaging_orders_epochs_a_then_b():
+def test_append_imaging_orders_epochs_from_list():
     a = generate_random_imaging(num_frames=(4, 6), height=3, width=5, sampling_frequency=10.0, seed=51)
     b = generate_random_imaging(num_frames=(7,), height=3, width=5, sampling_frequency=10.0, seed=52)
+    c = generate_random_imaging(num_frames=(2, 3), height=3, width=5, sampling_frequency=10.0, seed=53)
 
-    appended = append_imaging(a, b)
+    appended = append_imaging([a, b, c])
 
     assert isinstance(appended, AppendImaging)
-    assert appended.get_num_epochs() == 3
+    assert appended.get_num_epochs() == 5
     np.testing.assert_array_equal(appended.get_series(epoch_index=1), a.get_series(epoch_index=1))
     np.testing.assert_array_equal(appended.get_series(epoch_index=2), b.get_series(epoch_index=0))
+    np.testing.assert_array_equal(appended.get_series(epoch_index=3), c.get_series(epoch_index=0))
+    np.testing.assert_array_equal(appended.get_series(epoch_index=4), c.get_series(epoch_index=1))
 
 
 def test_append_imaging_rejects_mismatched_inputs():
@@ -236,9 +239,19 @@ def test_append_imaging_rejects_mismatched_inputs():
     wrong_fs = generate_random_imaging(num_frames=(4,), height=3, width=5, sampling_frequency=20.0, seed=55)
 
     with pytest.raises(ValueError):
-        _ = append_imaging(a, wrong_shape)
+        _ = append_imaging([a, wrong_shape])
     with pytest.raises(ValueError):
-        _ = append_imaging(a, wrong_fs)
+        _ = append_imaging([a, wrong_fs])
+
+
+def test_append_imaging_requires_a_list_of_at_least_two_objects():
+    a = generate_random_imaging(num_frames=(4,), height=3, width=5, sampling_frequency=10.0, seed=56)
+    b = generate_random_imaging(num_frames=(4,), height=3, width=5, sampling_frequency=10.0, seed=57)
+
+    with pytest.raises(TypeError, match="list"):
+        _ = append_imaging((a, b))
+    with pytest.raises(ValueError, match="at least two"):
+        _ = append_imaging([a])
 
 
 def test_frame_slice_round_trips_through_a_dict():

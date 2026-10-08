@@ -331,38 +331,55 @@ def concatenate_epochs(imaging: BaseImaging) -> ConcatenateImaging:
 
 
 class AppendImaging(BaseImaging):
-    """Imaging proxy whose epochs are those of ``imaging_a`` followed by those of ``imaging_b``.
+    """Imaging proxy whose epochs are those of each input, in list order.
 
-    Both inputs must share shape, sampling frequency and dtype. Nothing is copied.
+    Inputs must share shape, sampling frequency and dtype. Nothing is copied.
     """
 
-    def __init__(self, imaging_a: BaseImaging, imaging_b: BaseImaging):
-        if tuple(imaging_a.shape) != tuple(imaging_b.shape):
-            raise ValueError(f"Shapes disagree: {imaging_a.shape} vs {imaging_b.shape}")
-        if imaging_a.sampling_frequency != imaging_b.sampling_frequency:
-            raise ValueError(
-                f"Sampling frequencies disagree: {imaging_a.sampling_frequency} vs {imaging_b.sampling_frequency}"
-            )
-        if np.dtype(imaging_a.get_dtype()) != np.dtype(imaging_b.get_dtype()):
-            raise ValueError(f"Dtypes disagree: {imaging_a.get_dtype()} vs {imaging_b.get_dtype()}")
+    def __init__(self, imagings: list[BaseImaging]):
+        if not isinstance(imagings, list):
+            raise TypeError("imagings must be a list of BaseImaging objects")
+        if len(imagings) < 2:
+            raise ValueError("append_imaging requires at least two imaging objects")
+        for input_index, imaging in enumerate(imagings):
+            if not isinstance(imaging, BaseImaging):
+                raise TypeError(f"Input {input_index} is not a BaseImaging (got {type(imaging).__name__})")
+
+        imagings = imagings.copy()
+        reference = imagings[0]
+        for input_index, imaging in enumerate(imagings[1:], start=1):
+            if tuple(imaging.shape) != tuple(reference.shape):
+                raise ValueError(
+                    f"Input {input_index} shape {imaging.shape} disagrees with input 0 ({reference.shape})"
+                )
+            if imaging.sampling_frequency != reference.sampling_frequency:
+                raise ValueError(
+                    f"Input {input_index} sampling frequency {imaging.sampling_frequency} disagrees with input 0 "
+                    f"({reference.sampling_frequency})"
+                )
+            if np.dtype(imaging.get_dtype()) != np.dtype(reference.get_dtype()):
+                raise ValueError(
+                    f"Input {input_index} dtype {imaging.get_dtype()} disagrees with input 0 ({reference.get_dtype()})"
+                )
 
         BaseImaging.__init__(
             self,
-            sampling_frequency=imaging_a.sampling_frequency,
-            shape=imaging_a.shape,
-            dtype=imaging_a.get_dtype(),
+            sampling_frequency=reference.sampling_frequency,
+            shape=reference.shape,
+            dtype=reference.get_dtype(),
         )
-        imaging_a.copy_metadata(self)
-        for epoch in [*imaging_a.epochs, *imaging_b.epochs]:
-            self.add_epoch(epoch)
+        reference.copy_metadata(self)
+        for imaging in imagings:
+            for epoch in imaging.epochs:
+                self.add_epoch(epoch)
 
-        self._parents = [imaging_a, imaging_b]
-        self._kwargs = {"parent_imaging_a": imaging_a, "parent_imaging_b": imaging_b}
+        self._parents = imagings
+        self._kwargs = {"imagings": imagings}
 
 
-def append_imaging(imaging_a: BaseImaging, imaging_b: BaseImaging) -> AppendImaging:
-    """Return a proxy with the epochs of ``imaging_a`` followed by those of ``imaging_b``."""
-    return AppendImaging(imaging_a=imaging_a, imaging_b=imaging_b)
+def append_imaging(imagings: list[BaseImaging]) -> AppendImaging:
+    """Return a proxy with the epochs of each imaging object in list order."""
+    return AppendImaging(imagings=imagings)
 
 
 class _StackedPlanesEpoch(BaseImagingEpoch):
