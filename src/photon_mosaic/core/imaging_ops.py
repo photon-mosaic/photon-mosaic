@@ -262,6 +262,92 @@ def frame_slice(
     )
 
 
+class _ConcatenatedEpoch(BaseImagingEpoch):
+    """Lazy epoch joining several parent epochs end to end along time."""
+
+    def __init__(self, parent_epochs: Sequence[BaseImagingEpoch]):
+        first = parent_epochs[0]
+        BaseImagingEpoch.__init__(  # type: ignore[call-arg]
+            self,
+            sampling_frequency=first._sampling_frequency,
+            t_start=getattr(first, "_t_start", None),
+        )
+        self._parent_epochs = list(parent_epochs)
+        self._sizes = [e.get_num_samples() for e in self._parent_epochs]
+        self._offsets = np.cumsum([0, *self._sizes]).tolist()
+
+    def get_num_samples(self) -> int:
+        return self._offsets[-1]
+
+    def get_series(self, start_frame, end_frame, plane_indices=None):
+        parts = []
+        for epoch, offset, size in zip(self._parent_epochs, self._offsets, self._sizes):
+            lo, hi = max(start_frame - offset, 0), min(end_frame - offset, size)
+            if lo < hi:
+                parts.append(epoch.get_series(lo, hi, plane_indices))
+        return np.concatenate(parts, axis=0) if len(parts) > 1 else parts[0]
+
+
+class ConcatenateImaging(BaseImaging):
+    """Imaging proxy joining all epochs of a parent into one epoch along time.
+
+    Epoch data is accessed lazily from the parent epochs; ``t_start`` is the first epoch's.
+    """
+
+    def __init__(self, parent_imaging: BaseImaging):
+        BaseImaging.__init__(
+            self,
+            sampling_frequency=parent_imaging.sampling_frequency,
+            shape=parent_imaging.shape,
+            dtype=parent_imaging.get_dtype(),
+        )
+        parent_imaging.copy_metadata(self)
+        self.add_epoch(_ConcatenatedEpoch(parent_imaging.epochs))
+
+        self._parent = parent_imaging
+        self._kwargs = {"parent_imaging": parent_imaging, "n_epochs_concatenated": len(parent_imaging.epochs)}
+
+
+def concatenate_epochs(imaging: BaseImaging) -> ConcatenateImaging:
+    """Return a single-epoch proxy joining all epochs of ``imaging`` along time."""
+    return ConcatenateImaging(parent_imaging=imaging)
+
+
+class AppendImaging(BaseImaging):
+    """Imaging proxy whose epochs are those of ``imaging_a`` followed by those of ``imaging_b``.
+
+    Both inputs must share shape, sampling frequency and dtype. Nothing is copied.
+    """
+
+    def __init__(self, imaging_a: BaseImaging, imaging_b: BaseImaging):
+        if tuple(imaging_a.shape) != tuple(imaging_b.shape):
+            raise ValueError(f"Shapes disagree: {imaging_a.shape} vs {imaging_b.shape}")
+        if imaging_a.sampling_frequency != imaging_b.sampling_frequency:
+            raise ValueError(
+                f"Sampling frequencies disagree: {imaging_a.sampling_frequency} vs {imaging_b.sampling_frequency}"
+            )
+        if np.dtype(imaging_a.get_dtype()) != np.dtype(imaging_b.get_dtype()):
+            raise ValueError(f"Dtypes disagree: {imaging_a.get_dtype()} vs {imaging_b.get_dtype()}")
+
+        BaseImaging.__init__(
+            self,
+            sampling_frequency=imaging_a.sampling_frequency,
+            shape=imaging_a.shape,
+            dtype=imaging_a.get_dtype(),
+        )
+        imaging_a.copy_metadata(self)
+        for epoch in [*imaging_a.epochs, *imaging_b.epochs]:
+            self.add_epoch(epoch)
+
+        self._parents = [imaging_a, imaging_b]
+        self._kwargs = {"parent_imaging_a": imaging_a, "parent_imaging_b": imaging_b}
+
+
+def append_imaging(imaging_a: BaseImaging, imaging_b: BaseImaging) -> AppendImaging:
+    """Return a proxy with the epochs of ``imaging_a`` followed by those of ``imaging_b``."""
+    return AppendImaging(imaging_a=imaging_a, imaging_b=imaging_b)
+
+
 class _StackedPlanesEpoch(BaseImagingEpoch):
     """Lazy epoch whose planes are gathered from several parent epochs.
 
