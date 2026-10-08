@@ -17,7 +17,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: "3.14"
+        python-version: "3.13"
 
     - name: Install dependencies
       run: |
@@ -34,12 +34,12 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        python-version: ["3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13"]
         include:
           - os: macos-latest
-            python-version: "3.14"
+            python-version: "3.13"
           - os: windows-latest
-            python-version: "3.14"
+            python-version: "3.13"
     steps:
     - uses: actions/checkout@v4
 
