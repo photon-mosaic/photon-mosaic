@@ -284,9 +284,9 @@ class _ConcatenatedEpoch(BaseImagingEpoch):
 
         # _offsets is sorted, so bisect to the parent epochs overlapping the request.
         first = np.searchsorted(self._offsets, start_frame, side="right") - 1
-        stop = np.searchsorted(self._offsets, end_frame, side="left")
+        last = np.searchsorted(self._offsets, end_frame, side="left")
 
-        if stop - first == 1:  # request inside one epoch: no copy
+        if last - first == 1:  # request inside one epoch: no copy
             offset = self._offsets[first]
             return self._parent_epochs[first].get_series(start_frame - offset, end_frame - offset, plane_indices)
 
@@ -296,7 +296,7 @@ class _ConcatenatedEpoch(BaseImagingEpoch):
         out = np.empty((end_frame - start_frame, *probe.shape[1:]), dtype=probe.dtype)
 
         pos = 0
-        for i in range(first, stop):
+        for i in range(first, last):
             # Requested frames clipped to parent epoch i, in that epoch's own numbering.
             lo = max(start_frame - self._offsets[i], 0)
             hi = min(end_frame - self._offsets[i], self._sizes[i])
@@ -306,9 +306,9 @@ class _ConcatenatedEpoch(BaseImagingEpoch):
 
 
 class ConcatenateImaging(BaseImaging):
-    """Imaging proxy joining all epochs of several inputs into one epoch along time.
+    """Imaging proxy joining all epochs of one or several input imaging objects into one epoch along time.
 
-    Epoch data is accessed lazily in input-list order; ``t_start`` is the first epoch's.
+    Epoch data is accessed lazily in input order; ``t_start`` is the first epoch's from the first input.
     """
 
     def __init__(self, imagings: list[BaseImaging] | BaseImaging):
@@ -322,7 +322,7 @@ class ConcatenateImaging(BaseImaging):
             if not isinstance(imaging, BaseImaging):
                 raise TypeError(f"Input {input_index} is not a BaseImaging (got {type(imaging).__name__})")
 
-        imagings = imagings.copy()
+        imagings = imagings.copy()  # shallow copy, in case modified after call
         reference = imagings[0]
         for input_index, imaging in enumerate(imagings[1:], start=1):
             if tuple(imaging.shape) != tuple(reference.shape):
@@ -350,7 +350,7 @@ class ConcatenateImaging(BaseImaging):
         self.add_epoch(_ConcatenatedEpoch(parent_epochs))
 
         self._parents = imagings
-        self._kwargs = {"imagings": imagings}
+        self._kwargs = {"parent_imagings": imagings}
 
 
 def concatenate_epochs(imagings: list[BaseImaging] | BaseImaging) -> ConcatenateImaging:
@@ -402,7 +402,7 @@ class AppendImaging(BaseImaging):
                 self.add_epoch(epoch)
 
         self._parents = imagings
-        self._kwargs = {"imagings": imagings}
+        self._kwargs = {"parent_imagings": imagings}
 
 
 def append_imaging(imagings: list[BaseImaging]) -> AppendImaging:
