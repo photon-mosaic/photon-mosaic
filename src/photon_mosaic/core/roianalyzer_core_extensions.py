@@ -495,8 +495,10 @@ class NeuropilExtension(AnalyzerExtension):
             ``method='cnmf'``. Default is ``False``, since a band-passed seed legitimately goes
             negative.
         ridge : float, optional
-            Tikhonov regularisation applied to the least-squares solves, relative to each Gram
-            matrix's mean diagonal. Only used with ``method='cnmf'``. Default is ``1e-6``.
+            Tikhonov regularisation applied to the least-squares solves, relative to *each diagonal
+            entry* of the Gram matrix rather than to its mean diagonal (see
+            :func:`_ridge_inverse`). Must be finite and non-negative. Only used with
+            ``method='cnmf'``. Default is ``1e-6``.
         subsample_frames : int or None, optional
             Number of evenly-spaced frames used for the alternating background fit (the final
             traces and background timecourses are always solved over *all* frames). ``None`` uses
@@ -513,6 +515,18 @@ class NeuropilExtension(AnalyzerExtension):
                 raise ValueError(f"subsample_frames must be None or >= 2, got {subsample_frames}")
             if max_iter < 1:
                 raise ValueError(f"max_iter must be >= 1, got {max_iter}")
+            # Same finite/non-negative contract as FluorescenceExtension's ridge; see
+            # _check_finite_non_negative for why a negative ridge is the dangerous one.
+            _check_finite_non_negative("tol", tol)
+            _check_finite_non_negative("ridge", ridge)
+            for _name, _sigma in (("highpass_sigma", highpass_sigma), ("lowpass_sigma", lowpass_sigma)):
+                if _sigma is not None:
+                    _check_finite_non_negative(_name, _sigma)
+            # The background initialiser can build at most subsample_frames - 1 independent
+            # components; beyond that it duplicates the last one, and identical columns receive
+            # identical updates forever, so the extra components can never separate.
+            if subsample_frames is not None and gnb >= subsample_frames:
+                raise ValueError(f"gnb must be < subsample_frames ({subsample_frames}), got {gnb}")
         return dict(
             method=method,
             inner_neuropil_radius=inner_neuropil_radius,
@@ -1407,7 +1421,7 @@ def _init_cnmf_background(y_sub, masks_csr, traces_sub, gnb, spatial_shape, init
     rhs = _project_float64(y_sub, b) - traces_sub @ np.asarray(masks_csr @ b, dtype=np.float64)
     f = rhs @ _ridge_inverse(gram_b, ridge)
     if nonneg:
-        f = _nnls_block(gram_b, rhs, f)
+        f = _nnls_block(_ridge_regularize(gram_b, ridge), rhs, f)
     return b, f
 
 
@@ -1562,17 +1576,19 @@ def _fit_cnmf_background(
         rhs_b = _project_float64_transposed(y_sub, temporal_sub) - np.asarray(
             masks_csr.T @ (traces_sub.T @ temporal_sub), dtype=np.float64
         )
-        background = (
-            _nnls_block(gram_hh, rhs_b, background) if nonneg_background else rhs_b @ _ridge_inverse(gram_hh, ridge)
-        )
+        if nonneg_background:
+            background = _nnls_block(_ridge_regularize(gram_hh, ridge), rhs_b, background)
+        else:
+            background = rhs_b @ _ridge_inverse(gram_hh, ridge)
 
         gram_ab = np.asarray(masks_csr @ background, dtype=np.float64)
         gram_bb = background.T @ background
         proj_background_sub = _project_float64(y_sub, background)
         rhs_f = proj_background_sub - traces_sub @ gram_ab
-        temporal_sub = (
-            _nnls_block(gram_bb, rhs_f, temporal_sub) if nonneg_background else rhs_f @ _ridge_inverse(gram_bb, ridge)
-        )
+        if nonneg_background:
+            temporal_sub = _nnls_block(_ridge_regularize(gram_bb, ridge), rhs_f, temporal_sub)
+        else:
+            temporal_sub = rhs_f @ _ridge_inverse(gram_bb, ridge)
 
         objective.append(
             _cnmf_objective(
