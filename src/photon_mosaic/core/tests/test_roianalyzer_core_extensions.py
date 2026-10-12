@@ -99,16 +99,18 @@ def test_zero_mask_gives_zero_fluorescence(imaging, rois, chunk):
     np.testing.assert_array_equal(fluorescence, 0.0)
 
 
-def test_compute_matches_dense_result_with_sparse_masks(imaging, chunk):
+@pytest.mark.parametrize("method", ["projection", "regression", "nnls"])
+def test_compute_matches_dense_result_with_sparse_masks(imaging, chunk, method):
     """FluorescenceNode should give the same result for sparse (e.g. Suite2p-backed) ROIs
     as for dense ones, since it operates polymorphically on whatever get_roi_image_masks
-    returns (see photon-mosaic#103)."""
+    returns (see photon-mosaic#103). The joint solvers reach the sparse branch through
+    _masks_to_sparse_matrix, so they are covered here too."""
     sparse_rois = generate_rois(num_rois=NUM_ROIS, height=H, width=W, sampling_frequency=SF, seed=SEED, sparse=True)
     dense_rois = generate_rois(num_rois=NUM_ROIS, height=H, width=W, sampling_frequency=SF, seed=SEED)
 
-    fluorescence_sparse, _ = FluorescenceNode(imaging, sparse_rois).compute(chunk)
-    fluorescence_dense, _ = FluorescenceNode(imaging, dense_rois).compute(chunk)
-    np.testing.assert_allclose(fluorescence_sparse, fluorescence_dense, rtol=1e-5)
+    fluorescence_sparse, _ = FluorescenceNode(imaging, sparse_rois, method=method).compute(chunk)
+    fluorescence_dense, _ = FluorescenceNode(imaging, dense_rois, method=method).compute(chunk)
+    np.testing.assert_allclose(fluorescence_sparse, fluorescence_dense, rtol=1e-5, atol=1e-6)
 
 
 def test_compute_matches_least_squares_for_weighted_nonoverlapping_masks(imaging, chunk):
@@ -1149,6 +1151,18 @@ def test_joint_methods_separate_overlapping_rois(method):
     joint = analyzer.compute("fluorescence", method=method).get_data()
     np.testing.assert_allclose(joint, traces, rtol=1e-4, atol=1e-3)
     assert np.abs(projection - traces).max() > 1.0  # the crosstalk the joint solve removes
+
+
+@pytest.mark.parametrize("ridge", [-0.5, -1.0, np.nan, np.inf])
+def test_joint_methods_reject_an_invalid_ridge(imaging, rois, ridge):
+    # The ridge is relative to each diagonal entry, so a negative one scales the Gram by
+    # (1 + ridge) instead of padding it: ridge=-0.5 doubles every recovered trace and ridge=-1
+    # makes the factorization exactly singular. Neither fails loudly on its own.
+    analyzer = create_roi_analyzer(rois, imaging, format="memory")
+    with pytest.raises(ValueError, match="ridge must be finite"):
+        analyzer.compute("fluorescence", method="regression", ridge=ridge)
+    with pytest.raises(ValueError, match="ridge must be finite"):
+        FluorescenceNode(imaging, rois, method="nnls", ridge=ridge)
 
 
 def test_regression_with_surround_neuropil_matches_projection(suite2p_rois, neuropil_imaging):
