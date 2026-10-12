@@ -1,6 +1,3 @@
-import json
-from pathlib import Path
-
 import numpy as np
 import sparse
 from numpy.typing import ArrayLike
@@ -227,17 +224,48 @@ class BaseRois(BaseExtractor):
         ), "The imaging has a different sampling frequency than the ROIs!"
         self._imaging = imaging
 
-    def _save(self, format="binary", **save_kwargs):
-        """Save ROIs to disk. Called internally by ``BaseExtractor.save()``.
+    def save(self, format="binary", **save_kwargs):
+        """
+        Save a `BaseRois` object to a specified format:
+
+        * "binary"
+        * "zarr"
 
         Parameters
         ----------
         format : str, default: "binary"
-            ``"binary"`` or ``"zarr"``.
-        **save_kwargs
-            For ``"binary"``: must include ``folder`` (str or Path).
-            For ``"zarr"``: must include ``zarr_path`` (str or Path), pre-resolved by
-            ``BaseExtractor.save_to_zarr()`` from the public ``folder``/``name`` kwargs.
+            The format to save the ROIs in. Options are:
+
+            - "binary": Saves the ROIs in binary format.
+            - "zarr": Saves the ROIs in Zarr format.
+        verbose : bool, default: False
+            If True, prints additional information during the save process.
+        **save_kwargs : dict
+            Additional keyword arguments specific to the chosen format.
+            All formats support job_kwargs for parallel processing
+            (see `si.get_global_job_kwargs()` for default values).
+
+            * "binary" format:
+                - folder : str or Path
+                    The folder where the binary files will be saved.
+                - overwrite : bool, default: False
+                    If True, existing files in the folder will be overwritten.
+            * "zarr" format:
+                - folder : str or Path
+                    The folder where the Zarr files will be saved.
+                - overwrite: bool, default: False
+                    If True, the folder is removed if it already exists
+                - storage_options: dict or None, default: None
+                    Storage options for zarr `store`. E.g., if "s3://" or "gcs://" they can
+                    provide authentication methods, etc.
+                    For cloud storage locations, this should not be None (in case of default values, use an empty dict)
+                - compressor: numcodecs.Codec or None, default: None
+                    Compressor for the ROI mask datasets. If None, zarr's default is used
+                - filters: list[numcodecs.Codec] or None, default: None
+                    Filters for the ROI mask datasets
+                - chunks: tuple or None, default: None
+                    Chunk shape for the ROI mask datasets. If None, an automatic per-ROI
+                    chunking is applied
 
         Returns
         -------
@@ -245,65 +273,19 @@ class BaseRois(BaseExtractor):
             The on-disk representation.
         """
         if format == "binary":
-            return self._save_binary(**save_kwargs)
+            from .binaryrois import BinaryFolderRois
+
+            folder = save_kwargs.pop("folder", None)
+            if folder is None:
+                raise ValueError("The 'folder' parameter must be specified for binary format.")
+            return BinaryFolderRois.write_rois(self, folder, **save_kwargs)
         elif format == "zarr":
-            return self._save_zarr(**save_kwargs)
+            from .zarrrois import ZarrRois
+
+            folder = save_kwargs.pop("folder", None)
+            if folder is None:
+                raise ValueError("The 'folder' parameter must be specified for zarr format.")
+
+            return ZarrRois.write_rois(self, folder, **save_kwargs)
         else:
             raise ValueError(f"format {format!r} not supported for BaseRois, use 'binary' or 'zarr'")
-
-    def _save_binary(self, **save_kwargs):
-        from .binaryrois import BinaryFolderRois, BinaryRois
-
-        folder = Path(save_kwargs["folder"])
-        folder.mkdir(parents=True, exist_ok=True)
-
-        image_masks = self.get_roi_image_masks()
-        if isinstance(image_masks, sparse.SparseArray):
-            # np.save doesn't understand sparse arrays; sparse.save_npz stores the
-            # data/coords/shape directly instead of densifying.
-            mask_file = folder / "roi_image_masks.npz"
-            sparse.save_npz(mask_file, image_masks)
-        else:
-            mask_file = folder / "roi_image_masks.npy"
-            np.save(mask_file, image_masks)
-        np.save(folder / "roi_ids.npy", np.array(self.roi_ids))
-
-        metadata = dict(
-            sampling_frequency=float(self.sampling_frequency),
-            shape=list(self.shape),
-        )
-        with open(folder / "metadata.json", "w") as f:
-            json.dump(metadata, f, indent=4)
-
-        binary_rois = BinaryRois(
-            file_path=mask_file,
-            sampling_frequency=self.sampling_frequency,
-            roi_ids=self.roi_ids,
-            shape=self.shape,
-        )
-        binary_rois.dump(folder / "binary.json", relative_to=folder)
-
-        cached = BinaryFolderRois(folder_path=folder)
-
-        return cached
-
-    def _save_zarr(self, **save_kwargs):
-        import zarr
-        from spikeinterface.core.core_tools import retrieve_importing_provenance
-
-        from .zarrrois import ZarrRois, save_rois_to_zarr
-
-        zarr_path = save_kwargs["zarr_path"]
-        saving_options = save_kwargs.get("saving_options", None)
-        storage_options = save_kwargs.get("storage_options", None)
-
-        zarr_root = zarr.open(str(zarr_path), mode="w", storage_options=storage_options)
-        # Lets spikeinterface's own read_zarr() (called by BaseExtractor.save_to_zarr()
-        # right after this) reconstruct a ZarrRois directly, instead of falling back to its
-        # channel_ids/unit_ids recording/sorting check, which ROI data doesn't match.
-        zarr_root.attrs["zarr_class_info"] = retrieve_importing_provenance(ZarrRois)
-        rois_group = zarr_root.create_group("rois")
-        save_rois_to_zarr(self, rois_group, saving_options=saving_options)
-        zarr.consolidate_metadata(zarr_root.store)
-
-        return ZarrRois(zarr_path, storage_options=storage_options)
