@@ -169,7 +169,7 @@ class FluorescenceExtension(AnalyzerExtension):
             ``'numpy'`` or ``'recording'`` (a SpikeInterface ``NumpyRecording``). Default is
             ``'numpy'``.
         key : str, optional
-            ``'fluorescence'`` (the traces) or ``'background'`` (``B`` for a CNMF neuropil, ``Fneu``
+            ``'fluorescence'`` (the traces) or ``'background'`` (``B`` for a CNMF background, ``Fneu``
             for surround; see the class docstring). Default is ``'fluorescence'``.
 
         Raises
