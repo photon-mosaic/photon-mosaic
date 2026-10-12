@@ -33,9 +33,13 @@ class FluorescenceExtension(AnalyzerExtension):
     ================  ======================  ======================================================
     ``fluorescence``  ``(n_frames, n_rois)``  the extracted traces, ``F - neuropil_weight * Fneu``
                                               with a surround neuropil
-    ``background``    ``(n_frames, n_rois)``  the surround ring mean ``Fneu``, before
-                                              ``neuropil_weight``. ``(n_frames, 0)`` without a
-                                              neuropil.
+    ``background``    ``(n_frames, n_rois)``  the surround neuropil correction term, before
+                                              ``neuropil_weight``: the ring mean ``Fneu`` on the
+                                              same L2 scale as ``fluorescence`` (so
+                                              ``fluorescence + neuropil_weight * background`` is
+                                              the uncorrected trace). Equal to the raw ``Fneu``
+                                              for binary masks, ``Fneu * L1 / L2**2`` for weighted
+                                              ones. ``(n_frames, 0)`` without a neuropil.
     ================  ======================  ======================================================
     """
 
@@ -114,13 +118,25 @@ class FluorescenceExtension(AnalyzerExtension):
             ``'numpy'`` or ``'recording'`` (a SpikeInterface ``NumpyRecording``). Default is
             ``'numpy'``.
         key : str, optional
-            ``'fluorescence'`` (the traces) or ``'background'`` (the surround ring mean ``Fneu``; see
-            the class docstring). Default is ``'fluorescence'``.
+            ``'fluorescence'`` (the traces) or ``'background'`` (the surround neuropil correction
+            term; see the class docstring). Default is ``'fluorescence'``.
+
+        Raises
+        ------
+        ValueError
+            For ``key='background'`` when the fluorescence was extracted without a neuropil. A
+            zero-ROI analyzer returns an empty ``(n_frames, 0)`` background instead of raising.
         """
         if key not in ("fluorescence", "background"):
             raise KeyError(f"Unknown key: '{key}'. Supported: 'fluorescence', 'background'.")
-        if key == "background" and ("background" not in self.data or self.data["background"].shape[1] == 0):
-            raise ValueError("No background: fluorescence was extracted without a neuropil.")
+        if key == "background":
+            if "background" not in self.data:
+                raise ValueError("No background: fluorescence was extracted without a neuropil.")
+            # A zero-ROI analyzer (select_rois([]), remove_rois(all)) also has a width-0
+            # background, but that is an empty result rather than a missing one. The traces
+            # carry the same width, so use them to tell the two apart.
+            if self.data["background"].shape[1] == 0 and self.data["fluorescence"].shape[1] > 0:
+                raise ValueError("No background: fluorescence was extracted without a neuropil.")
         traces = self.data[key]
         if outputs == "numpy":
             return traces
@@ -140,7 +156,8 @@ class FluorescenceExtension(AnalyzerExtension):
         selected = {"fluorescence": self.data["fluorescence"][:, roi_indices]}
         if "background" in self.data:
             background = self.data["background"]
-            # (n_frames, 0) when there was no neuropil: nothing to slice.
+            # (n_frames, 0) when there was no neuropil: nothing to slice. Selecting no ROIs
+            # yields a width-0 background too; _get_data tells the two cases apart.
             selected["background"] = background[:, roi_indices] if background.shape[1] else background
         return selected
 

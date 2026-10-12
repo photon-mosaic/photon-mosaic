@@ -1175,6 +1175,44 @@ def test_surround_persists_its_ring_mean(suite2p_rois, neuropil_imaging, method)
     np.testing.assert_allclose(ext.get_data() + 0.7 * ext.get_data(key="background"), uncorrected, rtol=1e-4, atol=1e-2)
 
 
+def test_surround_persists_the_rescaled_ring_mean_for_weighted_masks(neuropil_imaging):
+    # `background` is the correction term on the L2 scale, not the raw ring mean: the two differ
+    # by L1 / L2**2, which is exactly 1 for binary masks -- which is why the Suite2p case above
+    # cannot see this.
+    weighted = np.zeros((2, NEUROPIL_H, NEUROPIL_W), dtype=np.float32)
+    weighted[0, 8:12, 8:12] = np.linspace(0.2, 1.0, 4)[:, None]
+    weighted[1, 40:45, 40:45] = np.linspace(0.1, 0.8, 5)[None, :]
+    rois = NumpyRois(roi_image_masks=weighted, sampling_frequency=SF)
+    analyzer = create_roi_analyzer(rois, neuropil_imaging, format="memory")
+
+    ring = analyzer.compute("neuropil", method="surround", min_neuropil_pixels=30).get_data()
+    ext = analyzer.compute("fluorescence", neuropil_weight=0.7)
+    background = ext.get_data(key="background")
+    corrected = ext.get_data()
+    uncorrected = analyzer.compute("fluorescence", use_neuropil=False).get_data()
+
+    flat = weighted.reshape(2, -1)
+    rescale = flat.sum(axis=1) / (flat**2).sum(axis=1)
+    assert not np.allclose(rescale, 1.0)  # the factor this test exists to pin down
+
+    movie = neuropil_imaging.get_series(epoch_index=0)
+    fneu = movie.reshape(movie.shape[0], -1) @ ring.reshape((ring.shape[0], -1)).todense().T
+    np.testing.assert_allclose(background, fneu * rescale, rtol=1e-4, atol=1e-3)
+    np.testing.assert_allclose(corrected + 0.7 * background, uncorrected, rtol=1e-4, atol=1e-2)
+
+
+def test_background_key_on_a_zero_roi_selection_is_empty_not_missing(suite2p_rois, neuropil_imaging):
+    # A width-0 background after selecting no ROIs is an empty result, not evidence that the
+    # fluorescence was extracted without a neuropil -- the traces are width-0 there too.
+    analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
+    analyzer.compute("neuropil", method="surround")
+    analyzer.compute("fluorescence", neuropil_weight=0.7)
+
+    ext = analyzer.select_rois([]).get_extension("fluorescence")
+    assert ext.get_data().shape == (NUM_FRAMES, 0)
+    assert ext.get_data(key="background").shape == (NUM_FRAMES, 0)
+
+
 # --- FluorescenceNode-level tests ------------------------------------------
 
 
