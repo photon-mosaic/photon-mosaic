@@ -65,7 +65,7 @@ def test_random_imaging_set_times_has_time_vector_shift_and_reset():
     imaging = generate_random_imaging(num_frames=num_frames, height=5, width=5, sampling_frequency=sf, seed=4)
 
     base_times = np.arange(num_frames, dtype="float64") / sf + 0.1
-    imaging.set_times(base_times.copy(), with_warning=False)
+    imaging.set_times(base_times.copy())
     assert imaging.has_time_vector() is True
     np.testing.assert_allclose(imaging.get_times(), base_times)
 
