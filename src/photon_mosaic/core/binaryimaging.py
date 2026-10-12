@@ -9,8 +9,8 @@ from spikeinterface.core.core_tools import (
     load_annotations_from_folder,
     load_properties_from_folder,
     save_annotations_to_folder,
-    save_extractor_provenance,
     save_properties_to_folder,
+    save_provenance_to_folder,
 )
 
 from .baseimaging import BaseImaging, BaseImagingEpoch
@@ -340,7 +340,7 @@ class BinaryFolderImaging(BinaryImaging):
             **job_kwargs,
         )
 
-        save_extractor_provenance(folder_path, imaging)
+        save_provenance_to_folder(folder_path, imaging, relative_to=folder_path)
         save_properties_to_folder(folder_path / "properties", imaging)
         save_annotations_to_folder(folder_path, imaging)
 
