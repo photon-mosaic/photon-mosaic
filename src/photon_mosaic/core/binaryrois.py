@@ -18,8 +18,8 @@ from spikeinterface.core.core_tools import (
     load_annotations_from_folder,
     load_properties_from_folder,
     save_annotations_to_folder,
-    save_extractor_provenance,
     save_properties_to_folder,
+    save_provenance_to_folder,
 )
 
 from .baserois import BaseRois
@@ -178,7 +178,7 @@ class BinaryFolderRois(BinaryRois):
         )
         binary_rois.dump(folder_path / "binary.json", relative_to=folder_path)
 
-        save_extractor_provenance(folder_path, rois)
+        save_provenance_to_folder(folder_path, rois, relative_to=folder_path)
         save_properties_to_folder(folder_path, rois)
         save_annotations_to_folder(folder_path, rois)
 
