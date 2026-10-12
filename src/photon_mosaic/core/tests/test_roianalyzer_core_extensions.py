@@ -1291,6 +1291,35 @@ def test_cnmf_joint_extraction_recovers_traces_up_to_the_background_gauge(cnmf_f
     assert np.linalg.norm(projected - projected_true) / np.linalg.norm(projected_true) < 0.02
 
 
+@pytest.mark.parametrize("method", ["regression", "nnls"])
+def test_cnmf_joint_solve_matches_a_dense_reference_with_gnb_2(cnmf_truth, method):
+    """Exercise the matrix-valued block-elimination path.
+
+    With ``gnb=1`` the background Gram is 1x1, ``_ridge_inverse`` is a scalar reciprocal and the
+    Schur complement is a rank-1 downdate, so ``gram_bb_inv @ gram_ab.T``, ``_rhs_correction`` and
+    ``_schur_inv`` are never exercised as matrices -- a transpose error in any of them would pass
+    every other test here. ``gnb=2`` makes all three genuine matrices, and the reference below is
+    a plain dense least-squares solve of the same joint problem, independent of that algebra.
+    """
+    masks, movie, _, _, _ = cnmf_truth
+    analyzer, ext = _cnmf_analyzer_and_fluorescence(masks, movie, method=method, neuropil_kwargs={"gnb": 2})
+    traces = ext.get_data()
+
+    # Reference: least squares for [C, f] in movie ~= [C, f] @ [A; b], using the same b the
+    # extension fitted. No ridge here; the extension's 1e-6 is far below the tolerance.
+    b = analyzer.get_extension("neuropil").get_data("background_spatial").reshape(2, -1).astype(np.float64)
+    a = masks.reshape(CNMF_ROIS, -1).astype(np.float64)
+    design = np.vstack([a, b])  # (n_rois + gnb, n_pixels)
+    flat = movie.reshape(movie.shape[0], -1).astype(np.float64)
+    coeffs = np.linalg.lstsq(design @ design.T, design @ flat.T, rcond=None)[0].T  # (n_frames, n_rois + gnb)
+    reference = coeffs[:, :CNMF_ROIS]
+
+    # The ground-truth traces are strictly positive, so the nnls constraint is inactive and both
+    # methods must land on the same unconstrained solution. Asserted rather than assumed.
+    assert (reference > 0).all()
+    assert np.linalg.norm(traces - reference) / np.linalg.norm(reference) < 1e-3
+
+
 def test_cnmf_concatenates_epochs_in_order(cnmf_truth):
     masks, _, traces_true, spatial_true, temporal_true = cnmf_truth
     first = 120
