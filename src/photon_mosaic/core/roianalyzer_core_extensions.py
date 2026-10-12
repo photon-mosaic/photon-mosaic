@@ -18,8 +18,9 @@ class FluorescenceExtension(AnalyzerExtension):
 
     Three extraction methods are supported:
 
-    - ``'projection'`` (default): each ROI's trace is the movie averaged over its own mask, each ROI
-      independently. Overlapping ROIs therefore pick up each other's signal.
+    - ``'projection'`` (default): each ROI's trace is the movie projected onto its own mask,
+      ``movie @ mask.T / sum(mask**2)``, each ROI independently -- a plain average over the mask
+      only when the mask is binary. Overlapping ROIs therefore pick up each other's signal.
     - ``'regression'``: the least-squares solve of ``movie ~= C A (+ f b)`` for all ROIs at once, so
       overlapping ROIs are separated. The sparse ``A A.T`` is factorized once and reused for every
       chunk, with ``b`` handled by a small ``gnb x gnb`` Schur-complement correction on top.
@@ -41,9 +42,13 @@ class FluorescenceExtension(AnalyzerExtension):
                                               ``F - neuropil_weight * Fneu`` for surround
     ``background``    ``(n_frames, n_rois)``  CNMF: ``B = f b A.T``, the background projected onto
                                               each ROI's own footprint (divided by ``||a_i||^2``,
-                                              i.e. in the units of ``C``). Surround: the ring mean
-                                              ``Fneu``, before ``neuropil_weight``. ``(n_frames, 0)``
-                                              without a neuropil.
+                                              i.e. in the units of ``C``). Surround: the neuropil
+                                              correction term before ``neuropil_weight`` -- the ring
+                                              mean ``Fneu`` on the same L2 scale as ``fluorescence``
+                                              (so ``fluorescence + neuropil_weight * background`` is
+                                              the uncorrected trace), equal to the raw ``Fneu`` for
+                                              binary masks and ``Fneu * L1 / L2**2`` for weighted
+                                              ones. ``(n_frames, 0)`` without a neuropil.
     ================  ======================  ======================================================
     """
 
@@ -73,10 +78,13 @@ class FluorescenceExtension(AnalyzerExtension):
             ``'projection'``.
         ridge : float, optional
             Regularization added to each diagonal entry of the Gram matrix, relative to that entry,
-            for ``'regression'`` and ``'nnls'``. Default is ``1e-6``.
+            for ``'regression'`` and ``'nnls'``. Must be finite and non-negative: a negative ridge
+            shrinks the diagonal instead of padding it, which rescales the traces rather than
+            stabilizing them. Default is ``1e-6``.
         """
         if method not in _FLUORESCENCE_METHODS:
             raise ValueError(f"Unknown method: '{method}'. Supported: {_FLUORESCENCE_METHODS}.")
+        _check_finite_non_negative("ridge", ridge)
         return dict(use_neuropil=use_neuropil, neuropil_weight=neuropil_weight, method=method, ridge=ridge)
 
     def _run(self, verbose=False, **job_kwargs):
@@ -130,11 +138,23 @@ class FluorescenceExtension(AnalyzerExtension):
         key : str, optional
             ``'fluorescence'`` (the traces) or ``'background'`` (``B`` for a CNMF neuropil, ``Fneu``
             for surround; see the class docstring). Default is ``'fluorescence'``.
+
+        Raises
+        ------
+        ValueError
+            For ``key='background'`` when the fluorescence was extracted without a neuropil. A
+            zero-ROI analyzer returns an empty ``(n_frames, 0)`` background instead of raising.
         """
         if key not in ("fluorescence", "background"):
             raise KeyError(f"Unknown key: '{key}'. Supported: 'fluorescence', 'background'.")
-        if key == "background" and ("background" not in self.data or self.data["background"].shape[1] == 0):
-            raise ValueError("No background: fluorescence was extracted without a neuropil.")
+        if key == "background":
+            if "background" not in self.data:
+                raise ValueError("No background: fluorescence was extracted without a neuropil.")
+            # A zero-ROI analyzer (select_rois([]), remove_rois(all)) also has a width-0
+            # background, but that is an empty result rather than a missing one. The traces
+            # carry the same width, so use them to tell the two apart.
+            if self.data["background"].shape[1] == 0 and self.data["fluorescence"].shape[1] > 0:
+                raise ValueError("No background: fluorescence was extracted without a neuropil.")
         traces = self.data[key]
         if outputs == "numpy":
             return traces
@@ -154,7 +174,8 @@ class FluorescenceExtension(AnalyzerExtension):
         selected = {"fluorescence": self.data["fluorescence"][:, roi_indices]}
         if "background" in self.data:
             background = self.data["background"]
-            # (n_frames, 0) when there was no neuropil: nothing to slice.
+            # (n_frames, 0) when there was no neuropil: nothing to slice. Selecting no ROIs
+            # yields a width-0 background too; _get_data tells the two cases apart.
             selected["background"] = background[:, roi_indices] if background.shape[1] else background
         return selected
 
@@ -216,6 +237,7 @@ class FluorescenceNode(PipelineNode):
                 "A method='cnmf' neuropil is solved jointly with the traces, which needs "
                 "FluorescenceExtension(method='regression') or method='nnls', not 'projection'."
             )
+        _check_finite_non_negative("ridge", ridge)
         self.rois = rois
         self.neuropil = neuropil
         self.neuropil_weight = neuropil_weight
@@ -341,6 +363,15 @@ class FluorescenceNode(PipelineNode):
         gram_bb_inv = _ridge_inverse(gram_bb, ridge)
         self._gram_bb_inv = gram_bb_inv
         self._rhs_correction = gram_bb_inv @ gram_ab.T  # (gnb, N): r = rhs_a - rhs_b @ this
+        # The ridge goes on the *reduced* system, not on gram_aa before eliminating f. That is
+        # deliberate: ridge is relative to each diagonal entry, and after elimination the scale of
+        # ROI i is ||a_i orthogonal to b||^2, not ||a_i||^2. For an ROI lying almost inside span(b)
+        # those differ by orders of magnitude, so regularizing gram_aa first would put a near-100%
+        # relative penalty on it here -- the same trap _ridge_inverse's docstring describes, one
+        # elimination later. The cost is that this path and 'regression' solve slightly different
+        # regularized problems: they agree to ~1e-5 for well-separated ROIs and only diverge where
+        # the trace/background split is unidentifiable anyway (the gauge freedom in
+        # NeuropilExtension's docstring).
         schur = _ridge_regularize(gram_aa - gram_ab @ gram_bb_inv @ gram_ab.T, ridge)
         # scipy's nnls takes min ||M x - y||, not a Gram: write S = M.T M with M = sqrt(w) V.T, and
         # then M.T y = r gives y = (V.T r) / sqrt(w).
@@ -566,8 +597,10 @@ class NeuropilExtension(AnalyzerExtension):
             ``method='cnmf'``. Default is ``False``, since a band-passed seed legitimately goes
             negative.
         ridge : float, optional
-            Tikhonov regularisation applied to the least-squares solves, relative to each Gram
-            matrix's mean diagonal. Only used with ``method='cnmf'``. Default is ``1e-6``.
+            Tikhonov regularisation applied to the least-squares solves, relative to *each diagonal
+            entry* of the Gram matrix rather than to its mean diagonal (see
+            :func:`_ridge_inverse`). Must be finite and non-negative. Only used with
+            ``method='cnmf'``. Default is ``1e-6``.
         subsample_frames : int or None, optional
             Number of evenly-spaced frames used for the alternating background fit (the final
             traces and background timecourses are always solved over *all* frames). ``None`` uses
@@ -584,6 +617,18 @@ class NeuropilExtension(AnalyzerExtension):
                 raise ValueError(f"subsample_frames must be None or >= 2, got {subsample_frames}")
             if max_iter < 1:
                 raise ValueError(f"max_iter must be >= 1, got {max_iter}")
+            # Same finite/non-negative contract as FluorescenceExtension's ridge; see
+            # _check_finite_non_negative for why a negative ridge is the dangerous one.
+            _check_finite_non_negative("tol", tol)
+            _check_finite_non_negative("ridge", ridge)
+            for _name, _sigma in (("highpass_sigma", highpass_sigma), ("lowpass_sigma", lowpass_sigma)):
+                if _sigma is not None:
+                    _check_finite_non_negative(_name, _sigma)
+            # The background initialiser can build at most subsample_frames - 1 independent
+            # components; beyond that it duplicates the last one, and identical columns receive
+            # identical updates forever, so the extra components can never separate.
+            if subsample_frames is not None and gnb >= subsample_frames:
+                raise ValueError(f"gnb must be < subsample_frames ({subsample_frames}), got {gnb}")
         return dict(
             method=method,
             inner_neuropil_radius=inner_neuropil_radius,
@@ -1356,6 +1401,18 @@ def _masks_to_sparse_matrix(masks):
     return sp.csr_matrix(np.asarray(flat, dtype=np.float32))
 
 
+def _check_finite_non_negative(name: str, value: float) -> None:
+    """Reject a solver parameter that must be finite and non-negative.
+
+    Chiefly about ``ridge``, which is relative to each Gram diagonal entry and so scales that entry
+    by ``1 + ridge``: a negative value shrinks the diagonal rather than padding it. ``ridge=-0.5``
+    doubles every recovered trace and ``ridge=-1`` makes the factorization exactly singular --
+    neither fails loudly on its own.
+    """
+    if not np.isfinite(value) or value < 0:
+        raise ValueError(f"{name} must be finite and >= 0, got {value}")
+
+
 def _spatial_bandpass(chunk, highpass_sigma, lowpass_sigma):
     """Difference-of-Gaussians spatial band-pass, applied per frame and per plane.
 
@@ -1376,7 +1433,10 @@ def _spatial_bandpass(chunk, highpass_sigma, lowpass_sigma):
 
 
 def _ridge_regularize(gram, ridge: float):
-    """``gram`` with ``ridge`` times each diagonal entry added to that entry (see :func:`_ridge_inverse`).
+    """``gram`` with ``ridge`` times each diagonal entry added to that entry.
+
+    The ridge is scaled by each *diagonal entry* rather than by the mean diagonal, so that entries
+    of very different magnitudes each get a comparable relative penalty.
 
     A non-positive or non-finite diagonal entry (e.g. an all-zero mask) is regularized with the mean
     of the valid ones instead, so the result stays positive definite.
@@ -1551,7 +1611,7 @@ def _init_cnmf_background(y_sub, masks_csr, traces_sub, gnb, spatial_shape, init
     rhs = _project_float64(y_sub, b) - traces_sub @ np.asarray(masks_csr @ b, dtype=np.float64)
     f = rhs @ _ridge_inverse(gram_b, ridge)
     if nonneg:
-        f = _nnls_block(gram_b, rhs, f)
+        f = _nnls_block(_ridge_regularize(gram_b, ridge), rhs, f)
     return b, f
 
 
@@ -1706,17 +1766,19 @@ def _fit_cnmf_background(
         rhs_b = _project_float64_transposed(y_sub, temporal_sub) - np.asarray(
             masks_csr.T @ (traces_sub.T @ temporal_sub), dtype=np.float64
         )
-        background = (
-            _nnls_block(gram_hh, rhs_b, background) if nonneg_background else rhs_b @ _ridge_inverse(gram_hh, ridge)
-        )
+        if nonneg_background:
+            background = _nnls_block(_ridge_regularize(gram_hh, ridge), rhs_b, background)
+        else:
+            background = rhs_b @ _ridge_inverse(gram_hh, ridge)
 
         gram_ab = np.asarray(masks_csr @ background, dtype=np.float64)
         gram_bb = background.T @ background
         proj_background_sub = _project_float64(y_sub, background)
         rhs_f = proj_background_sub - traces_sub @ gram_ab
-        temporal_sub = (
-            _nnls_block(gram_bb, rhs_f, temporal_sub) if nonneg_background else rhs_f @ _ridge_inverse(gram_bb, ridge)
-        )
+        if nonneg_background:
+            temporal_sub = _nnls_block(_ridge_regularize(gram_bb, ridge), rhs_f, temporal_sub)
+        else:
+            temporal_sub = rhs_f @ _ridge_inverse(gram_bb, ridge)
 
         objective.append(
             _cnmf_objective(
