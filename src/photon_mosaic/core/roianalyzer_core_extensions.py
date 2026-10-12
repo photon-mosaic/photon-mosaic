@@ -17,8 +17,9 @@ class FluorescenceExtension(AnalyzerExtension):
 
     Three extraction methods are supported:
 
-    - ``'projection'`` (default): each ROI's trace is the movie averaged over its own mask, each ROI
-      independently. Overlapping ROIs therefore pick up each other's signal.
+    - ``'projection'`` (default): each ROI's trace is the movie projected onto its own mask,
+      ``movie @ mask.T / sum(mask**2)``, each ROI independently -- a plain average over the mask
+      only when the mask is binary. Overlapping ROIs therefore pick up each other's signal.
     - ``'regression'``: the least-squares solve of ``movie ~= C A`` for all ROIs at once, so
       overlapping ROIs are separated. The sparse ``A A.T`` is factorized once and reused for every
       chunk.
@@ -53,10 +54,13 @@ class FluorescenceExtension(AnalyzerExtension):
             ``'projection'``.
         ridge : float, optional
             Regularization added to each diagonal entry of the Gram matrix, relative to that entry,
-            for ``'regression'`` and ``'nnls'``. Default is ``1e-6``.
+            for ``'regression'`` and ``'nnls'``. Must be finite and non-negative: a negative ridge
+            shrinks the diagonal instead of padding it, which rescales the traces rather than
+            stabilizing them. Default is ``1e-6``.
         """
         if method not in _FLUORESCENCE_METHODS:
             raise ValueError(f"Unknown method: '{method}'. Supported: {_FLUORESCENCE_METHODS}.")
+        _check_finite_non_negative("ridge", ridge)
         return dict(use_neuropil=use_neuropil, neuropil_weight=neuropil_weight, method=method, ridge=ridge)
 
     def _run(self, verbose=False, **job_kwargs):
@@ -156,6 +160,7 @@ class FluorescenceNode(PipelineNode):
         )
         if method not in _FLUORESCENCE_METHODS:
             raise ValueError(f"Unknown method: '{method}'. Supported: {_FLUORESCENCE_METHODS}.")
+        _check_finite_non_negative("ridge", ridge)
         self.rois = rois
         self.neuropil = neuropil
         self.neuropil_weight = neuropil_weight
@@ -1002,8 +1007,23 @@ def _masks_to_sparse_matrix(masks):
     return sp.csr_matrix(np.asarray(flat, dtype=np.float32))
 
 
+def _check_finite_non_negative(name: str, value: float) -> None:
+    """Reject a solver parameter that must be finite and non-negative.
+
+    Chiefly about ``ridge``, which is relative to each Gram diagonal entry and so scales that entry
+    by ``1 + ridge``: a negative value shrinks the diagonal rather than padding it. ``ridge=-0.5``
+    doubles every recovered trace and ``ridge=-1`` makes the factorization exactly singular --
+    neither fails loudly on its own.
+    """
+    if not np.isfinite(value) or value < 0:
+        raise ValueError(f"{name} must be finite and >= 0, got {value}")
+
+
 def _ridge_regularize(gram, ridge: float):
-    """``gram`` with ``ridge`` times each diagonal entry added to that entry (see :func:`_ridge_inverse`).
+    """``gram`` with ``ridge`` times each diagonal entry added to that entry.
+
+    The ridge is scaled by each *diagonal entry* rather than by the mean diagonal, so that entries
+    of very different magnitudes each get a comparable relative penalty.
 
     A non-positive or non-finite diagonal entry (e.g. an all-zero mask) is regularized with the mean
     of the valid ones instead, so the result stays positive definite.
