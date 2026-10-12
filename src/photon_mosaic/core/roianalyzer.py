@@ -34,7 +34,7 @@ from .baserois import BaseRois
 from .binaryrois import BinaryFolderRois
 from .imaging_tools import do_imaging_attributes_match, get_imaging_attributes
 from .numpyimaging import NumpyRois
-from .zarrrois import ZarrRois, save_rois_to_zarr
+from .zarrrois import ZarrRois, add_rois_to_zarr_group
 
 # ---------------------------------------------------------------------------
 # High-level factory functions
@@ -314,7 +314,7 @@ class RoiAnalyzer:
 
         # Save imaging provenance
         if imaging is not None:
-            if imaging.check_if_json_serializable():
+            if imaging.check_serializability("json"):
                 imaging.dump(folder / "imaging.json", relative_to=folder)
             elif imaging.check_serializability("pickle"):
                 imaging.dump(folder / "imaging.pickle", relative_to=folder)
@@ -322,7 +322,7 @@ class RoiAnalyzer:
                 warnings.warn("The imaging is not serializable. The imaging link will be lost on reload.")
 
         # Save rois provenance
-        if rois.check_if_json_serializable():
+        if rois.check_serializability("json"):
             rois.dump(folder / "rois_provenance.json", relative_to=folder)
         elif rois.check_serializability("pickle"):
             rois.dump(folder / "rois_provenance.pickle", relative_to=folder)
@@ -418,7 +418,7 @@ class RoiAnalyzer:
         relative_to = folder if not remote else None
         if imaging is not None:
             rec_dict = imaging.to_dict(relative_to=relative_to, recursive=True)
-            if imaging.check_if_json_serializable():
+            if imaging.check_serializability("json"):
                 zarr_rec = np.array([check_json(rec_dict)], dtype=object)
                 zarr_root.create_dataset("imaging", data=zarr_rec, object_codec=numcodecs.JSON())
             elif imaging.check_serializability("pickle"):
@@ -429,7 +429,7 @@ class RoiAnalyzer:
 
         # Save rois provenance
         rois_dict = rois.to_dict(relative_to=relative_to, recursive=True)
-        if rois.check_if_json_serializable():
+        if rois.check_serializability("json"):
             zarr_rois = np.array([check_json(rois_dict)], dtype=object)
             zarr_root.create_dataset("rois_provenance", data=zarr_rois, object_codec=numcodecs.JSON())
         elif rois.check_serializability("pickle"):
@@ -446,7 +446,7 @@ class RoiAnalyzer:
 
         # Save rois data
         rois_group = zarr_root.create_group("rois")
-        save_rois_to_zarr(rois, rois_group, saving_options=saving_options)
+        add_rois_to_zarr_group(rois, rois_group, saving_options=saving_options)
 
         # Extensions group
         zarr_root.create_group("extensions")
