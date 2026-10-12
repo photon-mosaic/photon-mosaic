@@ -397,13 +397,33 @@ def test_get_computable_extensions_lists_all_core_extensions(analyzer):
     """RoiAnalyzer.get_computable_extensions() is backed by a separate built-in registry
     from the one compute() uses to auto-import extension classes -- it must list every core
     extension defined in this module, not just the ones that happened to be registered when
-    that registry was first introduced."""
-    assert set(analyzer.get_computable_extensions()) == {
-        "fluorescence",
-        "df_over_f",
-        "deconvolution",
-        "neuropil",
+    that registry was first introduced.
+
+    The expected set is derived from the module rather than written out: a hand-maintained
+    literal passes happily when a new extension class is added and `_builtin_extensions` is
+    not, which is the drift this test exists to catch.
+    """
+    from photon_mosaic.core import roianalyzer_core_extensions as core_extensions
+    from photon_mosaic.core.roianalyzer import AnalyzerExtension
+
+    defined_here = {
+        obj.extension_name
+        for obj in vars(core_extensions).values()
+        # __module__ keeps out AnalyzerExtension itself and any extension another module
+        # registered (e.g. a test's own) that merely happens to be in this namespace.
+        if isinstance(obj, type)
+        and issubclass(obj, AnalyzerExtension)
+        and obj.__module__ == core_extensions.__name__
+        and obj.extension_name is not None
     }
+    assert defined_here, "found no extension classes -- the scan is broken, not the registry"
+
+    computable = set(analyzer.get_computable_extensions())
+    assert not defined_here - computable, (
+        f"defined in {core_extensions.__name__} but missing from _builtin_extensions: "
+        f"{sorted(defined_here - computable)}"
+    )
+    assert not computable - defined_here, f"registered but no longer defined: {sorted(computable - defined_here)}"
 
 
 # ---------------------------------------------------------------------------
