@@ -479,8 +479,6 @@ class FluorescenceNode(PipelineNode):
         return (neuropil_trace * self._rescale_to_l2).astype(np.float32)
 
 
-
-
 class NeuropilExtension(AnalyzerExtension):
     """Extension to model the neuropil / background contaminating each ROI's fluorescence.
 
@@ -508,7 +506,7 @@ class NeuropilExtension(AnalyzerExtension):
     ``roi_analyzer.compute("fluorescence")``. ``'surround'`` feeds an
     ``F - neuropil_weight * Fneu`` subtraction, with the ring mask applied to the movie inside
     :class:`FluorescenceNode`; it needs no change to the design matrix, since the ring is spatially
-    disjoint from its ROI. 
+    disjoint from its ROI.
     """
 
     extension_name = "neuropil"
@@ -583,13 +581,14 @@ class NeuropilExtension(AnalyzerExtension):
             ``(n_rois, Ly, Lx, n_planes)`` for multi-plane ROIs. Each ROI's ring pixels sum to 1.0
             (an unweighted mean over the ring, matching suite2p's own ``Fneu`` convention), except
             ROIs whose ring ended up empty (e.g. fully surrounded by other ROIs), which get an
-            all-zero row. 
+            all-zero row.
         """
         return self.data["neuropil_masks"]
 
     def _select_extension_data(self, roi_ids):
         roi_indices = self.roi_analyzer.rois.ids_to_indices(roi_ids)
         return {"neuropil_masks": self.data["neuropil_masks"][roi_indices]}
+
 
 class BackgroundExtension(AnalyzerExtension):
     """Extension to estimate a low-rank background over the whole field of view.
@@ -713,7 +712,6 @@ class BackgroundExtension(AnalyzerExtension):
             subsample_frames=subsample_frames,
         )
 
-
     def _run(self, verbose: bool = False, **job_kwargs: Any) -> None:
         rois = self.roi_analyzer.rois
         from spikeinterface.core.job_tools import ensure_chunk_size
@@ -753,6 +751,7 @@ class BackgroundExtension(AnalyzerExtension):
         # omitted key would be silently dropped. The spatial background is a property of the
         # whole field of view, so it passes through unsliced.
         return {"background_spatial": self.data["background_spatial"]}
+
 
 class DfOverFExtension(AnalyzerExtension):
     """Extension to compute dF/F (relative fluorescence change) from fluorescence traces.
@@ -1402,7 +1401,6 @@ def _build_surround_neuropil_masks(
         ring_masks.append(sparse.COO(coords, weights, shape=shape))
 
     return sparse.GCXS.from_coo(sparse.stack(ring_masks, axis=0), compressed_axes=(0,))
-
 
 
 _CNMF_INIT_METHODS = ("ramp", "svd")
