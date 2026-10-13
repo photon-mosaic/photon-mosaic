@@ -1653,4 +1653,5 @@ _builtin_extensions: dict[str, str] = {
     "df_over_f": "photon_mosaic.core",
     "deconvolution": "photon_mosaic.core",
     "neuropil": "photon_mosaic.core",
+    "background": "photon_mosaic.core",
 }
