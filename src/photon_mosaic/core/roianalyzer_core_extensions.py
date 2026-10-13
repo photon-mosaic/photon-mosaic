@@ -1028,16 +1028,19 @@ def _ridge_regularize(gram, ridge: float):
     The ridge is scaled by each *diagonal entry* rather than by the mean diagonal, so that entries
     of very different magnitudes each get a comparable relative penalty.
 
-    A non-positive or non-finite diagonal entry (e.g. an all-zero mask) is regularized with the mean
-    of the valid ones instead, so the result stays positive definite.
+    A non-positive or non-finite diagonal entry (e.g. an all-zero mask) gets the mean of the valid
+    ones instead, so the result stays positive definite. That floor is *not* scaled by ``ridge``:
+    it is what makes the matrix invertible at all, and ``ridge=0`` is an accepted value. Applying it
+    whole rather than as ``ridge * fallback`` also keeps an empty row from dominating the condition
+    number -- it leaves valid ROIs bit-identical, since an all-zero mask decouples from them.
     """
     gram = np.asarray(gram, dtype=np.float64)
     diagonal = np.diag(gram).astype(np.float64).copy()
     invalid = ~np.isfinite(diagonal) | (diagonal <= 0)
-    if invalid.any():
-        fallback = float(np.mean(diagonal[~invalid])) if (~invalid).any() else 1.0
-        diagonal[invalid] = fallback if fallback > 0 else 1.0
-    return gram + ridge * np.diag(diagonal)
+    fallback = float(np.mean(diagonal[~invalid])) if (~invalid).any() else 1.0
+    if not np.isfinite(fallback) or fallback <= 0:
+        fallback = 1.0
+    return gram + np.diag(np.where(invalid, fallback, ridge * diagonal))
 
 
 register_result_extension(NeuropilExtension)
