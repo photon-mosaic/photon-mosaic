@@ -45,13 +45,11 @@ class FluorescenceExtension(AnalyzerExtension):
                                               ``F - neuropil_weight * Fneu`` for surround
     ``background``    ``(n_frames, n_rois)``  CNMF: ``B = f b A.T``, the background projected onto
                                               each ROI's own footprint (divided by ``||a_i||^2``,
-                                              i.e. in the units of ``C``). Surround: the neuropil
-                                              correction term before ``neuropil_weight`` -- the ring
-                                              mean ``Fneu`` on the same L2 scale as ``fluorescence``
-                                              (so ``fluorescence + neuropil_weight * background`` is
-                                              the uncorrected trace), equal to the raw ``Fneu`` for
-                                              binary masks and ``Fneu * L1 / L2**2`` for weighted
-                                              ones. ``(n_frames, 0)`` without a neuropil.
+                                              i.e. in the units of ``C``). Surround: the ring mean
+                                              ``Fneu`` before ``neuropil_weight``, on the same L2
+                                              scale as ``fluorescence`` (see
+                                              :meth:`_persisted_neuropil`). ``(n_frames, 0)``
+                                              without a neuropil.
     ================  ======================  ======================================================
     """
 
@@ -467,9 +465,10 @@ class FluorescenceNode(PipelineNode):
     def _persisted_neuropil(self, neuropil_trace, num_frames):
         """The surround ring mean ``Fneu`` as ``(T, N)``, persisted rather than discarded.
 
-        Rescaled by the same L1 -> L2 factor as the traces (a no-op for binary masks), so that
-        ``fluorescence + neuropil_weight * background`` is the uncorrected trace. ``(T, 0)`` when there
-        is no surround neuropil.
+        Rescaled by the same L1 -> L2 factor as the traces, so that
+        ``fluorescence + neuropil_weight * background`` is the uncorrected trace. That makes it the raw
+        ``Fneu`` for binary masks (where the factor is exactly 1) and ``Fneu * L1 / L2**2`` for weighted
+        ones. ``(T, 0)`` when there is no surround neuropil.
         """
         num_rois = self._rescale_to_l2.shape[1]
         if neuropil_trace is None:
