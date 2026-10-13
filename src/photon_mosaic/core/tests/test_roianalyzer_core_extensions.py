@@ -109,7 +109,8 @@ def test_zero_mask_survives_the_joint_solve_even_without_ridge(imaging, rois, ch
     masks[0] = 0.0
     zero_rois = NumpyRois(roi_image_masks=masks, sampling_frequency=SF)
     node = FluorescenceNode(imaging, zero_rois, method=method, ridge=ridge)
-    (fluorescence,) = node.compute(chunk, 0, NUM_FRAMES, 0, 0)
+    # [0] rather than unpacking: later PRs in this stack add a second output.
+    fluorescence = node.compute(chunk, 0, NUM_FRAMES, 0, 0)[0]
     assert fluorescence.shape == (NUM_FRAMES, NUM_ROIS)
     assert np.isfinite(fluorescence).all()
     # Exactly zero for `regression`; `nnls` reaches it through an eigenvalue floor, so allow
