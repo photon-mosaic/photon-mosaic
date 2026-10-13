@@ -105,7 +105,8 @@ def test_zero_mask_survives_the_joint_solve_even_without_ridge(imaging, rois, me
     # An all-zero mask contributes a zero row to `A A.T`, so the factorization only exists because
     # of the diagonal floor. That floor must not be scaled by `ridge`, or `ridge=0` -- documented
     # and accepted -- brings the singularity back. Driven through the extension rather than
-    # FluorescenceNode directly, since the node's compute() signature changes later in this stack.
+    # FluorescenceNode directly: that is the stable public entry point, and it exercises the real
+    # path from params to traces.
     masks = rois.get_roi_image_masks().copy()
     masks[0] = 0.0
     analyzer = create_roi_analyzer(NumpyRois(roi_image_masks=masks, sampling_frequency=SF), imaging, format="memory")
