@@ -1245,6 +1245,49 @@ def test_cnmf_recovers_the_background_away_from_rois(cnmf_extension, cnmf_truth)
 # --- params, dispatch, error paths ----------------------------------------
 
 
+@pytest.mark.parametrize("weighted", [False, True])
+def test_cnmf_recovers_the_background_with_two_components(weighted):
+    """The end-to-end fixture is `gnb=1` with binary masks, which leaves the multi-component
+    alternating solve, the component normalisation/ordering below it, and the weighted-mask path
+    without a recovery test. Fit a genuinely rank-2 background and check both are found."""
+    masks = _cnmf_masks(weighted=weighted)
+    rng = np.random.default_rng(1)
+    yy, xx = np.mgrid[0:CNMF_H, 0:CNMF_W]
+    b_true = np.stack(
+        [
+            np.exp(-((yy - 6) ** 2 + (xx - 6) ** 2) / 40.0).ravel(),
+            np.exp(-((yy - 18) ** 2 + (xx - 18) ** 2) / 40.0).ravel(),
+        ]
+    ).astype(np.float32)
+    f_true = np.stack(
+        [
+            50.0 + 10.0 * np.sin(2 * np.pi * np.arange(CNMF_FRAMES) / CNMF_FRAMES),
+            40.0 + 8.0 * np.cos(2 * np.pi * np.arange(CNMF_FRAMES) / 70.0),
+        ],
+        axis=1,
+    ).astype(np.float32)
+    traces = (100.0 + 50.0 * np.abs(rng.standard_normal((CNMF_FRAMES, CNMF_ROIS)))).astype(np.float32)
+    movie = traces @ masks.reshape(CNMF_ROIS, -1) + f_true @ b_true
+    movie = (movie + rng.normal(0.0, 0.5, movie.shape)).astype(np.float32)
+    movie = movie.reshape(CNMF_FRAMES, CNMF_H, CNMF_W, 1)
+
+    analyzer = create_roi_analyzer(
+        NumpyRois(roi_image_masks=masks, sampling_frequency=SF),
+        NumpyImaging(movie, sampling_frequency=SF),
+        format="memory",
+    )
+    ext = analyzer.compute("neuropil", method="cnmf", gnb=2, max_iter=40, highpass_sigma=CNMF_HIGHPASS)
+    b = ext.get_data("background_spatial").reshape(2, -1)
+
+    assert b.shape == (2, CNMF_H * CNMF_W)
+    np.testing.assert_allclose(np.linalg.norm(b, axis=1), 1.0, rtol=1e-4)
+    # Off-ROI pixels are the identifiable part; the fitted pair should span the true pair there.
+    off_roi = masks.reshape(CNMF_ROIS, -1).sum(axis=0) == 0
+    fitted, true = b[:, off_roi].T, b_true[:, off_roi].T
+    residual = true - fitted @ np.linalg.lstsq(fitted, true, rcond=None)[0]
+    assert np.linalg.norm(residual) / np.linalg.norm(true) < 0.1
+
+
 def test_cnmf_default_params(analyzer):
     defaults = analyzer.get_default_extension_params("neuropil")
     assert defaults["gnb"] == 1
