@@ -1209,8 +1209,8 @@ def test_surround_persists_its_ring_mean(suite2p_rois, neuropil_imaging, method)
 
 def test_surround_persists_the_rescaled_ring_mean_for_weighted_masks(neuropil_imaging):
     # `background` is the correction term on the L2 scale, not the raw ring mean: the two differ
-    # by L1 / L2**2, which is exactly 1 for binary masks -- which is why the Suite2p case above
-    # cannot see this.
+    # by L1 / L2**2, which is exactly 1 for binary masks -- which is why
+    # test_surround_persists_its_ring_mean, using Suite2p masks, cannot see this.
     weighted = np.zeros((2, NEUROPIL_H, NEUROPIL_W), dtype=np.float32)
     weighted[0, 8:12, 8:12] = np.linspace(0.2, 1.0, 4)[:, None]
     weighted[1, 40:45, 40:45] = np.linspace(0.1, 0.8, 5)[None, :]
