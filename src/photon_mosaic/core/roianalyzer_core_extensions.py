@@ -748,9 +748,12 @@ class DfOverFExtension(AnalyzerExtension):
 
         dF/F = (C - C_baseline) / (B_baseline + C_baseline)
 
-    Baseline moved between ``C`` and the background shifts ``C_baseline`` and ``B_baseline`` by
-    opposite amounts, so their sum stays reliable. Both baselines use the same method, window and
-    (per ROI) percentile, the percentile being chosen from ``C``. Surround and no-neuropil
+    This reduces the gauge ambiguity rather than removing it. A constant offset moved between ``C``
+    and the background shifts ``C_baseline`` and ``B_baseline`` by exactly opposite amounts, since
+    percentile and maximin both commute with a constant shift, so their sum is unchanged. A general
+    CNMF reparameterisation moves a time-varying ``f alpha`` term instead, and those baselines are
+    non-linear, so the compensation is only approximate there. Both baselines use the same method,
+    window and (per ROI) percentile, the percentile being chosen from ``C``. Surround and no-neuropil
     fluorescence are unaffected.
 
     The fitted baseline itself is kept alongside the dF/F traces, accessible via
