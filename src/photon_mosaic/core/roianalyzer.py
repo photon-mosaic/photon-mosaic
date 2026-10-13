@@ -969,7 +969,7 @@ class RoiAnalyzer:
             for name, params in pipeline_exts.items():
                 ext_class = get_extension_class(name)
                 assert self.has_imaging() or self.has_temporary_imaging(), f"Extension '{name}' requires the imaging"
-                for var in ext_class.nodepipeline_variables:
+                for var in ext_class.nodepipeline_variables or []:
                     result_routage.append((name, var))
 
                 inst = ext_class(self)
@@ -1214,7 +1214,7 @@ class AnalyzerExtension:
     depend_on: list[str] = []
     need_imaging = False
     use_nodepipeline = False
-    nodepipeline_variables = None
+    nodepipeline_variables: list[str] | None = None
     need_job_kwargs = False
     need_backward_compatibility_on_load = False
 
