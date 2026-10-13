@@ -1444,8 +1444,8 @@ def test_cnmf_recovers_the_background_with_two_components(weighted):
         NumpyImaging(movie, sampling_frequency=SF),
         format="memory",
     )
-    ext = analyzer.compute("neuropil", method="cnmf", gnb=2, max_iter=40, highpass_sigma=CNMF_HIGHPASS)
-    b = ext.get_data("background_spatial").reshape(2, -1)
+    ext = analyzer.compute("background", gnb=2, max_iter=40, highpass_sigma=CNMF_HIGHPASS)
+    b = ext.get_data().reshape(2, -1)
 
     assert b.shape == (2, CNMF_H * CNMF_W)
     np.testing.assert_allclose(np.linalg.norm(b, axis=1), 1.0, rtol=1e-4)
