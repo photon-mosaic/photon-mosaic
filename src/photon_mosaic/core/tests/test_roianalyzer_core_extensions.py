@@ -111,7 +111,8 @@ def test_zero_mask_survives_the_joint_solve_even_without_ridge(imaging, rois, me
     # An all-zero mask contributes a zero row to `A A.T`, so the factorization only exists because
     # of the diagonal floor. That floor must not be scaled by `ridge`, or `ridge=0` -- documented
     # and accepted -- brings the singularity back. Driven through the extension rather than
-    # FluorescenceNode directly, since the node's compute() signature changes later in this stack.
+    # FluorescenceNode directly: that is the stable public entry point, and it exercises the real
+    # path from params to traces.
     masks = rois.get_roi_image_masks().copy()
     masks[0] = 0.0
     analyzer = create_roi_analyzer(NumpyRois(roi_image_masks=masks, sampling_frequency=SF), imaging, format="memory")
@@ -1836,8 +1837,8 @@ def test_cnmf_joint_extraction_is_invariant_to_chunk_size(cnmf_truth, method):
 
 def test_surround_persists_the_rescaled_ring_mean_for_weighted_masks(neuropil_imaging):
     # `background` is the correction term on the L2 scale, not the raw ring mean: the two differ
-    # by L1 / L2**2, which is exactly 1 for binary masks -- which is why the Suite2p case above
-    # cannot see this.
+    # by L1 / L2**2, which is exactly 1 for binary masks -- which is why
+    # test_surround_persists_its_ring_mean, using Suite2p masks, cannot see this.
     weighted = np.zeros((2, NEUROPIL_H, NEUROPIL_W), dtype=np.float32)
     weighted[0, 8:12, 8:12] = np.linspace(0.2, 1.0, 4)[:, None]
     weighted[1, 40:45, 40:45] = np.linspace(0.1, 0.8, 5)[None, :]
