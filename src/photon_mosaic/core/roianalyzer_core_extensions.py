@@ -365,15 +365,12 @@ class FluorescenceNode(PipelineNode):
         gram_bb_inv = _ridge_inverse(gram_bb, ridge)
         self._gram_bb_inv = gram_bb_inv
         self._rhs_correction = gram_bb_inv @ gram_ab.T  # (gnb, N): r = rhs_a - rhs_b @ this
-        # The ridge goes on the *reduced* system, not on gram_aa before eliminating f. That is
-        # deliberate: ridge is relative to each diagonal entry, and after elimination the scale of
-        # ROI i is ||a_i orthogonal to b||^2, not ||a_i||^2. For an ROI lying almost inside span(b)
-        # those differ by orders of magnitude, so regularizing gram_aa first would put a near-100%
-        # relative penalty on it here -- the same trap _ridge_inverse's docstring describes, one
-        # elimination later. The cost is that this path and 'regression' solve slightly different
-        # regularized problems: they agree to ~1e-5 for well-separated ROIs and only diverge where
-        # the trace/background split is unidentifiable anyway (the gauge freedom in
-        # NeuropilExtension's docstring).
+        # Deliberately on the *reduced* system, not on gram_aa before eliminating f: ridge is
+        # relative to each diagonal entry, and after elimination ROI i's scale is
+        # ||a_i orthogonal to b||^2, not ||a_i||^2. Regularizing gram_aa first would therefore
+        # over-penalize an ROI lying close to span(b). This does make 'regression' and 'nnls' solve
+        # slightly different regularized problems, which only matters where the trace/background
+        # split is unidentifiable anyway (see the gauge freedom in NeuropilExtension's docstring).
         schur = _ridge_regularize(gram_aa - gram_ab @ gram_bb_inv @ gram_ab.T, ridge)
         # scipy's nnls takes min ||M x - y||, not a Gram: write S = M.T M with M = sqrt(w) V.T, and
         # then M.T y = r gives y = (V.T r) / sqrt(w).
