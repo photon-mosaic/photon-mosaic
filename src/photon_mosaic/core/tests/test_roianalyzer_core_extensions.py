@@ -99,6 +99,24 @@ def test_zero_mask_gives_zero_fluorescence(imaging, rois, chunk):
     np.testing.assert_array_equal(fluorescence, 0.0)
 
 
+@pytest.mark.parametrize("method", ["regression", "nnls"])
+@pytest.mark.parametrize("ridge", [1e-6, 0.0])
+def test_zero_mask_survives_the_joint_solve_even_without_ridge(imaging, rois, method, ridge):
+    # An all-zero mask contributes a zero row to `A A.T`, so the factorization only exists because
+    # of the diagonal floor. That floor must not be scaled by `ridge`, or `ridge=0` -- documented
+    # and accepted -- brings the singularity back. Driven through the extension rather than
+    # FluorescenceNode directly, since the node's compute() signature changes later in this stack.
+    masks = rois.get_roi_image_masks().copy()
+    masks[0] = 0.0
+    analyzer = create_roi_analyzer(NumpyRois(roi_image_masks=masks, sampling_frequency=SF), imaging, format="memory")
+    traces = analyzer.compute("fluorescence", method=method, ridge=ridge).get_data()
+    assert traces.shape == (NUM_FRAMES, NUM_ROIS)
+    assert np.isfinite(traces).all()
+    # Exactly zero for `regression`; `nnls` reaches it through an eigenvalue floor, so allow
+    # rounding there rather than asserting an exact zero.
+    np.testing.assert_allclose(traces[:, 0], 0.0, atol=1e-6)
+
+
 @pytest.mark.parametrize("method", ["projection", "regression", "nnls"])
 def test_compute_matches_dense_result_with_sparse_masks(imaging, chunk, method):
     """FluorescenceNode should give the same result for sparse (e.g. Suite2p-backed) ROIs

@@ -288,12 +288,15 @@ class FluorescenceNode(PipelineNode):
         gram_aa = (self._masks_csr @ self._masks_csr.T).tocsc()  # (N, N), sparse
 
         if self.method == "regression":
-            # Same per-diagonal-entry ridge as _ridge_regularize; an all-zero mask falls back to the
-            # mean diagonal so the factorization stays nonsingular.
+            # Same per-diagonal-entry ridge as _ridge_regularize. An all-zero mask contributes a
+            # zero row, so it needs a floor on the diagonal for the factorization to exist at all --
+            # and that floor cannot be scaled by `ridge`, or `ridge=0` (a documented, valid value)
+            # would reinstate the singularity.
             diagonal = np.asarray(gram_aa.diagonal(), dtype=np.float64)
             empty = diagonal <= 0
-            diagonal[empty] = float(diagonal[~empty].mean()) if (~empty).any() else 1.0
-            self._gram_aa_lu = splu((gram_aa + ridge * sp.diags(diagonal)).tocsc())
+            fallback = float(diagonal[~empty].mean()) if (~empty).any() else 1.0
+            shift = np.where(empty, fallback, ridge * diagonal)
+            self._gram_aa_lu = splu((gram_aa + sp.diags(shift)).tocsc())
             return
 
         # nnls: scipy's nnls takes min ||M x - y||, not a Gram: write G = M.T M with M = sqrt(w) V.T,
@@ -1091,16 +1094,19 @@ def _ridge_regularize(gram, ridge: float):
     The ridge is scaled by each *diagonal entry* rather than by the mean diagonal, so that entries
     of very different magnitudes each get a comparable relative penalty.
 
-    A non-positive or non-finite diagonal entry (e.g. an all-zero mask) is regularized with the mean
-    of the valid ones instead, so the result stays positive definite.
+    A non-positive or non-finite diagonal entry (e.g. an all-zero mask) gets the mean of the valid
+    ones instead, so the result stays positive definite. That floor is *not* scaled by ``ridge``:
+    it is what makes the matrix invertible at all, and ``ridge=0`` is an accepted value. Applying it
+    whole rather than as ``ridge * fallback`` also keeps an empty row from dominating the condition
+    number -- it leaves valid ROIs bit-identical, since an all-zero mask decouples from them.
     """
     gram = np.asarray(gram, dtype=np.float64)
     diagonal = np.diag(gram).astype(np.float64).copy()
     invalid = ~np.isfinite(diagonal) | (diagonal <= 0)
-    if invalid.any():
-        fallback = float(np.mean(diagonal[~invalid])) if (~invalid).any() else 1.0
-        diagonal[invalid] = fallback if fallback > 0 else 1.0
-    return gram + ridge * np.diag(diagonal)
+    fallback = float(np.mean(diagonal[~invalid])) if (~invalid).any() else 1.0
+    if not np.isfinite(fallback) or fallback <= 0:
+        fallback = 1.0
+    return gram + np.diag(np.where(invalid, fallback, ridge * diagonal))
 
 
 register_result_extension(NeuropilExtension)
