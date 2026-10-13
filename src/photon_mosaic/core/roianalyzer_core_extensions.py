@@ -238,12 +238,15 @@ class FluorescenceNode(PipelineNode):
         gram_aa = (self._masks_csr @ self._masks_csr.T).tocsc()  # (N, N), sparse
 
         if self.method == "regression":
-            # Same per-diagonal-entry ridge as _ridge_regularize; an all-zero mask falls back to the
-            # mean diagonal so the factorization stays nonsingular.
+            # Same per-diagonal-entry ridge as _ridge_regularize. An all-zero mask contributes a
+            # zero row, so it needs a floor on the diagonal for the factorization to exist at all --
+            # and that floor cannot be scaled by `ridge`, or `ridge=0` (a documented, valid value)
+            # would reinstate the singularity.
             diagonal = np.asarray(gram_aa.diagonal(), dtype=np.float64)
             empty = diagonal <= 0
-            diagonal[empty] = float(diagonal[~empty].mean()) if (~empty).any() else 1.0
-            self._gram_aa_lu = splu((gram_aa + ridge * sp.diags(diagonal)).tocsc())
+            fallback = float(diagonal[~empty].mean()) if (~empty).any() else 1.0
+            shift = np.where(empty, fallback, ridge * diagonal)
+            self._gram_aa_lu = splu((gram_aa + sp.diags(shift)).tocsc())
             return
 
         # nnls: scipy's nnls takes min ||M x - y||, not a Gram: write G = M.T M with M = sqrt(w) V.T,
