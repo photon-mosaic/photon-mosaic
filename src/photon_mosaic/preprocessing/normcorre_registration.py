@@ -24,7 +24,7 @@ class NormcorreRegistrationSettings(RegistrationSettings):
     """CaImAn's ``motion`` parameters, with CaImAn's names and defaults.
 
     The shared ``nonrigid`` (CaImAn ``pw_rigid``), ``max_nonrigid_shift`` (CaImAn
-    ``max_deviation_rigid``) and ``indices`` come from
+    ``max_deviation_rigid``) and ``bounds`` (CaImAn ``indices``) come from
     :class:`~photon_mosaic.preprocessing.registration.RegistrationSettings`.
     """
 
@@ -228,11 +228,11 @@ def _read_plane(epoch: BaseImagingEpoch, plane_index: int, start: int, end: int,
 
 
 def _crop(frames: NDArray, settings: NormcorreRegistrationSettings) -> NDArray:
-    """The ``indices`` region of the frames (CaImAn ``m[:, indices[0], indices[1]]``)."""
+    """The ``bounds`` region of the frames (CaImAn ``m[:, indices[0], indices[1]]``)."""
 
-    if settings.indices is None:
+    if settings.bounds is None:
         return frames
-    (y0, y1), (x0, x1) = settings.indices
+    (y0, y1), (x0, x1) = settings.bounds
     return frames[:, y0:y1, x0:x1]
 
 
@@ -391,8 +391,8 @@ class NormcorreMotion(Motion):
             raise ValueError("nonrigid registration needs max_nonrigid_shift > 0.")
         epochs = imaging.epochs
         n_splits = max(epochs[0].get_num_samples() // max(settings.num_frames_split, 10), 1)
-        y0 = settings.indices[0][0] or 0 if settings.indices is not None else 0
-        x0 = settings.indices[1][0] or 0 if settings.indices is not None else 0
+        y0 = settings.bounds[0][0] or 0 if settings.bounds is not None else 0
+        x0 = settings.bounds[1][0] or 0 if settings.bounds is not None else 0
         rigid_settings = settings.model_copy(update={"nonrigid": False})
 
         rigid: list[list[NDArray]] = [[] for _ in epochs]
@@ -473,7 +473,7 @@ class RegisterNormcorreImagingEpoch(RegisterImagingEpoch):
         """Rigid: cubic warp or DFT per ``shifts_opencv``. Piecewise: always the remap, on the full frame.
 
         As CaImAn, the piecewise replay interpolates from the patch centres whenever
-        ``indices`` crops the estimation region.
+        ``bounds`` crops the estimation region.
         """
 
         settings = NormcorreRegistrationSettings.model_validate(self.motion.settings)
@@ -487,7 +487,7 @@ class RegisterNormcorreImagingEpoch(RegisterImagingEpoch):
 
         centers = self.motion.patch_centers[p] if self.motion.patch_centers is not None else None
         assert centers is not None, "piecewise motion without patch centres"
-        cropped = settings.indices is not None and settings.indices != ((None, None), (None, None))
+        cropped = settings.bounds is not None and settings.bounds != ((None, None), (None, None))
         interpolate = settings.shifts_interpolate or cropped
         patches = epoch_patches[p]
         assert patches is not None
