@@ -79,6 +79,40 @@ class TestKernels:
         else:
             np.testing.assert_array_equal(strip, np.broadcast_to(edge, strip.shape))
 
+    def test_patches_share_a_uniform_shift(self):
+        base = _base()
+        shift = np.array([1.5, -2.0])
+        patches, phase, (cy, cx) = nc._register_patches(
+            _shifted(base, shift)[None], base, (32, 32), (16, 16), (6, 6), 3, 10, shift[None]
+        )
+        assert patches.shape == (1, len(cy), len(cx), 2) and phase.shape == (1, len(cy), len(cx))
+        # small non-periodic patches bias phase correlation by a few tenths of a pixel
+        np.testing.assert_allclose(patches[0], np.broadcast_to(shift, patches[0].shape), atol=0.4)
+
+    @pytest.mark.parametrize("shifts_interpolate", [False, True])
+    def test_uniform_patch_field_matches_the_rigid_warp(self, shifts_interpolate):
+        base = _base()[None]
+        correction = np.array([1.5, -2.0])
+        centers = nc._patch_centers(base.shape[1:], (16, 16), (32, 32))
+        field = np.broadcast_to(correction, (1, len(centers[0]), len(centers[1]), 2))
+        remapped = nc._apply_pw_shifts_remap(base, field, centers, "copy", shifts_interpolate)
+        warped = nc._apply_shift_iteration(base, correction[None], "copy")
+        np.testing.assert_allclose(remapped[0][INNER, INNER], warped[0][INNER, INNER], atol=0.05)
+
+    @pytest.mark.parametrize("border_nan", [True, False, "min", "copy"])
+    def test_remap_border_modes(self, border_nan):
+        # CaImAn's own remap raises on 'min' with OpenCV >= 5 (numpy-scalar border value). float32, as
+        # replayed: OpenCV's float64 remap rounds a constant border value next to the frame edge.
+        base = _base()[None].astype(np.float32)
+        centers = nc._patch_centers(base.shape[1:], (16, 16), (32, 32))
+        field = np.broadcast_to([3.0, 0.0], (1, len(centers[0]), len(centers[1]), 2))
+        top = nc._apply_pw_shifts_remap(base, field, centers, border_nan, False)[0][:2]
+        expected = {True: np.nan, False: 0.0, "min": base.min()}.get(border_nan)
+        if border_nan == "copy":
+            assert np.isfinite(top).all()
+        else:
+            np.testing.assert_array_equal(top, np.full_like(top, expected))
+
     def test_high_pass_removes_a_constant(self):
         flat = np.full((1, 40, 40), 7.0)
         np.testing.assert_allclose(nc._high_pass_filter_space(flat, (3, 3)), 0, atol=1e-4)
@@ -96,6 +130,8 @@ class TestKernels:
 CONFIGS = {
     "rigid_warp": dict(nonrigid=False),
     "rigid_dft": dict(nonrigid=False, shifts_opencv=False),
+    "nonrigid_remap": dict(nonrigid=True, strides=(32, 32), overlaps=(16, 16)),
+    "nonrigid_fft": dict(nonrigid=True, strides=(32, 32), overlaps=(16, 16), shifts_opencv=False),
 }
 
 
@@ -126,12 +162,21 @@ class TestEndToEnd:
         moved = np.concatenate([d[:, 0] for d in motion.displacements])
         np.testing.assert_allclose(moved - moved.mean(0), true_shifts - true_shifts.mean(0), atol=0.25)
 
+    def test_bounds_crop_estimation_but_not_the_output(self, imaging):
+        motion = compute_motion(
+            imaging, method="normcorre", nonrigid=True, strides=(16, 16), overlaps=(8, 8), bounds=((10, 70), (20, 80))
+        )
+        assert motion.reference[0].shape == (60, 60)
+        cy, cx = motion.patch_centers[0]
+        assert cy.min() >= 10 and cx.min() >= 20
+        assert register_motion(imaging, motion, method="normcorre").get_series(0, 2).shape == (2, SIZE, SIZE, 1)
+
     def test_motion_pickles_and_registered_view_serialises(self, imaging):
         from spikeinterface.core.base import BaseExtractor
 
-        motion = compute_motion(imaging, method="normcorre", nonrigid=False)
+        motion = compute_motion(imaging, method="normcorre", nonrigid=True, strides=(32, 32), overlaps=(16, 16))
         restored = pickle.loads(pickle.dumps(motion))
-        np.testing.assert_array_equal(restored.displacements[0], motion.displacements[0])
+        np.testing.assert_array_equal(restored.patch_shifts[0][0], motion.patch_shifts[0][0])
         registered = register_motion(imaging, motion, method="normcorre")
         rebuilt = BaseExtractor.from_dict(registered.to_dict())
         assert isinstance(rebuilt.epochs[0], RegisterNormcorreImagingEpoch)
