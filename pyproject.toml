@@ -51,10 +51,9 @@ widgets = [
 suite2p = [
   "suite2p==1.1.0",
 ]
-normcorre = [
-  # in-house NoRMCorre backend (preprocessing/normcorre_registration.py); torch for the
-  # batched FFT and grid_sample kernels, declared ahead of their implementation
-  "torch",
+normcorre-registration = [
+  # already pulled in by roiextractors[full]; restated so the backend's own import is declared
+  "opencv-python-headless>=4.8.1.78",
 ]
 deconvolution = [
   "oasis-deconv>=0.3.2",
