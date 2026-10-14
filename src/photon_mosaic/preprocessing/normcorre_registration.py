@@ -1,4 +1,28 @@
-"""NoRMCorre motion correction following CaImAn v1.13.2 (``240e1f2``); line numbers cite that version."""
+"""NoRMCorre motion correction, reimplemented to follow CaImAn step by step.
+
+NoRMCorre (Pnevmatikakis & Giovannucci, 2017) first corrects each frame with one rigid
+translation, estimated against a template that is refined as it goes. With
+``nonrigid=True`` it then splits the field of view into overlapping patches, finds a
+shift for each patch (allowed to deviate from the rigid shift by at most
+``max_nonrigid_shift`` pixels) and warps the frame with the smooth field those shifts
+define. Beyond numpy and scipy it needs only OpenCV, which photon-mosaic already installs.
+
+Typical use::
+
+    from photon_mosaic.preprocessing import compute_motion, register_motion
+
+    motion = compute_motion(imaging, method="normcorre", nonrigid=True)
+    registered = register_motion(imaging, motion, method="normcorre")
+
+``compute_motion`` estimates the shifts and keeps the final template as
+``motion.reference``; ``register_motion`` applies them lazily, as frames are read.
+
+Every step reproduces CaImAn v1.13.2 (``240e1f2``); the line numbers in the docstrings
+below cite that version, so each function can be checked against its original.
+Internally, as in CaImAn, shifts are *corrections* (how far to move a frame back onto the
+template); what :class:`NormcorreMotion` stores is the opposite, the frame's motion, which
+is suite2p's convention for ``displacements``.
+"""
 
 from __future__ import annotations
 
@@ -14,6 +38,7 @@ from photon_mosaic.core import (
     BaseImagingEpoch,
     Motion,
     register_motion_class,
+    register_registration_class,
 )
 
 from .registration import RegisterImagingEpoch, RegistrationSettings
@@ -529,22 +554,163 @@ def _register_patches(
     raise NotImplementedError
 
 
-def _apply_shift_iteration(frames: NDArray, shifts: NDArray, border_nan: BorderNan) -> NDArray:
-    """Translate each frame by its correction shift with cubic interpolation (``shifts_opencv`` rigid path).
+def _fill_border(img: NDArray, shift: Sequence[float], border_nan: BorderNan, min_value: float) -> NDArray:
+    """Fill, in place, the strip at the frame edge that a shift left without data.
 
-    ``cv2.warpAffine`` ``INTER_CUBIC``, reflect border, clipped to the frame's min/max, then the
-    uncovered strip filled per ``border_nan``. CaImAn ``apply_shift_iteration`` L512.
+    Parameters
+    ----------
+    img : array, ``(H, W)``
+        The shifted image; modified in place.
+    shift : sequence of float
+        The ``(y, x)`` correction that was applied; its rounded-up size sets the strip width.
+    border_nan : bool or {'copy', 'min'}
+        True fills NaN, 'min' fills ``min_value``, 'copy' repeats the nearest valid row or
+        column, False leaves the strip as it is.
+    min_value : float
+        The fill for 'min'.
+
+    Returns
+    -------
+    array, ``(H, W)``
+        ``img``.
+
+    Notes
+    -----
+    CaImAn ``apply_shift_iteration`` L522 and ``apply_shifts_dft`` L1733.
     """
-    raise NotImplementedError
+    if border_nan is False:
+        return img
+    max_h, max_w = np.ceil(np.maximum((0, 0), shift[:2])).astype(int)
+    min_h, min_w = np.floor(np.minimum((0, 0), shift[:2])).astype(int)
+    if border_nan == "copy":
+        if max_h > 0:
+            img[:max_h] = img[max_h]
+        if min_h < 0:
+            img[min_h:] = img[min_h - 1]
+        if max_w > 0:
+            img[:, :max_w] = img[:, max_w, np.newaxis]
+        if min_w < 0:
+            img[:, min_w:] = img[:, min_w - 1, np.newaxis]
+        return img
+    fill = np.nan if border_nan is True else min_value
+    img[:max_h, :] = fill
+    if min_h < 0:
+        img[min_h:, :] = fill
+    img[:, :max_w] = fill
+    if min_w < 0:
+        img[:, min_w:] = fill
+    return img
+
+
+def _apply_shift_iteration(frames: NDArray, shifts: NDArray, border_nan: BorderNan) -> NDArray:
+    """Move each frame by its rigid correction, with cubic interpolation.
+
+    The default way rigid shifts are applied (``shifts_opencv=True``). Edges are
+    reflected, each frame is clipped to its original range, and the exposed strip is then
+    filled as ``border_nan`` says.
+
+    Parameters
+    ----------
+    frames : array, ``(T, H, W)``
+        Frames to shift; float32 or float64, kept.
+    shifts : array, ``(T, 2)``
+        Per frame, the ``(y, x)`` correction.
+    border_nan : bool or {'copy', 'min'}
+        See :func:`_fill_border`.
+
+    Returns
+    -------
+    array, ``(T, H, W)``
+        The shifted frames.
+
+    Notes
+    -----
+    CaImAn ``apply_shift_iteration`` L512.
+    """
+    out = []
+    for img, shift in zip(frames, shifts):
+        h_i, w_i = img.shape
+        M = np.array([[1, 0, shift[1]], [0, 1, shift[0]]], dtype=np.float32)
+        min_, max_ = np.nanmin(img), np.nanmax(img)
+        warped = cv2.warpAffine(img, M, (w_i, h_i), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REFLECT)
+        out.append(_fill_border(np.clip(warped, min_, max_), shift, border_nan, min_))
+    return np.stack(out)
+
+
+def _shift_dft_image(src_freq: NDArray, shift: Sequence[float], diffphase: float, border_nan: BorderNan) -> NDArray:
+    """Move one image by a correction in the Fourier domain.
+
+    Multiplies the spectrum by a phase ramp, transforms back and fills the exposed strip.
+    Edges wrap around before the fill.
+
+    Parameters
+    ----------
+    src_freq : array, ``(H, W)`` complex
+        The image's spectrum, from :func:`_dft`.
+    shift : sequence of float
+        The ``(y, x)`` correction.
+    diffphase : float
+        Global phase from :func:`_register_translation_image`; 0 when replaying.
+    border_nan : bool or {'copy', 'min'}
+        See :func:`_fill_border`; 'min' uses the shifted image's minimum.
+
+    Returns
+    -------
+    array, ``(H, W)`` float
+        The shifted image.
+
+    Notes
+    -----
+    CaImAn ``apply_shifts_dft`` L1654, 2-D branch.
+    """
+    nr, nc = src_freq.shape
+    Nr = np.fft.ifftshift(np.arange(-np.trunc(nr / 2.0), np.ceil(nr / 2.0)))
+    Nc = np.fft.ifftshift(np.arange(-np.trunc(nc / 2.0), np.ceil(nc / 2.0)))
+    Nc, Nr = np.meshgrid(Nc, Nr)
+    Greg = src_freq * np.exp(1j * 2 * np.pi * (-shift[0] * Nr / nr - shift[1] * Nc / nc))
+    Greg = Greg.dot(np.exp(1j * diffphase))
+    new_img = cv2.idft(np.dstack([np.real(Greg), np.imag(Greg)]))[:, :, 0]
+    min_value = np.nanmin(new_img) if border_nan == "min" else 0.0
+    return _fill_border(new_img, shift, border_nan, min_value)
 
 
 def _apply_shifts_dft(frames: NDArray, shifts: NDArray, diffphase: NDArray | None, border_nan: BorderNan) -> NDArray:
-    """Translate each frame by its correction shift through a Fourier phase ramp, then fill per ``border_nan``.
+    """Move each frame by its rigid correction in the Fourier domain (``shifts_opencv=False``).
 
+    Exact for whole and fractional pixels alike, but edges wrap around before the
+    ``border_nan`` fill.
+
+    Parameters
+    ----------
+    frames : array, ``(T, H, W)``
+        Frames to shift.
+    shifts : array, ``(T, 2)``
+        Per frame, the ``(y, x)`` correction.
+    diffphase : array, ``(T,)``, or None
+        Per-frame phases from estimation, which then uses the spectrum as
+        ``register_translation`` computes it; None when replaying stored shifts, which
+        CaImAn does with ``diffphase=0, is_freq=False``.
+    border_nan : bool or {'copy', 'min'}
+        See :func:`_fill_border`.
+
+    Returns
+    -------
+    array, ``(T, H, W)`` float64
+        The shifted frames.
+
+    Notes
+    -----
     CaImAn ``apply_shifts_dft`` L1654; jnormcorre ``apply_shifts_dft_fast_1`` L1219;
     masknmf ``apply_rigid_shifts`` L45.
     """
-    raise NotImplementedError
+    if diffphase is None:
+        out = [_shift_dft_image(_dft(img, real_input=False), sh, 0.0, border_nan) for img, sh in zip(frames, shifts)]
+    else:
+        out = [
+            _shift_dft_image(_dft(img, real_input=True), sh, ph, border_nan)
+            for img, sh, ph in zip(frames, shifts, diffphase)
+        ]
+    return np.stack(out)
 
 
 def _apply_pw_shifts_remap(
@@ -588,12 +754,12 @@ def _apply_patch_shifts_fft(
 
 
 # --------------------------------------------------------------------------- #
-# The CaImAn driver -- real code over the stubs.
+# The driver: CaImAn's MotionCorrect over photon-mosaic epochs and planes.
 # --------------------------------------------------------------------------- #
 
 
 def _read_plane(epoch: BaseImagingEpoch, plane_index: int, start: int, end: int, step: int = 1) -> NDArray:
-    """``(n, H, W)`` float32 frames of one plane."""
+    """Frames ``start:end:step`` of one plane of an epoch, as ``(n, H, W)`` float32."""
 
     video = epoch.get_series(start, end)[::step]
     plane = video[:, :, :, plane_index] if video.ndim == 4 else video
@@ -601,7 +767,7 @@ def _read_plane(epoch: BaseImagingEpoch, plane_index: int, start: int, end: int,
 
 
 def _crop(frames: NDArray, settings: NormcorreRegistrationSettings) -> NDArray:
-    """The ``bounds`` region of the frames (CaImAn ``m[:, indices[0], indices[1]]``)."""
+    """The part of ``(T, H, W)`` frames used for estimation: ``settings.bounds``, or all of it."""
 
     if settings.bounds is None:
         return frames
@@ -612,10 +778,38 @@ def _crop(frames: NDArray, settings: NormcorreRegistrationSettings) -> NDArray:
 def _tile_and_correct(
     frames: NDArray, template: NDArray, add_to_movie: float, settings: NormcorreRegistrationSettings
 ) -> tuple[NDArray, NDArray, NDArray | None, tuple[NDArray, NDArray] | None]:
-    """One split through CaImAn's ``tile_and_correct`` (L2013), vectorised over frames.
+    """Register a chunk of frames to the template and correct them.
 
-    Returns the corrected frames and the *correction* shifts: rigid ``(T, 2)`` and, when
-    ``settings.nonrigid``, per patch ``(T, ny, nx, 2)`` with the patch centres.
+    Estimation runs on the frames plus ``add_to_movie`` (and high-passed if ``gSig_filt``);
+    the rigid translation is always estimated, the patch translations only when
+    ``settings.nonrigid``. The corrections are then applied as the settings say.
+
+    Parameters
+    ----------
+    frames : array, ``(T, H, W)``
+        The chunk, already cropped to ``bounds``.
+    template : array, ``(H, W)``
+        The current template.
+    add_to_movie : float
+        Offset that makes the movie non-negative (``-min_mov``).
+    settings : NormcorreRegistrationSettings
+        The backend settings.
+
+    Returns
+    -------
+    corrected : array, ``(T, H, W)``
+        The corrected frames, used to build the next template.
+    rigid : array, ``(T, 2)``
+        Per frame, the rigid ``(y, x)`` correction.
+    patches : array, ``(T, ny, nx, 2)``, or None
+        Non-rigid only: per frame, the correction of every patch (on the finer grid for
+        the Fourier-domain path).
+    centers : tuple of arrays or None
+        Non-rigid only: the centres of those patches.
+
+    Notes
+    -----
+    CaImAn ``tile_and_correct`` L2013, vectorised over frames.
     """
 
     raw = frames.astype(np.float64)
@@ -663,9 +857,14 @@ def _tile_and_correct(
 
 
 def _split_template(corrected: NDArray) -> NDArray:
-    """A split's template: ``nanmean`` over frames, NaN filled with the minimum (``tile_and_correct_wrapper``)."""
+    """A chunk's template: the mean of its corrected frames, with NaN pixels set to the minimum.
 
-    template = np.nanmean(corrected.astype(np.float32), axis=0)  # CaImAn writes mc as float32
+    Notes
+    -----
+    CaImAn ``tile_and_correct_wrapper`` L3066, which accumulates in float32.
+    """
+
+    template = np.nanmean(corrected.astype(np.float32), axis=0)
     template[np.isnan(template)] = np.nanmin(template)
     return template
 
@@ -678,10 +877,42 @@ def _correct_epoch(
     n_splits: int,
     settings: NormcorreRegistrationSettings,
 ) -> tuple[NDArray, NDArray, NDArray | None, tuple[NDArray, NDArray] | None]:
-    """One pass of ``motion_correction_piecewise`` (L3144) over an epoch's contiguous splits.
+    """One registration pass over an epoch, and the template it produces.
 
-    Returns the new template (median of the split templates, high-passed if ``gSig_filt``)
-    and the shifts of every frame against the *input* template, as CaImAn's are.
+    The epoch is cut into ``n_splits`` contiguous chunks; each is registered to
+    ``template`` and corrected, and the new template is the median of the chunks' mean
+    images (high-passed if ``gSig_filt``). The shifts returned are measured against the
+    template the pass started from, as CaImAn's are.
+
+    Parameters
+    ----------
+    epoch : BaseImagingEpoch
+        The epoch.
+    plane_index : int
+        The plane to register.
+    template : array, ``(H, W)``
+        Template to register to.
+    add_to_movie : float
+        Offset that makes the movie non-negative.
+    n_splits : int
+        Number of chunks.
+    settings : NormcorreRegistrationSettings
+        The backend settings.
+
+    Returns
+    -------
+    template : array, ``(H, W)``
+        The new template.
+    rigid : array, ``(frames, 2)``
+        Per frame, the rigid correction.
+    patches : array, ``(frames, ny, nx, 2)``, or None
+        Non-rigid only: per frame, the patch corrections.
+    centers : tuple of arrays or None
+        Non-rigid only: the patch centres, in cropped-frame pixels.
+
+    Notes
+    -----
+    CaImAn ``motion_correction_piecewise`` L3144.
     """
 
     n_frames = epoch.get_num_samples()
@@ -704,13 +935,30 @@ def _correct_epoch(
 
 
 class NormcorreMotion(Motion):
-    """Motion estimated by the NoRMCorre backend: arrays and a settings dump only, so it pickles.
+    """The motion NoRMCorre estimated, returned by ``compute_motion(..., method="normcorre")``.
 
-    ``displacements`` is the rigid correction per frame ``(frames, planes, 2)`` (CaImAn
-    ``shifts_rig``); ``reference`` the final per-plane template. For piecewise runs
-    ``patch_shifts`` is ``[epoch][plane] -> (frames, ny, nx, 2)`` (CaImAn ``-x_shifts_els``,
-    ``-y_shifts_els``) and ``patch_centers`` ``[plane] -> (cy, cx)`` in full-frame
-    coordinates. ``metadata["border_to_0"]`` is CaImAn's ``border_to_0``.
+    Holds only arrays and a dump of the settings used, so it pickles. Shifts are stored in
+    pixels, ``(y, x)``, as the *motion* of each frame (or patch) relative to the template,
+    suite2p's convention for ``displacements``: the correction applied on registration is
+    the negative. CaImAn stores the corrections, so CaImAn's ``shifts_rig`` is
+    ``-displacements`` and its ``x_shifts_els``/``y_shifts_els`` are ``-patch_shifts``.
+
+    Attributes
+    ----------
+    displacements : list of arrays
+        Per epoch, the rigid motion of every frame, ``(frames, planes, 2)``.
+    reference : list of arrays
+        Per plane, the final template every frame was registered to (cropped to ``bounds``).
+    patch_shifts : list or None
+        Non-rigid runs only: ``patch_shifts[epoch][plane]`` is the motion of every patch,
+        ``(frames, ny, nx, 2)``.
+    patch_centers : list or None
+        Non-rigid runs only: per plane, the patch centres ``(cy, cx)`` in full-frame pixels.
+    settings : dict
+        The :class:`NormcorreRegistrationSettings` used, as a dict.
+    metadata : dict
+        ``"border_to_0"``: the largest shift, rounded up, i.e. how many pixels at each edge
+        may hold filled-in values (CaImAn ``border_to_0``).
     """
 
     method_name = "normcorre"
@@ -740,16 +988,40 @@ class NormcorreMotion(Motion):
         badframes: NDArray | None = None,
         **params: Any,
     ) -> "NormcorreMotion":
-        """CaImAn's ``MotionCorrect.motion_correct`` (L222), per plane, with epochs as files.
+        """Estimate the motion of every plane, treating epochs as CaImAn treats a list of files.
 
-        ``min_mov`` from the first 400 frames of the first epoch (high-passed if ``gSig_filt``).
-        Rigid (``motion_correct_rigid`` L270 / ``motion_correct_batch_rigid`` L2782): for the
-        first epoch the template is the bin median of the registered sample of every
-        ``T // 50 + 1``-th frame; each epoch then runs ``niter_rig`` passes, each pass
-        registering every split to the current template and replacing it by the median of the
-        split means; the epoch's shifts are those of its last pass, and its template carries to
-        the next epoch. Piecewise (``motion_correct_pwrigid`` L326): after the rigid run, one
-        pass per epoch from the rigid template, carried across epochs the same way.
+        For each plane: the offset ``min_mov`` comes from the first 400 frames of the first
+        epoch. The first template is the median of a registered sample of every
+        ``T // 50 + 1``-th frame of the first epoch. Each epoch then gets ``niter_rig`` rigid
+        passes (:func:`_correct_epoch`), and its rigid shifts are those of the last pass; the
+        template carries over to the next epoch. With ``nonrigid``, one more pass per epoch
+        estimates patch shifts, starting from the final rigid template.
+
+        Parameters
+        ----------
+        imaging : BaseImaging
+            The movie.
+        settings : NormcorreRegistrationSettings, optional
+            Base settings; defaults, plus environment variables, if omitted.
+        badframes : None
+            Must be None: CaImAn has no bad-frame mechanism.
+        **params
+            Settings overriding ``settings``.
+
+        Returns
+        -------
+        NormcorreMotion
+
+        Raises
+        ------
+        ValueError
+            Where CaImAn raises: bad frames given, ``gSig_filt`` with ``shifts_opencv=False``,
+            ``nonrigid`` with ``max_nonrigid_shift=0``, NaNs in the movie or the template.
+
+        Notes
+        -----
+        CaImAn ``MotionCorrect.motion_correct`` L222, ``motion_correct_rigid`` L270,
+        ``motion_correct_batch_rigid`` L2782 and ``motion_correct_pwrigid`` L326.
         """
 
         if badframes is not None:
@@ -811,7 +1083,10 @@ class NormcorreMotion(Motion):
             templates.append(template)
             centers.append(plane_centers)
 
-        displacements = [np.stack(epoch_shifts, axis=1) for epoch_shifts in rigid]
+        # Everything above is CaImAn's corrections; store motion (their negative), suite2p's convention
+        # for displacements, so that every backend's displacements mean the same thing.
+        displacements = [-np.stack(epoch_shifts, axis=1) for epoch_shifts in rigid]
+        patch_motion = [[-x if x is not None else None for x in epoch_patches] for epoch_patches in patches]
         moved = [np.abs(d).max() for d in displacements]
         if settings.nonrigid:
             moved = [max(np.abs(x).max() for x in epoch_patches if x is not None) for epoch_patches in patches]
@@ -819,7 +1094,7 @@ class NormcorreMotion(Motion):
             imaging=imaging,
             displacements=displacements,
             reference=templates,
-            patch_shifts=patches if settings.nonrigid else None,
+            patch_shifts=patch_motion if settings.nonrigid else None,
             patch_centers=centers if settings.nonrigid else None,
             settings=settings.model_dump(),
             metadata={"border_to_0": int(np.ceil(max(moved)))},
@@ -827,11 +1102,13 @@ class NormcorreMotion(Motion):
 
 
 class RegisterNormcorreImagingEpoch(RegisterImagingEpoch):
-    """Replays stored NoRMCorre shifts on read, as CaImAn's ``apply_shifts_movie`` (L399).
+    """One epoch of a registered movie: applies stored NoRMCorre shifts as frames are read.
 
-    Frame bounds, plane selection and output allocation come from
-    :class:`~photon_mosaic.preprocessing.registration.RegisterImagingEpoch`. Registered with
-    :func:`photon_mosaic.core.register_registration_class` only once the apply kernels exist.
+    Not built directly: ``register_motion(imaging, motion, method="normcorre")`` makes one
+    per epoch. Rigid shifts are applied as they were estimated (``shifts_opencv``);
+    non-rigid shifts always by cubic interpolation of the per-pixel field, as CaImAn's
+    ``apply_shifts_movie`` (L399). Frame bounds, plane selection and output allocation come
+    from :class:`~photon_mosaic.preprocessing.registration.RegisterImagingEpoch`.
     """
 
     motion: NormcorreMotion
@@ -843,20 +1120,37 @@ class RegisterNormcorreImagingEpoch(RegisterImagingEpoch):
         start_frame: int,
         end_frame: int,
     ) -> NDArray[np.floating[Any]]:
-        """Rigid: cubic warp or DFT per ``shifts_opencv``. Piecewise: always the remap, on the full frame.
+        """Correct frames ``start_frame:end_frame`` of one plane.
 
-        As CaImAn, the piecewise replay interpolates from the patch centres whenever
-        ``bounds`` crops the estimation region.
+        Rigid motion is undone with the cubic warp or the Fourier shift, as estimated.
+        Non-rigid motion is undone with the per-pixel remap on the full frame, interpolated
+        from the patch centres whenever ``shifts_interpolate`` is set or ``bounds`` cropped
+        the estimation region, as CaImAn does.
+
+        Parameters
+        ----------
+        plane_video : array, ``(n_frames, H, W)`` float32
+            The raw frames.
+        plane_index : int
+            Which plane they belong to.
+        start_frame, end_frame : int
+            Their range within the epoch.
+
+        Returns
+        -------
+        array, ``(n_frames, H, W)``
+            The registered frames.
         """
 
         settings = NormcorreRegistrationSettings.model_validate(self.motion.settings)
         p = plane_index
         epoch_patches = self.motion.patch_shifts[self.epoch_index] if self.motion.patch_shifts is not None else None
+        # stored shifts are motion; the kernels apply corrections, their negative
         if epoch_patches is None:
-            shifts = self.motion.displacements[self.epoch_index][start_frame:end_frame, p]
+            correction = -self.motion.displacements[self.epoch_index][start_frame:end_frame, p]
             if settings.shifts_opencv:
-                return _apply_shift_iteration(plane_video, shifts, settings.border_nan)
-            return _apply_shifts_dft(plane_video, shifts, None, settings.border_nan)
+                return _apply_shift_iteration(plane_video, correction, settings.border_nan)
+            return _apply_shifts_dft(plane_video, correction, None, settings.border_nan)
 
         centers = self.motion.patch_centers[p] if self.motion.patch_centers is not None else None
         assert centers is not None, "piecewise motion without patch centres"
@@ -865,10 +1159,9 @@ class RegisterNormcorreImagingEpoch(RegisterImagingEpoch):
         patches = epoch_patches[p]
         assert patches is not None
         return _apply_pw_shifts_remap(
-            plane_video, patches[start_frame:end_frame], centers, settings.border_nan, interpolate
+            plane_video, -patches[start_frame:end_frame], centers, settings.border_nan, interpolate
         )
 
 
-# ``register_registration_class("normcorre", RegisterNormcorreImagingEpoch)`` is added
-# by the PR that implements the apply kernels.
 register_motion_class(NormcorreMotion)
+register_registration_class("normcorre", RegisterNormcorreImagingEpoch)
