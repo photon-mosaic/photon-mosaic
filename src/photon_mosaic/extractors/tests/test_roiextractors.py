@@ -20,6 +20,7 @@ def _make_mock_imaging_extractor(num_samples=100, shape=(64, 64), sampling_frequ
     mock.get_sample_shape.return_value = shape
     mock.get_sampling_frequency.return_value = sampling_frequency
     mock.get_series.return_value = np.random.default_rng(0).random((num_samples, *shape))
+    mock.get_dtype.return_value = np.dtype("float64")
     return mock
 
 

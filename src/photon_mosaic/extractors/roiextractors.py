@@ -23,6 +23,7 @@ class BaseROIExtractorImaging(BaseImaging):
             self,
             shape=roi_extractor.get_sample_shape(),
             sampling_frequency=roi_extractor.get_sampling_frequency(),
+            dtype=roi_extractor.get_dtype(),
         )
         self.add_epoch(segment)
         self.name = f"{imaging_name} (ROIExtractors)"

@@ -65,7 +65,7 @@ def test_random_imaging_set_times_has_time_vector_shift_and_reset():
     imaging = generate_random_imaging(num_frames=num_frames, height=5, width=5, sampling_frequency=sf, seed=4)
 
     base_times = np.arange(num_frames, dtype="float64") / sf + 0.1
-    imaging.set_times(base_times.copy(), with_warning=False)
+    imaging.set_times(base_times.copy())
     assert imaging.has_time_vector() is True
     np.testing.assert_allclose(imaging.get_times(), base_times)
 
@@ -111,9 +111,19 @@ def test_random_imaging_repr_contains_expected_fields():
 def test_baseimaging_constructor_with_2d_dhape():
     shape = (50, 50)
     sampling_frequency = 15.0
-    base_imaging = BaseImaging(sampling_frequency=sampling_frequency, shape=shape)
+    base_imaging = BaseImaging(sampling_frequency=sampling_frequency, shape=shape, dtype="float32")
 
     assert base_imaging.shape == (50, 50, 1)
+
+
+def test_baseimaging_requires_dtype():
+    with pytest.raises(AssertionError, match="dtype must be specified"):
+        BaseImaging(sampling_frequency=30.0, shape=(8, 9), dtype=None)
+
+
+def test_baseimaging_rejects_invalid_dtype():
+    with pytest.raises(TypeError):
+        BaseImaging(sampling_frequency=30.0, shape=(8, 9), dtype="not_a_dtype")
 
 
 def test_baseimaging_multi_epoch_requires_epoch_index():

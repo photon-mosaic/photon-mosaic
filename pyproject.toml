@@ -8,10 +8,10 @@ authors = [
 ]
 description = "Library for modular calcium imaging analysis"
 readme = "README.md"
-requires-python = ">=3.10.0"
+requires-python = ">=3.11.0"
 dynamic = ["version"]
 dependencies = [
-    "spikeinterface @ git+https://github.com/SpikeInterface/spikeinterface.git@409d1f548f1c56829731f93dc61b1bed71f43006",
+    "spikeinterface>=0.105.1",
     "roiextractors[full]>=0.8.0",
     "pydantic-settings>=2",
     "pooch",
@@ -26,6 +26,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
     "License :: OSI Approved :: MIT License",
 ]
@@ -41,6 +42,8 @@ classifiers = [
 widgets = [
   "matplotlib",
   "ipywidgets",
+  "ipympl",
+  "ipykernel"
 ]
 suite2p-registration = [
   "suite2p==1.0.0.1",
@@ -56,6 +59,7 @@ dev = [
   "mypy",
   "pre-commit",
   "ruff",
+  "nbstripout",
   "setuptools-scm",
   "suite2p==1.0.0.1",
   "oasis-deconv>=0.3.2",
@@ -103,12 +107,13 @@ ignore-words-list = "coo"
 [tool.tox]
 legacy_tox_ini = """
 [tox]
-envlist = py{311,312}
+envlist = py{311,312,313}
 
 [gh-actions]
 python =
     3.11: py311
     3.12: py312
+    3.13: py313
 
 [testenv]
 extras =

@@ -3,8 +3,25 @@ from .baserois import BaseRois
 from .binaryimaging import BinaryImaging, read_binary
 from .binaryrois import BinaryFolderRois, BinaryRois
 from .generators import generate_fluorescence, generate_imaging_with_rois, generate_random_imaging, generate_rois
+from .imaging_ops import (
+    FrameSliceImaging,
+    SelectEpochImaging,
+    SplitEpochAtFramesImaging,
+    StackPlanesImaging,
+    frame_slice,
+    split_epoch_at_frames,
+    split_epochs,
+    stack_planes,
+)
 from .loading import load
-from .motion import Motion
+from .motion import (
+    KnownMotionMethod,
+    Motion,
+    compute_motion,
+    get_registration_class,
+    register_motion_class,
+    register_registration_class,
+)
 from .numpyimaging import NumpyImaging
 from .roianalyzer import (
     AnalyzerExtension,
@@ -14,5 +31,4 @@ from .roianalyzer import (
     register_result_extension,
 )
 from .roianalyzer_core_extensions import FluorescenceExtension
-from .split import SelectEpochImaging, split_epochs
 from .zarrrois import ZarrRois

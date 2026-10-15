@@ -28,7 +28,9 @@ class SelectPlanesImaging(BaseImaging):
         )
 
         shape = (imaging.shape[0], imaging.shape[1], len(plane_ids))
-        BaseImaging.__init__(self, sampling_frequency=imaging.sampling_frequency, shape=shape)
+        BaseImaging.__init__(
+            self, sampling_frequency=imaging.sampling_frequency, shape=shape, dtype=imaging.get_dtype()
+        )
         imaging.copy_metadata(self)
 
         for epoch in imaging.epochs:

@@ -34,7 +34,7 @@ class BasePreprocessor(BaseImaging):
         if dtype is None:
             dtype = imaging.get_dtype()
 
-        BaseImaging.__init__(self, sampling_frequency=sampling_frequency, shape=imaging.shape)
+        BaseImaging.__init__(self, sampling_frequency=sampling_frequency, shape=imaging.shape, dtype=dtype)
         imaging.copy_metadata(self, only_main=False)
         self._parent = imaging
 

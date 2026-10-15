@@ -54,13 +54,14 @@ class NumpyImaging(BaseImaging):
 
         # Check that all shapes and number of planes are consistent across epochs
         shapes = []
-        for video in videos:
+        for i, video in enumerate(videos):
             if len(video.shape) not in [3, 4]:
                 raise ValueError(
                     "'timeseries' must be a 3D or 4D numpy array (num_frames, height, width, [num_planes])"
                 )
             if len(video.shape) == 3:
-                video = video[:, :, :, np.newaxis]  # Add a planes dimension
+                videos[i] = video[:, :, :, np.newaxis]  # Add a planes dimension
+
             shapes.append(video.shape[1:])
         if not all(shape == shapes[0] for shape in shapes):
             raise ValueError("All epochs must have the same image shape (height, width, planes)")
@@ -72,9 +73,10 @@ class NumpyImaging(BaseImaging):
             assert len(time_vectors) == num_epochs, "Number of time vectors must match number of epochs"
         else:
             time_vectors = [None] * num_epochs
-        BaseImaging.__init__(self, shape=shapes[0], sampling_frequency=sampling_frequency)
+        BaseImaging.__init__(self, shape=shapes[0], sampling_frequency=sampling_frequency, dtype=videos[0].dtype)
 
         for video, time_vector in zip(videos, time_vectors):
+            assert len(video.shape) == 4, "Video must be a 4D numpy array (num_frames, height, width, num_planes)"
             self.add_epoch(
                 NumpyImagingEpoch(
                     video=video,
@@ -163,7 +165,9 @@ class NumpyRois(BaseRois):
             Optional array of ROI IDs. If None, IDs will be assigned as integers from 0 to num_rois-1.
         """
         num_rois = roi_image_masks.shape[0]
-        mask_shape = roi_image_masks[0].shape
+        # `.shape[1:]` avoids `roi_image_masks[0].shape`, which triggers a multi-second numba
+        # JIT compile on sparse arrays and crashes outright on an empty (0-ROI) array.
+        mask_shape = roi_image_masks.shape[1:]
         if len(mask_shape) not in [2, 3]:
             raise ValueError("Each ROI mask must be a 2D (height x width) or 3D (height x width x planes) array")
 
