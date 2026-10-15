@@ -415,7 +415,8 @@ def test_generate_imaging_with_rois_neuropil_model_constant_is_default_and_uncha
 
 
 def test_generate_imaging_with_rois_neuropil_model_rejects_unknown_value():
-    """An unrecognized `neuropil_model` should raise clearly rather than silently falling through."""
+    """An unrecognized `neuropil_model` should raise clearly, not silently fall through to the
+    "diffuse" branch (which would otherwise reference variables never defined for it)."""
     with pytest.raises(ValueError, match="neuropil_model"):
         generate_imaging_with_rois(num_frames=50, num_rois=2, radius_range=(3, 5), neuropil_model="invalid")
 
@@ -423,7 +424,7 @@ def test_generate_imaging_with_rois_neuropil_model_rejects_unknown_value():
 def test_generate_imaging_with_rois_vignette_properties():
     """ "vignette"'s defining properties: brighter at the frame center than the corners,
     fluctuates over time (unlike "constant"), and all background pixels share that one
-    fluctuation."""
+    fluctuation (the defining difference from "diffuse" below)."""
     kwargs = dict(num_frames=1000, height=64, width=64, num_rois=1, radius_range=(2, 3), noise_std=0.0, seed=1)
     rois, im_constant, _ = generate_imaging_with_rois(**kwargs, baseline_range=(0.0, 0.0), neuropil_model="constant")
     _, im_vignette, _ = generate_imaging_with_rois(**kwargs, baseline_range=(0.0, 0.0), neuropil_model="vignette")
@@ -443,7 +444,44 @@ def test_generate_imaging_with_rois_vignette_properties():
     assert np.corrcoef(trace_a, trace_b)[0, 1] > 0.999
 
 
-@pytest.mark.parametrize("neuropil_model", ["vignette"])
+def test_generate_imaging_with_rois_diffuse_is_a_spatially_varying_mixture():
+    """ "diffuse"'s background pixels should *not* all move together -- distant pixels should
+    be far less correlated than under "vignette", since each is driven by a different mixture
+    of (independently-fluctuating) nearby diffuse sources rather than one shared trace."""
+    kwargs = dict(
+        num_frames=2000,
+        height=64,
+        width=64,
+        num_rois=5,
+        radius_range=(2, 3),
+        baseline_range=(0.0, 0.0),
+        noise_std=0.0,
+        seed=1,
+    )
+    _, im_diffuse, _ = generate_imaging_with_rois(**kwargs, neuropil_model="diffuse")
+    video = im_diffuse.get_series()
+
+    # Sample several widely-separated pixel pairs (rather than one, arbitrary pair) so the
+    # assertion doesn't depend on two particular pixels happening to share a source by chance.
+    rng = np.random.default_rng(0)
+    correlations = []
+    for _ in range(30):
+        y1, x1 = rng.integers(0, 64, size=2)
+        y2, x2 = rng.integers(0, 64, size=2)
+        if abs(y1 - y2) + abs(x1 - x2) < 40:  # only count genuinely distant pairs
+            continue
+        t1, t2 = video[:, y1, x1, 0], video[:, y2, x2, 0]
+        if t1.std() == 0 or t2.std() == 0:  # either pixel is reached by no diffuse source
+            continue
+        with np.errstate(invalid="ignore"):
+            corr = np.corrcoef(t1, t2)[0, 1]
+        if not np.isnan(corr):
+            correlations.append(corr)
+    assert correlations, "no distant, fluctuating pixel pairs sampled -- widen the search"
+    assert np.median(np.abs(correlations)) < 0.5
+
+
+@pytest.mark.parametrize("neuropil_model", ["vignette", "diffuse"])
 def test_generate_imaging_with_rois_neuropil_model_reproducible_and_does_not_perturb_others(neuropil_model):
     """Same seed/model twice gives identical output; switching `neuropil_model` (a dedicated RNG
     sub-stream) must not change ROI placement or the injected fluorescence traces -- only the
@@ -465,7 +503,7 @@ def test_generate_fluorescence_leaves_neuropil_none():
     assert fluorescence.neuropil is None
 
 
-@pytest.mark.parametrize("neuropil_model", ["constant", "vignette"])
+@pytest.mark.parametrize("neuropil_model", ["constant", "vignette", "diffuse"])
 def test_generate_imaging_with_rois_neuropil_matches_actual_background(neuropil_model):
     """`neuropil` should exactly match the true, mask-weighted mean background level actually
     present in the video, isolated from ROI signal (zero baseline) and noise; and regardless of
