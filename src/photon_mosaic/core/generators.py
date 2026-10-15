@@ -176,9 +176,15 @@ def generate_rois(
     return NumpyRois(roi_image_masks=roi_masks, roi_ids=roi_ids, sampling_frequency=sampling_frequency)
 
 
-# Internal constants for the "vignette" neuropil model (see `generate_imaging_with_rois`).
+# Internal constants for the "vignette"/"diffuse" neuropil models (see `generate_imaging_with_rois`).
 _VIGNETTE_FALLOFF = 0.25  # fraction of center brightness lost at the frame corners
 _NEUROPIL_TAU_SECONDS = 5.0  # OU mean-reversion timescale -- slow drift, not frame-to-frame noise
+_DIFFUSE_DENSITY = 0.46  # diffuse sources per ROI -- CNMF-E's (Zhou et al. 2018) own base
+# Relative to ROI radius; needs to be well above 1x to read as pooled/blurred
+# contamination rather than another cell-sized blob.
+_DIFFUSE_RADIUS_MULTIPLIER = 5.0
+# Converts a cone-style radius to a Gaussian sigma with the same FWHM: 1 / (2 * sqrt(2 * ln(2))).
+_DIFFUSE_SIGMA_TO_RADIUS = 0.4247
 
 
 def _generate_vignette_profile(height: int, width: int, num_planes: int = 1) -> np.ndarray:
@@ -253,6 +259,63 @@ def _generate_ou_process(
     return ou.astype(np.float32)
 
 
+def _generate_diffuse_footprints(
+    n_sources: int,
+    height: int,
+    width: int,
+    num_planes: int,
+    radius_range: tuple[float, float],
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """Broad, overlapping, low-amplitude spatial footprints for the "diffuse" neuropil model.
+
+    2D Gaussian footprints, approximating a microscope's out-of-focus point-spread function
+    (unlike `generate_rois`'s linear-cone cell shapes). Centers are unconstrained by frame
+    edges, each source spans a single plane, and the result is a plain array rather than a
+    `BaseRois` -- these aren't ROIs, and at this radius they'd violate `generate_rois`'s
+    edge-margin assumptions anyway. Not truncated: a real PSF has no hard edge either, and
+    every pixel already gets a dense array regardless (`np.ogrid` over the full frame), so
+    truncating would only add an artificial cutoff without saving any work.
+
+    Parameters
+    ----------
+    n_sources : int
+        Number of diffuse sources to place.
+    height, width : int
+        Frame dimensions in pixels.
+    num_planes : int
+        Number of imaging planes.
+    radius_range : tuple[float, float]
+        Range of radii (pixels) from which each source's radius is drawn uniformly; converted
+        to a Gaussian sigma via `_DIFFUSE_SIGMA_TO_RADIUS` so the Gaussian's FWHM matches that
+        radius.
+    rng : np.random.Generator
+        Source of randomness.
+
+    Returns
+    -------
+    np.ndarray
+        ``(n_sources, height, width)`` or ``(n_sources, height, width, num_planes)``, float32,
+        each source's own footprint, peak 1.0 at its center.
+    """
+    y, x = np.ogrid[:height, :width]
+    shape = (n_sources, height, width) if num_planes == 1 else (n_sources, height, width, num_planes)
+    footprints = np.zeros(shape, dtype=np.float32)
+    centers_x = rng.uniform(0, width, size=n_sources)
+    centers_y = rng.uniform(0, height, size=n_sources)
+    radii = rng.uniform(radius_range[0], radius_range[1], size=n_sources)
+    sigmas = radii * _DIFFUSE_SIGMA_TO_RADIUS
+    planes = rng.integers(0, num_planes, size=n_sources) if num_planes > 1 else None
+    for k in range(n_sources):
+        distance_sq = (x - centers_x[k]) ** 2 + (y - centers_y[k]) ** 2
+        footprint = np.exp(-distance_sq / (2.0 * sigmas[k] ** 2))
+        if num_planes == 1:
+            footprints[k] = footprint
+        else:
+            footprints[k, :, :, planes[k]] = footprint
+    return footprints
+
+
 def generate_imaging_with_rois(
     num_frames: int = 1000,
     height: int = 256,
@@ -269,7 +332,7 @@ def generate_imaging_with_rois(
     noise_std: float | Literal["poisson"] = 1.3,
     bleaching_time: float = np.inf,
     seed: int | None = None,
-    neuropil_model: Literal["constant", "vignette"] = "constant",
+    neuropil_model: Literal["constant", "vignette", "diffuse"] = "constant",
     neuropil_fluctuation_std: float = 0.5,
 ) -> tuple[BaseRois, NumpyImaging, FluorescenceData]:
     """Generate a random NumpyImaging object and corresponding ROIs with fluorescence activity.
@@ -337,7 +400,7 @@ def generate_imaging_with_rois(
         :func:`generate_fluorescence`. The default of ``inf`` means no photobleaching.
     seed : int | None, default: None
         Random seed for reproducibility.
-    neuropil_model : {"constant", "vignette"}, default: "constant"
+    neuropil_model : {"constant", "vignette", "diffuse"}, default: "constant"
         How `background` varies over space and time:
 
         - ``"constant"``: spatially uniform, no fluctuation beyond `bleaching_time` decay.
@@ -345,19 +408,23 @@ def generate_imaging_with_rois(
           modulated by a static radial illumination falloff (brighter center, dimmer edges --
           real 2P vignetting). Every background pixel shares the same fluctuation, just scaled
           by its own position.
+        - ``"diffuse"``: several (``0.46 * num_rois``, see `_DIFFUSE_DENSITY`) broad, overlapping
+          Gaussian sources, each with its own independent Ornstein-Uhlenbeck-like fluctuation, so
+          nearby background pixels move together while distant ones don't. Each source's width
+          is `radius_range * 5` (see `_DIFFUSE_RADIUS_MULTIPLIER`), so it scales with ROI size
+          rather than frame size. Also carries the same vignette falloff as ``"vignette"``.
 
-        ``"vignette"`` is normalized to preserve `background`'s mean-photon-count semantics
-        (see `background` above); only its *spatial and temporal structure* differs from
+        Both new models are normalized to preserve `background`'s mean-photon-count semantics
+        (see `background` above); only their *spatial and temporal structure* differs from
         ``"constant"``. Kept intentionally simple -- just enough realism to make neuropil
-        subtraction demonstrably matter, not an optically/biologically precise model. A further
-        ``"diffuse"`` model (many independently-fluctuating sources, rather than one shared
-        fluctuation) is tracked separately (#142), deferred until there's a background-estimation
-        method suited to comparing against it.
+        subtraction demonstrably matter, not an optically/biologically precise model.
     neuropil_fluctuation_std : float, default: 0.5
         How strongly the background fluctuates relative to `background`, for
-        ``neuropil_model="vignette"`` (ignored for ``"constant"``). The fluctuation is additive
-        around a mean level, so large values can push the instantaneous background negative
-        (unphysical); 0.5 balances a clearly demonstrable effect against that risk.
+        ``neuropil_model="vignette"`` or ``"diffuse"`` (ignored for ``"constant"``). The
+        fluctuation is additive around a mean level, so large values can push the instantaneous
+        background negative (unphysical); empirically for "diffuse", ~11% of samples go negative
+        at 0.8, ~4% at 0.5, ~0.6% at 0.3 -- 0.5 balances a clearly demonstrable effect against
+        that risk.
 
     Returns
     -------
@@ -371,8 +438,8 @@ def generate_imaging_with_rois(
         e.g. for comparison against values recovered from `imaging` via an
         :class:`~photon_mosaic.core.roianalyzer.RoiAnalyzer`.
     """
-    if neuropil_model not in ("constant", "vignette"):
-        raise ValueError(f"Unknown neuropil_model: {neuropil_model!r}. Supported: 'constant', 'vignette'.")
+    if neuropil_model not in ("constant", "vignette", "diffuse"):
+        raise ValueError(f"Unknown neuropil_model: {neuropil_model!r}. Supported: 'constant', 'vignette', 'diffuse'.")
 
     rng = np.random.default_rng(seed)
     imaging_seed = int(rng.integers(0, 2**31))
@@ -431,6 +498,21 @@ def generate_imaging_with_rois(
         fluctuation = 1.0 + neuropil_fluctuation_std * _generate_ou_process(
             num_frames, sampling_frequency, neuropil_rng
         ).reshape(-1)
+    elif neuropil_model == "diffuse":
+        n_sources = max(1, round(_DIFFUSE_DENSITY * num_rois))
+        diffuse_radius_range = (
+            radius_range[0] * _DIFFUSE_RADIUS_MULTIPLIER,
+            radius_range[1] * _DIFFUSE_RADIUS_MULTIPLIER,
+        )
+        footprints = _generate_diffuse_footprints(
+            n_sources, height, width, num_planes, diffuse_radius_range, neuropil_rng
+        )
+        footprints_flat = footprints.reshape(n_sources, -1).astype(video.dtype)
+        # Scales `neuropil_fluctuation_std` to the same magnitude as "vignette"'s single shared
+        # trace: typical per-pixel variance if every (unit-variance) source contributed independently.
+        typical_variance = (footprints_flat**2).sum(axis=0).mean()
+        modulation_scale = 1.0 / np.sqrt(max(typical_variance, 1e-12))
+        ou_traces = _generate_ou_process(num_frames, sampling_frequency, neuropil_rng, num_traces=n_sources)
 
     # True background level under each ROI's mask (mask-weighted mean, before noise) -- cheap
     # since it only needs the ROI masks, not the full pixel grid. Under `noise_std="poisson"`,
@@ -441,9 +523,16 @@ def generate_imaging_with_rois(
         neuropil = np.empty((num_frames, num_rois), dtype=np.float32)
     elif neuropil_model == "constant":
         neuropil = np.broadcast_to((background * bleach)[:, np.newaxis], (num_frames, num_rois)).copy()
-    else:  # "vignette"
+    elif neuropil_model == "vignette":
         roi_profile_avg = (masks_flat * profile_flat[np.newaxis, :]).sum(axis=1) / mask_sums
         neuropil = (background * bleach * fluctuation)[:, np.newaxis] * roi_profile_avg[np.newaxis, :]
+    else:  # "diffuse"
+        weighted_profile_masks = masks_flat * profile_flat[np.newaxis, :]
+        roi_profile_avg = weighted_profile_masks.sum(axis=1) / mask_sums
+        roi_modulation = (ou_traces @ (footprints_flat @ weighted_profile_masks.T)) * modulation_scale / mask_sums
+        neuropil = (background * bleach)[:, np.newaxis] * (
+            roi_profile_avg[np.newaxis, :] + neuropil_fluctuation_std * roi_modulation
+        )
 
     noise_rng = np.random.default_rng(noise_seed)
     slab_size = 256
@@ -452,10 +541,23 @@ def generate_imaging_with_rois(
         bleach_sl = bleach[t0 : t0 + slab_size]
         if neuropil_model == "constant":
             bg_slab = np.broadcast_to((background * bleach_sl)[:, np.newaxis], sl.shape)
-        else:  # "vignette"
+        elif neuropil_model == "vignette":
             bg_slab = (background * bleach_sl * fluctuation[t0 : t0 + slab_size])[:, np.newaxis] * profile_flat[
                 np.newaxis, :
             ]
+        else:  # "diffuse"
+            # Zero-mean-at-every-pixel fluctuation (each source's own trace has mean 0), so the
+            # background's mean level is exactly `background * bleach * vignette_profile`
+            # everywhere, same as "vignette" -- only the *fluctuation pattern* differs (a
+            # spatially-varying mixture of many sources, rather than one shared trace). A pixel
+            # far from every source simply doesn't fluctuate (behaves like "vignette" with
+            # `neuropil_fluctuation_std=0` there), rather than losing its background entirely.
+            modulation_sl = (ou_traces[t0 : t0 + slab_size] @ footprints_flat) * modulation_scale
+            bg_slab = (
+                (background * bleach_sl)[:, np.newaxis]
+                * profile_flat[np.newaxis, :]
+                * (1.0 + neuropil_fluctuation_std * modulation_sl)
+            )
 
         if noise_std == "poisson":
             bg_slab = np.clip(bg_slab, 0, None)
