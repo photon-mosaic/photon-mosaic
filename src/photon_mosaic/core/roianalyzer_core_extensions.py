@@ -382,7 +382,8 @@ class FluorescenceNode(PipelineNode):
             # and accepted) would reinstate the singularity.
             fallback = float(own_norm[~empty].mean()) if (~empty).any() else 1.0
             shift = np.where(empty, fallback, ridge * own_norm)
-            self._gram_aa_lu = splu((gram_aa + sp.diags(shift)).tocsc())
+            self._gram_aa_regularized = (gram_aa + sp.diags(shift)).tocsc()
+            self._gram_aa_lu = splu(self._gram_aa_regularized)
             self._aa_inv_ab = self._gram_aa_lu.solve(gram_ab) if self._gnb else gram_ab  # (N, gnb)
             schur = _ridge_regularize(gram_bb, ridge) - gram_ab.T @ self._aa_inv_ab  # (gnb, gnb)
             self._schur_inv = pinvh(schur) if self._gnb else schur
@@ -410,6 +411,22 @@ class FluorescenceNode(PipelineNode):
         sqrt_w = np.sqrt(np.maximum(eigvals, floor))
         self._nnls_matrix = (eigvecs * sqrt_w).T
         self._nnls_rhs_map = eigvecs / sqrt_w  # r @ this == y
+
+    def __getstate__(self):
+        # scipy.sparse.linalg.SuperLU (method='regression') isn't picklable, which breaks
+        # n_jobs>1 (spikeinterface's run_node_pipeline sends nodes to worker processes via
+        # ProcessPoolExecutor). Drop it here and rebuild it from the already-picklable
+        # `_gram_aa_regularized` in __setstate__, once per worker process.
+        state = self.__dict__.copy()
+        state.pop("_gram_aa_lu", None)
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        if "_gram_aa_regularized" in self.__dict__:
+            from scipy.sparse.linalg import splu
+
+            self._gram_aa_lu = splu(self._gram_aa_regularized)
 
     def get_dtype(self):
         return np.float32
