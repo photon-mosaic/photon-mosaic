@@ -384,3 +384,37 @@ class TestSharedSettingsOnSuite2p:
 
 def test_register_suite2p_imaging_is_the_generic_class():
     assert issubclass(RegisterSuite2PImaging, RegisterImaging)
+
+
+class TestStreamingEstimation:
+    """Estimation reads the movie a batch at a time instead of loading each epoch whole."""
+
+    def test_estimation_never_reads_more_than_a_batch(self):
+        shifts = [[(0, 0), (1, 0), (0, 1), (1, 1)] * 6]
+        imaging = _make_shifted_imaging(num_frames=24, height=12, width=12, shifts=shifts)
+        epoch = imaging.epochs[0]
+        read_sizes = []
+        get_series = epoch.get_series
+
+        def spy(start, end, *args, **kwargs):
+            read_sizes.append(end - start)
+            return get_series(start, end, *args, **kwargs)
+
+        epoch.get_series = spy
+        motion = compute_motion(imaging, method="suite2p", batch_size=5, nonrigid=False)
+        assert max(read_sizes) <= 5
+        assert motion.displacements[0].shape == (24, 1, 2)
+
+    def test_each_plane_reads_only_its_own_frames(self):
+        imaging = generate_random_imaging(num_frames=12, height=12, width=12, num_planes=3, sampling_frequency=10.0)
+        epoch = imaging.epochs[0]
+        requested = []
+        get_series = epoch.get_series
+
+        def spy(start, end, plane_indices=None):
+            requested.append(plane_indices)
+            return get_series(start, end, plane_indices=plane_indices)
+
+        epoch.get_series = spy
+        compute_motion(imaging, method="suite2p", batch_size=4, nonrigid=False)
+        assert all(len(range(3)[planes]) == 1 for planes in requested)
