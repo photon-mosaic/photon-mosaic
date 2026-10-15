@@ -3,29 +3,33 @@ from urllib.request import Request, urlopen
 
 import pooch
 
-from photon_mosaic.extractors import read_tiff_imaging
+from photon_mosaic.core import BaseImaging
+from photon_mosaic.extractors import read_multi_tiff_multi_page, read_tiff_imaging
 
 _FOLDER_ID = "0B649boZqpYG1R3ota25jdUthSzQ"
 _RESOURCE_KEY = "0-wSoqFv5rnE6TERPcJHwQtQ"
 _CACHE_DIR = Path.home() / ".photon-mosaic" / "sample_data" / "suite2p"
 
 
-def download_suite2p_google_drive(num_files: int = 5) -> list:
-    """Download and return \"official\" suite2p sample TIFFs as a list of imaging objects.
+def download_suite2p_google_drive(num_files: int = 5, lazy: bool = True) -> BaseImaging | list[BaseImaging]:
+    """Download the \"official\" suite2p sample TIFFs and return them as imaging.
 
-    Assumes they are sampled at 30 Hz. There are maximum 50 TIFF files available, with 200 frames each.
-    Each TIFF file is read into its own imaging object, using a generic tiff imaging reader.
-    Note that this reader loads the whole image into memory.
+    The files are consecutive pieces of one single-plane recording, sampled at 30 Hz: at most
+    50 files of 200 frames each. They are cached in ``~/.photon-mosaic/sample_data/suite2p``.
 
     Parameters
     ----------
     num_files : int, default=5
-        Number of files to load.
+        Number of files to download.
+    lazy : bool, default=True
+        True returns one imaging over all the files, as one continuous movie, that reads only the
+        frames asked for. False returns one imaging per file, each read whole into memory (these
+        TIFFs cannot be memory-mapped).
 
     Returns
     -------
-    list
-        A list of imaging objects, one per TIFF file.
+    BaseImaging or list of BaseImaging
+        One imaging of ``200 * num_files`` frames if ``lazy``, else one imaging per file.
     """
     if num_files < 1:
         raise ValueError("num_files must be >= 1")
@@ -70,4 +74,8 @@ def download_suite2p_google_drive(num_files: int = 5) -> list:
         )
         local_paths.append(local_path)
 
-    return [read_tiff_imaging(file_path=str(p), sampling_frequency=30) for p in local_paths]
+    if not lazy:
+        return [read_tiff_imaging(file_path=str(p), sampling_frequency=30) for p in local_paths]
+    return read_multi_tiff_multi_page(
+        file_paths=[str(p) for p in local_paths], sampling_frequency=30, num_channels=1, num_planes=1
+    )
