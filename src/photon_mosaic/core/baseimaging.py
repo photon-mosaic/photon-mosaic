@@ -3,7 +3,7 @@ from math import prod
 import numpy as np
 from numpy.typing import ArrayLike, DTypeLike
 from spikeinterface.core.base import BaseExtractor
-from spikeinterface.core.core_tools import convert_bytes_to_str, convert_seconds_to_str
+from spikeinterface.core.core_tools import check_json, convert_bytes_to_str, convert_seconds_to_str
 from spikeinterface.core.job_tools import split_job_kwargs
 from spikeinterface.core.time_series import TimeSeries, TimeSeriesSegment
 from spikeinterface.core.time_series_tools import get_chunks
@@ -67,7 +67,7 @@ class BaseImaging(BaseExtractor, TimeSeries):
 
         # Format shape string based on whether data is volumetric or not
         shape_repr = f"{shape[0]} rows x {shape[1]} columns "
-        return (
+        header = (
             f"{name}:\n"
             f"{sampling_frequency_repr} - "
             f"{self.get_num_epochs()} epochs - "
@@ -76,6 +76,14 @@ class BaseImaging(BaseExtractor, TimeSeries):
             f"{dtype} dtype - "
             f"{memory_repr}"
         )
+        # Show placement only for fields that carry geometry (multi-field acquisitions).
+        geometry = self.geometry
+        if geometry is not None:
+            header += (
+                f"\n  geometry: field_name={geometry.get('field_name')!r} center_xy={geometry.get('center_xy')} "
+                f"size_xy={geometry.get('size_xy')} units={geometry.get('units')!r}"
+            )
+        return header
 
     def __repr__(self):
         return self._repr_header()
@@ -124,6 +132,55 @@ class BaseImaging(BaseExtractor, TimeSeries):
             The shape of the images as (height, width).
         """
         return self._shape
+
+    @property
+    def geometry(self) -> dict | None:
+        """Optional lateral placement of this imaging field in a reference space.
+
+        A free-form dictionary, or ``None`` when unknown. It is populated for multi-field (e.g. mesoscope)
+        acquisitions, where each field is an independent :class:`BaseImaging` with its own pixel grid and
+        position; a plain single-field imaging leaves it ``None`` and is unaffected. The placement applies
+        to all planes of the field. Depth is not stored here: it belongs to the field's own plane axis, set
+        as a per-plane ``z`` property.
+
+        Stored as the SpikeInterface annotation ``"geometry"``, so it travels through save / load with
+        the extractor. Values are converted to JSON types on assignment (arrays and tuples become lists).
+        Reads return a copy, so mutating the returned dict in place does not persist; assign a new dict
+        instead.
+
+        Coordinates are ``(x, y)``: x runs along the columns (width), y along the rows (height).
+        Conventional keys, all optional:
+
+        - ``field_name`` (str): name of the field; not guaranteed to be unique.
+        - ``field_uuid`` (str): unique identifier of the field.
+        - ``units`` (str): unit of the reference space, e.g. ``"scanner_degrees"`` or ``"um"``.
+        - ``reference_frame`` (str): name of the reference space; placements are only comparable
+          within the same frame.
+        - ``center_xy`` ([x, y]): center of the field, in ``units``.
+        - ``size_xy`` ([width, height]): extent of the field, in ``units``.
+        - ``affine`` (3x3 list of lists): maps the fractional position within the field ``(u, v)``
+          (0 to 1 along each axis) to the reference space, ``[x, y, 1] = affine @ [u, v, 1]``.
+          ``(0, 0)`` is the outer corner of pixel ``(row 0, column 0)``, ``(1, 1)`` the outer corner of
+          the last pixel; the center of pixel ``(row, column)`` lies at ``u = (column + 0.5) / width``,
+          ``v = (row + 0.5) / height``. Being fractional, it does not depend on the pixel resolution.
+        - ``microns_per_unit`` (float): scale from ``units`` to micrometers.
+
+        Returns
+        -------
+        dict | None
+            The geometry dictionary, or None if unset.
+        """
+        return self.get_annotation("geometry")
+
+    @geometry.setter
+    def geometry(self, value: dict | None) -> None:
+        """Set the geometry dictionary (stored as the ``"geometry"`` annotation); accepts a dict or None."""
+        if value is not None and not isinstance(value, dict):
+            raise TypeError(f"geometry must be a dict or None, got {type(value).__name__}")
+        # Convert to JSON types now, so a non-serializable value fails here rather than at save time.
+        if value is not None:
+            value = check_json(value)
+        self.set_annotation("geometry", value, overwrite=True)
 
     @property
     def plane_ids(self):
