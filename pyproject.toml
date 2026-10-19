@@ -48,6 +48,11 @@ widgets = [
 suite2p-registration = [
   "suite2p==1.0.0.1",
 ]
+normcorre = [
+  # in-house NoRMCorre backend (preprocessing/normcorre_registration.py); torch for the
+  # batched FFT and grid_sample kernels, declared ahead of their implementation
+  "torch",
+]
 deconvolution = [
   "oasis-deconv>=0.3.2",
 ]

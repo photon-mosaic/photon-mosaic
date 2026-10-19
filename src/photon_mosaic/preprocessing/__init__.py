@@ -6,3 +6,6 @@ from .suite2p_registration import RegisterSuite2PImagingEpoch
 from .suite2p_registration import RegisterSuite2PImaging
 from .suite2p_registration import Suite2pRegistrationSettings
 from .suite2p_registration import Suite2PMotion
+from .normcorre_registration import NormcorreRegistrationSettings
+from .normcorre_registration import NormcorreMotion
+from .normcorre_registration import RegisterNormcorreImagingEpoch
