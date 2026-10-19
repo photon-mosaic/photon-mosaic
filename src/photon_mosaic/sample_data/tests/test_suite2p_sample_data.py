@@ -2,7 +2,9 @@ import numpy as np
 import pytest
 
 from photon_mosaic.core import BaseImaging
+from photon_mosaic.extractors import read_tiff_imaging
 from photon_mosaic.sample_data import download_suite2p_google_drive
+from photon_mosaic.sample_data.suite2p_sample_data import _CACHE_DIR
 
 
 @pytest.mark.network
@@ -14,12 +16,14 @@ def test_suite2p_google_drive_one_file():
 
 
 @pytest.mark.network
-def test_files_are_one_lazy_movie_matching_the_eager_files():
-    lazy = download_suite2p_google_drive(num_files=2)
-    eager = download_suite2p_google_drive(num_files=2, lazy=False)
+def test_files_are_one_lazy_movie_matching_each_file():
+    imaging = download_suite2p_google_drive(num_files=2)
+    first, second = (
+        read_tiff_imaging(file_path=str(_CACHE_DIR / f"file_00002_{index:05d}.tif"), sampling_frequency=30)
+        for index in (1, 2)
+    )
 
-    assert lazy.get_num_epochs() == 1
-    assert lazy.get_num_samples() == 400
-    assert len(eager) == 2 and all(isinstance(imaging, BaseImaging) for imaging in eager)
-    across_boundary = np.concatenate([eager[0].get_series(195, 200), eager[1].get_series(0, 5)])
-    np.testing.assert_array_equal(lazy.get_series(195, 205), across_boundary)
+    assert imaging.get_num_epochs() == 1
+    assert imaging.get_num_samples() == 400
+    across_boundary = np.concatenate([first.get_series(195, 200), second.get_series(0, 5)])
+    np.testing.assert_array_equal(imaging.get_series(195, 205), across_boundary)
