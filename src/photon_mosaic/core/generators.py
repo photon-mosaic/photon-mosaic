@@ -22,11 +22,19 @@ class FluorescenceData(NamedTuple):
         Binary spike trains ``(num_frames, num_rois)``, float32.
     clean_traces : np.ndarray
         Convolved traces before bleaching and noise ``(num_frames, num_rois)``, float32.
+    neuropil : np.ndarray | None
+        True background/neuropil level at each ROI's own mask (mask-weighted mean over the
+        ROI's own pixels, before noise), ``(num_frames, num_rois)``, float32. Only populated by
+        :func:`generate_imaging_with_rois` (:func:`generate_fluorescence` alone has no
+        background to report); ``None`` otherwise. Lets a `NeuropilExtension` surround-based
+        estimate be checked against the true *local* contamination, rather than only the end
+        effect on recovered dF/F.
     """
 
     traces: np.ndarray
     spikes: np.ndarray
     clean_traces: np.ndarray
+    neuropil: np.ndarray | None = None
 
 
 def generate_random_imaging(
@@ -168,6 +176,83 @@ def generate_rois(
     return NumpyRois(roi_image_masks=roi_masks, roi_ids=roi_ids, sampling_frequency=sampling_frequency)
 
 
+# Internal constants for the "vignette" neuropil model (see `generate_imaging_with_rois`).
+_VIGNETTE_FALLOFF = 0.25  # fraction of center brightness lost at the frame corners
+_NEUROPIL_TAU_SECONDS = 5.0  # OU mean-reversion timescale -- slow drift, not frame-to-frame noise
+
+
+def _generate_vignette_profile(height: int, width: int, num_planes: int = 1) -> np.ndarray:
+    """Static radial illumination falloff, brighter at the frame center than the edges.
+
+    Simple linear falloff from the frame center -- real 2P vignetting (Gaussian beam, finite-NA
+    lens falloff) isn't modeled exactly. Renormalized to spatial mean 1, so multiplying it into
+    `background` preserves that parameter's "mean photon count per pixel per frame" semantics
+    regardless of `neuropil_model`.
+
+    Parameters
+    ----------
+    height, width : int
+        Frame dimensions in pixels.
+    num_planes : int, default: 1
+        Number of imaging planes; the same 2D profile is broadcast across all planes.
+
+    Returns
+    -------
+    np.ndarray
+        ``(height, width)`` or ``(height, width, num_planes)``, float32, spatial mean 1.
+    """
+    y, x = np.ogrid[:height, :width]
+    center_y, center_x = (height - 1) / 2.0, (width - 1) / 2.0
+    distance = np.sqrt((y - center_y) ** 2 + (x - center_x) ** 2)
+    max_distance = np.sqrt(center_y**2 + center_x**2)
+    profile = 1.0 - _VIGNETTE_FALLOFF * (distance / max_distance)
+    profile = profile / profile.mean()
+    if num_planes > 1:
+        profile = np.broadcast_to(profile[:, :, np.newaxis], (height, width, num_planes))
+    return profile.astype(np.float32)
+
+
+def _generate_ou_process(
+    num_frames: int,
+    sampling_frequency: float,
+    rng: np.random.Generator,
+    num_traces: int = 1,
+) -> np.ndarray:
+    """Ornstein-Uhlenbeck-like fluctuation(s): exactly zero-mean per trace, asymptotically unit variance.
+
+    Discrete-time AR(1) via exact IIR recurrence (same `lfilter` style as
+    `generate_fluorescence`'s exponential-kernel convolution): ``x[t] = phi * x[t-1] +
+    sqrt(1 - phi**2) * white[t]``, with ``phi = exp(-1 / (_NEUROPIL_TAU_SECONDS *
+    sampling_frequency))``. Starts at 0 and reaches unit variance within a few
+    `_NEUROPIL_TAU_SECONDS` -- an accepted simplification (the brief initial transient is
+    negligible for the frame counts this is meant for) rather than seeding the recurrence from
+    its stationary distribution. Each trace is then centered to exactly zero mean.
+
+    Parameters
+    ----------
+    num_frames : int
+        Number of time points to generate.
+    sampling_frequency : float
+        Sampling frequency in Hz.
+    rng : np.random.Generator
+        Source of randomness.
+    num_traces : int, default: 1
+        Number of independent traces to generate at once.
+
+    Returns
+    -------
+    np.ndarray
+        ``(num_frames, num_traces)``, float32, each column exactly zero-mean.
+    """
+    from scipy.signal import lfilter
+
+    phi = np.exp(-1.0 / (_NEUROPIL_TAU_SECONDS * sampling_frequency))
+    white = rng.normal(0, 1, size=(num_frames, num_traces)).astype(np.float32)
+    ou = lfilter([np.sqrt(1 - phi**2)], [1.0, -phi], white, axis=0)
+    ou = ou - ou.mean(axis=0, keepdims=True)
+    return ou.astype(np.float32)
+
+
 def generate_imaging_with_rois(
     num_frames: int = 1000,
     height: int = 256,
@@ -176,7 +261,7 @@ def generate_imaging_with_rois(
     num_rois: int = 20,
     radius_range: tuple[int, int] | tuple[int, int, int] = (5, 15),
     sampling_frequency: float = 30.0,
-    decay_time: float = 2.0,
+    decay_time: float = 0.5,
     event_rate: float = 0.3,
     weighted_rois: bool = False,
     background: float = 0.2,
@@ -184,6 +269,9 @@ def generate_imaging_with_rois(
     noise_std: float | Literal["poisson"] = 1.3,
     bleaching_time: float = np.inf,
     seed: int | None = None,
+    neuropil_model: Literal["constant", "vignette"] = "constant",
+    neuropil_fluctuation_std: float = 0.5,
+    neuropil_roi_coefficient: float | None = None,
 ) -> tuple[BaseRois, NumpyImaging, FluorescenceData]:
     """Generate a random NumpyImaging object and corresponding ROIs with fluorescence activity.
 
@@ -207,8 +295,13 @@ def generate_imaging_with_rois(
         Range of radii for circular ROIs.
     sampling_frequency : float, default: 30.0
         Sampling frequency in Hz.
-    decay_time : float, default: 2.0
-        Duration of exponential decay for fluorescence events in seconds.
+    decay_time : float, default: 0.5
+        Duration of exponential decay for fluorescence events in seconds. Since this generative
+        model (sharp rise, single-exponential decay) matches OASIS's own deconvolution model, the
+        relevant reference is OASIS's optimal single-exponential fit to real GCaMP8 recordings --
+        0.2/0.45/0.5 s for GCaMP8f/8m/8s (Rupprecht et al. 2026, Nat. Methods) -- not the sensor's
+        true, more complex kinetics. Default follows GCaMP8s, the variant most often recommended
+        for reliably detecting isolated action potentials.
     event_rate : float, default: 0.3
         Mean spike-event rate in Hz, passed through to :func:`generate_fluorescence`. Each
         ROI's number of events scales with the recording's duration (`num_frames` /
@@ -221,7 +314,11 @@ def generate_imaging_with_rois(
         everywhere in the frame, including under the ROIs (e.g. neuropil, out-of-
         focus light). 0 means a dark background with only noise. Subject to the same
         `bleaching_time` decay as the ROI signal, since it mostly represents genuine
-        fluorescence rather than non-bleaching dark counts.
+        fluorescence rather than non-bleaching dark counts. This is the true
+        frame-and-time-averaged mean regardless of `neuropil_model`: each model's spatial
+        profile and/or temporal fluctuation is normalized to mean 1, so `background` always
+        means the same thing. (The one exception is a `neuropil_roi_coefficient` other than 1,
+        which scales the background on ROI pixels only, as ``"vignette"`` does by default.)
     baseline_range : tuple[float, float], default: (0.5, 1.0)
         Range from which each ROI's baseline fluorescence (F0) is drawn uniformly at
         random, modeling cell-to-cell brightness variability -- same photon-count
@@ -242,6 +339,36 @@ def generate_imaging_with_rois(
         :func:`generate_fluorescence`. The default of ``inf`` means no photobleaching.
     seed : int | None, default: None
         Random seed for reproducibility.
+    neuropil_model : {"constant", "vignette"}, default: "constant"
+        How `background` varies over space and time:
+
+        - ``"constant"``: spatially uniform, no fluctuation beyond `bleaching_time` decay.
+        - ``"vignette"``: one shared Ornstein-Uhlenbeck-like fluctuation (slow, ~5s timescale)
+          modulated by a static radial illumination falloff (brighter center, dimmer edges --
+          real 2P vignetting). Every background pixel shares the same fluctuation, just scaled
+          by its own position.
+
+        ``"vignette"`` is normalized to preserve `background`'s mean-photon-count semantics
+        (see `background` above); only its *spatial and temporal structure* differs from
+        ``"constant"``. Kept intentionally simple -- just enough realism to make neuropil
+        subtraction demonstrably matter, not an optically/biologically precise model. A further
+        ``"diffuse"`` model (many independently-fluctuating sources, rather than one shared
+        fluctuation) is tracked separately (#142), deferred until there's a background-estimation
+        method suited to comparing against it.
+    neuropil_fluctuation_std : float, default: 0.5
+        How strongly the background fluctuates relative to `background`, for
+        ``neuropil_model="vignette"`` (ignored for ``"constant"``). The fluctuation is additive
+        around a mean level, so large values can push the instantaneous background negative
+        (unphysical); 0.5 balances a clearly demonstrable effect against that risk.
+    neuropil_roi_coefficient : float or None, default: None
+        Background level on ROI pixels relative to the background around them, applied to every
+        pixel covered by any ROI mask. ``1.0``: the same background everywhere, so a ring around
+        an ROI estimates the neuropil under it exactly. Below 1, ROI pixels are dimmer than their
+        surroundings (e.g. cell bodies displacing neuropil), the situation Suite2p's default
+        neuropil weight of 0.7 corrects for; the optimal ``neuropil_weight`` of a ``"surround"``
+        correction is then about this value. ``None`` (the default) is ``1.0`` for
+        ``neuropil_model="constant"``, which stays spatially uniform, and ``0.7`` for
+        ``"vignette"``. Must be non-negative.
 
     Returns
     -------
@@ -250,16 +377,25 @@ def generate_imaging_with_rois(
     imaging : NumpyImaging
         The imaging data with injected fluorescence activity.
     fluorescence : FluorescenceData
-        The ground-truth fluorescence (traces, spikes, clean_traces) injected
-        into the video, e.g. for comparison against values recovered from
-        `imaging` via an :class:`~photon_mosaic.core.roianalyzer.RoiAnalyzer`.
+        The ground-truth fluorescence (traces, spikes, clean_traces) injected into the video,
+        plus `neuropil` (unlike bare :func:`generate_fluorescence`, which leaves it ``None``) --
+        e.g. for comparison against values recovered from `imaging` via an
+        :class:`~photon_mosaic.core.roianalyzer.RoiAnalyzer`.
     """
+    if neuropil_model not in ("constant", "vignette"):
+        raise ValueError(f"Unknown neuropil_model: {neuropil_model!r}. Supported: 'constant', 'vignette'.")
+    if neuropil_roi_coefficient is None:
+        neuropil_roi_coefficient = 1.0 if neuropil_model == "constant" else 0.7
+    if neuropil_roi_coefficient < 0:
+        raise ValueError(f"neuropil_roi_coefficient must be non-negative, got {neuropil_roi_coefficient}.")
+
     rng = np.random.default_rng(seed)
     imaging_seed = int(rng.integers(0, 2**31))
     rois_seed = int(rng.integers(0, 2**31))
     fluorescence_seed = int(rng.integers(0, 2**31))
     noise_seed = int(rng.integers(0, 2**31))
     roi_baseline = rng.uniform(baseline_range[0], baseline_range[1], size=num_rois)
+    neuropil_seed = int(rng.integers(0, 2**31))
 
     imaging = generate_random_imaging(
         num_frames=num_frames,
@@ -298,20 +434,61 @@ def generate_imaging_with_rois(
     signal = (roi_baseline[np.newaxis, :] * fluorescence.traces).astype(video.dtype)  # (T, N)
     bleach = np.exp(-np.arange(num_frames) / (bleaching_time * sampling_frequency), dtype=np.float32)
 
-    # `video` is reused as scratch (about to be overwritten); noise is added slab by slab to avoid a full array.
+    # `video` is reused as scratch (about to be overwritten); background+noise are added slab by
+    # slab to avoid a full (num_frames, height*width*num_planes) temporary for either.
     flat = video.reshape(num_frames, -1)
     np.matmul(signal, masks_flat, out=flat)
-    flat += (background * bleach)[:, np.newaxis]
+
+    neuropil_rng = np.random.default_rng(neuropil_seed)
+    # Static spatial profile of the background; None means spatially uniform.
+    profile_flat = None
+    fluctuation = np.ones(num_frames)
+    if neuropil_model == "vignette":
+        profile_flat = _generate_vignette_profile(height, width, num_planes).reshape(-1).astype(video.dtype)
+        fluctuation = 1.0 + neuropil_fluctuation_std * _generate_ou_process(
+            num_frames, sampling_frequency, neuropil_rng
+        ).reshape(-1)
+    if neuropil_roi_coefficient != 1.0:
+        if profile_flat is None:
+            profile_flat = np.ones(masks_flat.shape[1], dtype=video.dtype)
+        profile_flat[masks_flat.any(axis=0)] *= neuropil_roi_coefficient
+
+    # True background level under each ROI's mask (mask-weighted mean, before noise) -- cheap
+    # since it only needs the ROI masks, not the full pixel grid. Under `noise_std="poisson"`,
+    # this can't work in closed form (the per-pixel clip to nonnegative is nonlinear), so
+    # `neuropil` is instead accumulated from the clipped per-pixel field in the slab loop.
+    mask_sums = masks_flat.sum(axis=1)
+    if noise_std == "poisson":
+        neuropil = np.empty((num_frames, num_rois), dtype=np.float32)
+    elif profile_flat is None:
+        neuropil = np.broadcast_to((background * bleach)[:, np.newaxis], (num_frames, num_rois)).copy()
+    else:
+        roi_profile_avg = (masks_flat * profile_flat[np.newaxis, :]).sum(axis=1) / mask_sums
+        neuropil = (background * bleach * fluctuation)[:, np.newaxis] * roi_profile_avg[np.newaxis, :]
 
     noise_rng = np.random.default_rng(noise_seed)
     slab_size = 256
     for t0 in range(0, num_frames, slab_size):
         sl = flat[t0 : t0 + slab_size]
+        bleach_sl = bleach[t0 : t0 + slab_size]
+        if profile_flat is None:
+            bg_slab = np.broadcast_to((background * bleach_sl)[:, np.newaxis], sl.shape)
+        else:
+            bg_slab = (background * bleach_sl * fluctuation[t0 : t0 + slab_size])[:, np.newaxis] * profile_flat[
+                np.newaxis, :
+            ]
+
+        if noise_std == "poisson":
+            bg_slab = np.clip(bg_slab, 0, None)
+            neuropil[t0 : t0 + slab_size] = (bg_slab @ masks_flat.T) / mask_sums
+        sl += bg_slab
+
         if noise_std == "poisson":
             sl[:] = noise_rng.poisson(np.clip(sl, 0, None))
         else:
             sl += noise_rng.normal(0, noise_std, sl.shape)
 
+    fluorescence = fluorescence._replace(neuropil=neuropil.astype(np.float32))
     rois.register_imaging(imaging)  # Link the ROIs to the imaging data
 
     return rois, imaging, fluorescence
@@ -321,7 +498,7 @@ def generate_fluorescence(
     num_frames: int,
     num_rois: int = 1,
     sampling_frequency: float = 30.0,
-    decay_time: float = 2.0,
+    decay_time: float = 0.5,
     event_rate: float = 0.3,
     noise_std: float = 0.0,
     bleaching_time: float = np.inf,
@@ -337,8 +514,12 @@ def generate_fluorescence(
         Number of independent fluorescence traces to generate.
     sampling_frequency : float, default: 30.0
         Sampling frequency in Hz.
-    decay_time : float, default: 2.0
-        Time constant of the exponential decay kernel in seconds.
+    decay_time : float, default: 0.5
+        Time constant of the exponential decay kernel in seconds. This sharp-rise,
+        single-exponential kernel is the same simplified model OASIS itself fits during
+        deconvolution, so the default follows the single-exponential time constant OASIS finds
+        optimal when fit to real GCaMP8s ground-truth recordings under that same model (0.5 s;
+        Rupprecht et al. 2026, Nat. Methods) rather than the sensor's true single-spike kinetics.
     event_rate : float, default: 0.3
         Mean spike-event rate in Hz. Each ROI's number of events is drawn as
         ``round(uniform(0.5, 1.5) * event_rate * num_frames / sampling_frequency)``, scaling

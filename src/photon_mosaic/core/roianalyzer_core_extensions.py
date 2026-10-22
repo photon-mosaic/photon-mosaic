@@ -12,6 +12,8 @@ from .roianalyzer import AnalyzerExtension, register_result_extension
 
 _FLUORESCENCE_METHODS = ("projection", "regression", "nnls")
 _NEUROPIL_SOURCES = ("neuropil", "background")
+
+
 _NEUROPIL_METHODS = ("surround",)
 
 
@@ -32,20 +34,29 @@ class FluorescenceExtension(AnalyzerExtension):
 
     When a :class:`BackgroundExtension` exists, its spatial background ``b`` is appended to the
     design matrix and its timecourse ``f`` is solved for together with the traces ``C``. That
-    requires ``'regression'`` or ``'nnls'``. ``neuropil_weight`` is not used in that case: ``C``
-    already excludes the modelled background. With both a :class:`NeuropilExtension` and a
+    requires ``'regression'`` or ``'nnls'``. With both a :class:`NeuropilExtension` and a
     :class:`BackgroundExtension` computed, ``neuropil_source`` picks which one to use.
+
+    ``neuropil_weight`` ``w`` (default ``0.7``, as in Suite2p) is how much of the estimated neuropil is
+    assumed to contaminate the ROI. For surround it is the weight of the subtracted ring mean
+    (``F - w Fneu``). For a CNMF background the traces are ``C + (1 - w) B``, i.e. ``(C + B) - w B``,
+    the same correction with ``B`` as the neuropil: the joint fit's own split corresponds to ``w = 1``,
+    and ``w < 1`` returns ``(1 - w) B`` to the trace, which is right when the background under the
+    ROIs is weaker than around them (cell bodies displacing neuropil). The fit cannot tell this from
+    the data: it only fixes the split up to a gauge freedom (see :class:`NeuropilExtension`).
 
     Computed data keys:
 
     ================  ======================  ======================================================
     Key               Shape                   Contents
     ================  ======================  ======================================================
-    ``fluorescence``  ``(n_frames, n_rois)``  the extracted traces: ``C`` for a CNMF background,
+    ``fluorescence``  ``(n_frames, n_rois)``  the extracted traces: ``C + (1 - neuropil_weight) B``
+                                              for a CNMF background (``C`` for ``neuropil_weight=1``),
                                               ``F - neuropil_weight * Fneu`` for surround
     ``background``    ``(n_frames, n_rois)``  CNMF: ``B = f b A.T``, the background projected onto
                                               each ROI's own footprint (divided by ``||a_i||^2``,
-                                              i.e. in the units of ``C``). Surround: the ring mean
+                                              i.e. in the units of ``C``), before ``neuropil_weight``.
+                                              Surround: the ring mean
                                               ``Fneu`` before ``neuropil_weight``, on the same L2
                                               scale as ``fluorescence`` (see
                                               :meth:`_persisted_neuropil`). ``(n_frames, 0)``
@@ -75,8 +86,9 @@ class FluorescenceExtension(AnalyzerExtension):
             Use the ``neuropil`` or ``background`` extension if one has been computed. Default is
             ``True``.
         neuropil_weight : float, optional
-            Weight of the surround neuropil trace subtracted from each ROI's trace. Not used with a
-            CNMF background (see the class docstring). Default is ``0.7``.
+            How much of the neuropil estimate is assumed to contaminate each ROI: the weight of the
+            subtracted surround trace, or, for a CNMF background, the share of ``B`` kept out of the
+            trace (see the class docstring); ``1`` keeps the joint fit's own split. Default is ``0.7``.
         method : str, optional
             ``'projection'``, ``'regression'`` or ``'nnls'``; see the class docstring. Default is
             ``'projection'``.
@@ -242,7 +254,9 @@ class FluorescenceNode(PipelineNode):
             Optional neuropil mask(s) to subtract from the fluorescence traces.
             Should have shape (num_rois, height, width) or (height, width).
         neuropil_weight : float, optional
-            Weight to apply to the neuropil signal before subtraction (default is 0.7).
+            Weight to apply to the neuropil signal before subtraction (default is 0.7). With
+            ``background_spatial`` it is the share of the modelled background kept out of the traces:
+            they become ``C + (1 - neuropil_weight) B``.
         background_spatial : np.ndarray, optional
             Spatial background components ``b`` of shape ``(gnb, height, width[, planes])``, e.g.
             from :class:`BackgroundExtension`'s ``method='cnmf'``. Appended to the design matrix and
@@ -382,7 +396,8 @@ class FluorescenceNode(PipelineNode):
             # and accepted) would reinstate the singularity.
             fallback = float(own_norm[~empty].mean()) if (~empty).any() else 1.0
             shift = np.where(empty, fallback, ridge * own_norm)
-            self._gram_aa_lu = splu((gram_aa + sp.diags(shift)).tocsc())
+            self._gram_aa_regularized = (gram_aa + sp.diags(shift)).tocsc()
+            self._gram_aa_lu = splu(self._gram_aa_regularized)
             self._aa_inv_ab = self._gram_aa_lu.solve(gram_ab) if self._gnb else gram_ab  # (N, gnb)
             schur = _ridge_regularize(gram_bb, ridge) - gram_ab.T @ self._aa_inv_ab  # (gnb, gnb)
             self._schur_inv = pinvh(schur) if self._gnb else schur
@@ -410,6 +425,22 @@ class FluorescenceNode(PipelineNode):
         sqrt_w = np.sqrt(np.maximum(eigvals, floor))
         self._nnls_matrix = (eigvecs * sqrt_w).T
         self._nnls_rhs_map = eigvecs / sqrt_w  # r @ this == y
+
+    def __getstate__(self):
+        # scipy.sparse.linalg.SuperLU (method='regression') isn't picklable, which breaks
+        # n_jobs>1 (spikeinterface's run_node_pipeline sends nodes to worker processes via
+        # ProcessPoolExecutor). Drop it here and rebuild it from the already-picklable
+        # `_gram_aa_regularized` in __setstate__, once per worker process.
+        state = self.__dict__.copy()
+        state.pop("_gram_aa_lu", None)
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        if "_gram_aa_regularized" in self.__dict__:
+            from scipy.sparse.linalg import splu
+
+            self._gram_aa_lu = splu(self._gram_aa_regularized)
 
     def get_dtype(self):
         return np.float32
@@ -451,7 +482,10 @@ class FluorescenceNode(PipelineNode):
             temporal = (rhs_b - traces @ self._gram_ab) @ self._gram_bb_inv
 
         if self._gnb:
-            return traces.astype(np.float32), (temporal @ self._background_to_rois).astype(np.float32)
+            background = temporal @ self._background_to_rois
+            if self.neuropil_weight != 1.0:
+                traces = traces + (1.0 - self.neuropil_weight) * background
+            return traces.astype(np.float32), background.astype(np.float32)
 
         neuropil_trace = None
         if self._neuropil_flat is not None:
@@ -769,8 +803,9 @@ class DfOverFExtension(AnalyzerExtension):
     the fit can't fully separate a cell's baseline from the background: moving part of the baseline
     from ``C`` into ``b, f`` (or back) fits the movie equally well, so ``C``'s own baseline is not
     reliable on its own. With ``use_background=True`` (the default) the background per ROI ``B``
-    (``FluorescenceExtension.get_data(key='background')``) is then used as a second input, as in
-    CaImAn's ``detrend_df_f``::
+    (``FluorescenceExtension.get_data(key='background')``, scaled by that extension's
+    ``neuropil_weight`` like the share of it removed from the traces) is then used as a second input,
+    as in CaImAn's ``detrend_df_f``::
 
         dF/F = (C - C_baseline) / (B_baseline + C_baseline)
 
@@ -850,7 +885,8 @@ class DfOverFExtension(AnalyzerExtension):
             return None
         if fluorescence._neuropil_source() != "background":
             return None
-        return background
+        # The traces keep (1 - w) B, so only w B is left as background (see FluorescenceExtension).
+        return fluorescence.params.get("neuropil_weight", 0.7) * background
 
     def _run(self, verbose: bool = False, **job_kwargs) -> None:
         F = self.roi_analyzer.get_extension("fluorescence").get_data()
