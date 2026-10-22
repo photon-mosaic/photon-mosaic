@@ -496,12 +496,15 @@ def test_generate_imaging_with_rois_neuropil_matches_actual_background(neuropil_
     assert video.mean() == pytest.approx(0.2, rel=0.15)
 
 
-@pytest.mark.parametrize("neuropil_model", ["constant", "vignette"])
-def test_generate_imaging_with_rois_neuropil_roi_coefficient_default_is_unchanged(neuropil_model):
-    """`neuropil_roi_coefficient=1.0` (explicit) should be identical to omitting it."""
+@pytest.mark.parametrize(("neuropil_model", "expected"), [("constant", 1.0), ("vignette", 0.7)])
+def test_generate_imaging_with_rois_neuropil_roi_coefficient_default_depends_on_the_model(neuropil_model, expected):
+    """Omitting `neuropil_roi_coefficient` is 1.0 for "constant" (so it stays uniform, as before) and
+    0.7 for "vignette"."""
     kwargs = dict(num_frames=100, height=30, width=40, num_rois=3, radius_range=(3, 5), seed=42)
     _, default, _ = generate_imaging_with_rois(**kwargs, neuropil_model=neuropil_model)
-    _, explicit, _ = generate_imaging_with_rois(**kwargs, neuropil_model=neuropil_model, neuropil_roi_coefficient=1.0)
+    _, explicit, _ = generate_imaging_with_rois(
+        **kwargs, neuropil_model=neuropil_model, neuropil_roi_coefficient=expected
+    )
     np.testing.assert_array_equal(default.get_series(), explicit.get_series())
 
 
@@ -525,7 +528,9 @@ def test_generate_imaging_with_rois_neuropil_roi_coefficient_scales_only_roi_pix
         neuropil_model=neuropil_model,
         seed=11,
     )
-    rois_a, im_a, fluor_a = generate_imaging_with_rois(**kwargs, baseline_range=(0.0, 0.0))
+    rois_a, im_a, fluor_a = generate_imaging_with_rois(
+        **kwargs, baseline_range=(0.0, 0.0), neuropil_roi_coefficient=1.0
+    )
     rois_b, im_b, fluor_b = generate_imaging_with_rois(
         **kwargs, baseline_range=(0.0, 0.0), neuropil_roi_coefficient=0.7
     )

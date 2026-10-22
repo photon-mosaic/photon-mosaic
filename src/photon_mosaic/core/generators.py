@@ -271,7 +271,7 @@ def generate_imaging_with_rois(
     seed: int | None = None,
     neuropil_model: Literal["constant", "vignette"] = "constant",
     neuropil_fluctuation_std: float = 0.5,
-    neuropil_roi_coefficient: float = 1.0,
+    neuropil_roi_coefficient: float | None = None,
 ) -> tuple[BaseRois, NumpyImaging, FluorescenceData]:
     """Generate a random NumpyImaging object and corresponding ROIs with fluorescence activity.
 
@@ -318,7 +318,7 @@ def generate_imaging_with_rois(
         frame-and-time-averaged mean regardless of `neuropil_model`: each model's spatial
         profile and/or temporal fluctuation is normalized to mean 1, so `background` always
         means the same thing. (The one exception is a `neuropil_roi_coefficient` other than 1,
-        which scales the background on ROI pixels only.)
+        which scales the background on ROI pixels only, as ``"vignette"`` does by default.)
     baseline_range : tuple[float, float], default: (0.5, 1.0)
         Range from which each ROI's baseline fluorescence (F0) is drawn uniformly at
         random, modeling cell-to-cell brightness variability -- same photon-count
@@ -360,14 +360,15 @@ def generate_imaging_with_rois(
         ``neuropil_model="vignette"`` (ignored for ``"constant"``). The fluctuation is additive
         around a mean level, so large values can push the instantaneous background negative
         (unphysical); 0.5 balances a clearly demonstrable effect against that risk.
-    neuropil_roi_coefficient : float, default: 1.0
+    neuropil_roi_coefficient : float or None, default: None
         Background level on ROI pixels relative to the background around them, applied to every
-        pixel covered by any ROI mask and to any `neuropil_model`. ``1.0`` (default): the same
-        background everywhere, so a ring around an ROI estimates the neuropil under it exactly.
-        Below 1, ROI pixels are dimmer than their surroundings (e.g. cell bodies displacing
-        neuropil), the situation Suite2p's default neuropil weight of 0.7 corrects for; the
-        optimal ``neuropil_weight`` of a ``"surround"`` correction is then about this value.
-        Must be non-negative.
+        pixel covered by any ROI mask. ``1.0``: the same background everywhere, so a ring around
+        an ROI estimates the neuropil under it exactly. Below 1, ROI pixels are dimmer than their
+        surroundings (e.g. cell bodies displacing neuropil), the situation Suite2p's default
+        neuropil weight of 0.7 corrects for; the optimal ``neuropil_weight`` of a ``"surround"``
+        correction is then about this value. ``None`` (the default) is ``1.0`` for
+        ``neuropil_model="constant"``, which stays spatially uniform, and ``0.7`` for
+        ``"vignette"``. Must be non-negative.
 
     Returns
     -------
@@ -383,6 +384,8 @@ def generate_imaging_with_rois(
     """
     if neuropil_model not in ("constant", "vignette"):
         raise ValueError(f"Unknown neuropil_model: {neuropil_model!r}. Supported: 'constant', 'vignette'.")
+    if neuropil_roi_coefficient is None:
+        neuropil_roi_coefficient = 1.0 if neuropil_model == "constant" else 0.7
     if neuropil_roi_coefficient < 0:
         raise ValueError(f"neuropil_roi_coefficient must be non-negative, got {neuropil_roi_coefficient}.")
 
