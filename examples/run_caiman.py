@@ -106,7 +106,14 @@ def main():
             "f",
             None if e.f is None else e.f.shape,
         )
-        np.savez(a.out, A=A, C=e.C, YrA=e.YrA, b=e.b, f=e.f, F_dff=e.F_dff, dims=np.array(dims))
+        S = np.zeros_like(e.C) if e.S is None else np.asarray(e.S)  # spikes (p > 0), zeros for p=0
+        # AR(1) coefficient per component (p=1), for the decay time
+        g = (
+            np.array([np.atleast_1d(x)[0] if np.size(x) else np.nan for x in e.g])
+            if getattr(e, "g", None) is not None
+            else np.array([])
+        )
+        np.savez(a.out, A=A, C=e.C, YrA=e.YrA, S=S, g=g, b=e.b, f=e.f, F_dff=e.F_dff, dims=np.array(dims))
     finally:
         cm.stop_server(dview=dview)
 
