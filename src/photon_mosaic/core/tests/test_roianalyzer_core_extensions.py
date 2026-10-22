@@ -1686,16 +1686,49 @@ def test_cnmf_joint_extraction_beats_no_correction(cnmf_truth, method):
     assert np.linalg.norm(corrected - traces_true) < np.linalg.norm(uncorrected - traces_true) / 5
 
 
-@pytest.mark.parametrize("neuropil_weight", [0.0, 0.7, 1.0])
-def test_cnmf_traces_are_the_joint_solve_with_no_neuropil_subtraction(cnmf_truth, neuropil_weight):
-    # With a CNMF background, C is the ROI block of the joint [C, f] least-squares solve, returned
-    # as is: the background is modelled, not subtracted, so neuropil_weight must have no effect.
+def test_cnmf_traces_are_the_joint_solve_by_default(cnmf_truth):
+    # With a CNMF background and the default neuropil_weight (1.0), C is the ROI block of the joint
+    # [C, f] least-squares solve, returned as is: the background is modelled, not subtracted.
     masks, movie, _, _, _ = cnmf_truth
-    analyzer, ext = _cnmf_analyzer_and_fluorescence(masks, movie, neuropil_weight=neuropil_weight)
+    analyzer, ext = _cnmf_analyzer_and_fluorescence(masks, movie)
     b = analyzer.get_extension("background").get_data().reshape(1, -1)
     design = np.concatenate([masks.reshape(CNMF_ROIS, -1), b], axis=0).T.astype(np.float64)
     expected, *_ = np.linalg.lstsq(design, movie.reshape(CNMF_FRAMES, -1).T.astype(np.float64), rcond=None)
     np.testing.assert_allclose(ext.get_data(), expected[:CNMF_ROIS].T, rtol=1e-4, atol=1e-2)
+
+
+@pytest.mark.parametrize("neuropil_weight", [0.0, 0.7])
+def test_cnmf_neuropil_weight_keeps_a_share_of_the_background_in_the_traces(cnmf_truth, neuropil_weight):
+    # neuropil_weight w < 1 is the same two-step correction as for surround with B as the neuropil:
+    # fluorescence = (C + B) - w B, while `background` stays B (before the weight), so that
+    # fluorescence + w * background is the uncorrected trace. w = 1 is the joint solve itself.
+    masks, movie, _, _, _ = cnmf_truth
+    _, joint = _cnmf_analyzer_and_fluorescence(masks, movie)
+    _, weighted = _cnmf_analyzer_and_fluorescence(masks, movie, neuropil_weight=neuropil_weight)
+    background = joint.get_data(key="background")
+    np.testing.assert_array_equal(weighted.get_data(key="background"), background)
+    np.testing.assert_allclose(
+        weighted.get_data(), joint.get_data() + (1 - neuropil_weight) * background, rtol=1e-5, atol=1e-5
+    )
+    np.testing.assert_allclose(
+        weighted.get_data() + neuropil_weight * weighted.get_data(key="background"),
+        joint.get_data() + background,
+        rtol=1e-5,
+        atol=1e-5,
+    )
+
+
+def test_df_over_f_scales_the_cnmf_background_by_neuropil_weight(cnmf_truth):
+    # dF/F = (C - C_baseline) / (B_baseline + C_baseline), with C the traces (which keep (1 - w) B)
+    # and B only the w B left as background.
+    masks, movie, _, _, _ = cnmf_truth
+    weight, win_s, prct = 0.7, 2.0, 20.0
+    analyzer, ext = _cnmf_analyzer_and_fluorescence(masks, movie, neuropil_weight=weight)
+    dff = analyzer.compute("df_over_f", method="percentile", win_baseline=win_s, prctile_baseline=prct)
+    C, B = ext.get_data(), weight * ext.get_data(key="background")
+    win = int(win_s * SF)
+    c0, b0 = _percentile_baselines(C, win, prct), _percentile_baselines(B, win, prct)
+    np.testing.assert_allclose(dff.get_data(), (C - c0) / (b0 + c0), rtol=1e-4, atol=1e-6)
 
 
 @pytest.mark.parametrize("weighted", [False, True])
