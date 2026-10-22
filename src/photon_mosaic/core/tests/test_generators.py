@@ -465,8 +465,9 @@ def test_generate_fluorescence_leaves_neuropil_none():
     assert fluorescence.neuropil is None
 
 
+@pytest.mark.parametrize("neuropil_roi_coefficient", [1.0, 0.7])
 @pytest.mark.parametrize("neuropil_model", ["constant", "vignette"])
-def test_generate_imaging_with_rois_neuropil_matches_actual_background(neuropil_model):
+def test_generate_imaging_with_rois_neuropil_matches_actual_background(neuropil_model, neuropil_roi_coefficient):
     """`neuropil` should exactly match the true, mask-weighted mean background level actually
     present in the video, isolated from ROI signal (zero baseline) and noise; and regardless of
     `neuropil_model`, the video's overall mean should still match the `background` parameter --
@@ -483,6 +484,7 @@ def test_generate_imaging_with_rois_neuropil_matches_actual_background(neuropil_
         noise_std=0.0,
         neuropil_model=neuropil_model,
         neuropil_fluctuation_std=0.5,
+        neuropil_roi_coefficient=neuropil_roi_coefficient,
         seed=7,
     )
     video = imaging.get_series()
@@ -492,3 +494,46 @@ def test_generate_imaging_with_rois_neuropil_matches_actual_background(neuropil_
 
     np.testing.assert_allclose(fluorescence.neuropil, actual, rtol=1e-4, atol=1e-5)
     assert video.mean() == pytest.approx(0.2, rel=0.15)
+
+
+@pytest.mark.parametrize("neuropil_model", ["constant", "vignette"])
+def test_generate_imaging_with_rois_neuropil_roi_coefficient_default_is_unchanged(neuropil_model):
+    """`neuropil_roi_coefficient=1.0` (explicit) should be identical to omitting it."""
+    kwargs = dict(num_frames=100, height=30, width=40, num_rois=3, radius_range=(3, 5), seed=42)
+    _, default, _ = generate_imaging_with_rois(**kwargs, neuropil_model=neuropil_model)
+    _, explicit, _ = generate_imaging_with_rois(**kwargs, neuropil_model=neuropil_model, neuropil_roi_coefficient=1.0)
+    np.testing.assert_array_equal(default.get_series(), explicit.get_series())
+
+
+def test_generate_imaging_with_rois_neuropil_roi_coefficient_rejects_negative_value():
+    with pytest.raises(ValueError, match="neuropil_roi_coefficient"):
+        generate_imaging_with_rois(num_frames=50, num_rois=2, radius_range=(3, 5), neuropil_roi_coefficient=-0.1)
+
+
+@pytest.mark.parametrize("neuropil_model", ["constant", "vignette"])
+def test_generate_imaging_with_rois_neuropil_roi_coefficient_scales_only_roi_pixels(neuropil_model):
+    """The background drops by exactly `neuropil_roi_coefficient` on pixels covered by an ROI and is
+    untouched elsewhere; ROI placement and the injected traces do not change."""
+    kwargs = dict(
+        num_frames=200,
+        height=40,
+        width=40,
+        num_rois=3,
+        radius_range=(3, 5),
+        weighted_rois=True,
+        noise_std=0.0,
+        neuropil_model=neuropil_model,
+        seed=11,
+    )
+    rois_a, im_a, fluor_a = generate_imaging_with_rois(**kwargs, baseline_range=(0.0, 0.0))
+    rois_b, im_b, fluor_b = generate_imaging_with_rois(
+        **kwargs, baseline_range=(0.0, 0.0), neuropil_roi_coefficient=0.7
+    )
+    np.testing.assert_array_equal(rois_a.get_roi_image_masks(), rois_b.get_roi_image_masks())
+    np.testing.assert_array_equal(fluor_a.traces, fluor_b.traces)
+
+    on_roi = (rois_a.get_roi_image_masks() > 0).any(axis=0)
+    video_a, video_b = im_a.get_series()[..., 0], im_b.get_series()[..., 0]
+    np.testing.assert_allclose(video_b[:, on_roi], 0.7 * video_a[:, on_roi], rtol=1e-5)
+    np.testing.assert_array_equal(video_b[:, ~on_roi], video_a[:, ~on_roi])
+    np.testing.assert_allclose(fluor_b.neuropil, 0.7 * fluor_a.neuropil, rtol=1e-5)

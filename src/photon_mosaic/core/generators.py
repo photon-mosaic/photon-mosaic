@@ -271,6 +271,7 @@ def generate_imaging_with_rois(
     seed: int | None = None,
     neuropil_model: Literal["constant", "vignette"] = "constant",
     neuropil_fluctuation_std: float = 0.5,
+    neuropil_roi_coefficient: float = 1.0,
 ) -> tuple[BaseRois, NumpyImaging, FluorescenceData]:
     """Generate a random NumpyImaging object and corresponding ROIs with fluorescence activity.
 
@@ -316,7 +317,8 @@ def generate_imaging_with_rois(
         fluorescence rather than non-bleaching dark counts. This is the true
         frame-and-time-averaged mean regardless of `neuropil_model`: each model's spatial
         profile and/or temporal fluctuation is normalized to mean 1, so `background` always
-        means the same thing.
+        means the same thing. (The one exception is a `neuropil_roi_coefficient` other than 1,
+        which scales the background on ROI pixels only.)
     baseline_range : tuple[float, float], default: (0.5, 1.0)
         Range from which each ROI's baseline fluorescence (F0) is drawn uniformly at
         random, modeling cell-to-cell brightness variability -- same photon-count
@@ -358,6 +360,14 @@ def generate_imaging_with_rois(
         ``neuropil_model="vignette"`` (ignored for ``"constant"``). The fluctuation is additive
         around a mean level, so large values can push the instantaneous background negative
         (unphysical); 0.5 balances a clearly demonstrable effect against that risk.
+    neuropil_roi_coefficient : float, default: 1.0
+        Background level on ROI pixels relative to the background around them, applied to every
+        pixel covered by any ROI mask and to any `neuropil_model`. ``1.0`` (default): the same
+        background everywhere, so a ring around an ROI estimates the neuropil under it exactly.
+        Below 1, ROI pixels are dimmer than their surroundings (e.g. cell bodies displacing
+        neuropil), the situation Suite2p's default neuropil weight of 0.7 corrects for; the
+        optimal ``neuropil_weight`` of a ``"surround"`` correction is then about this value.
+        Must be non-negative.
 
     Returns
     -------
@@ -373,6 +383,8 @@ def generate_imaging_with_rois(
     """
     if neuropil_model not in ("constant", "vignette"):
         raise ValueError(f"Unknown neuropil_model: {neuropil_model!r}. Supported: 'constant', 'vignette'.")
+    if neuropil_roi_coefficient < 0:
+        raise ValueError(f"neuropil_roi_coefficient must be non-negative, got {neuropil_roi_coefficient}.")
 
     rng = np.random.default_rng(seed)
     imaging_seed = int(rng.integers(0, 2**31))
@@ -425,12 +437,18 @@ def generate_imaging_with_rois(
     np.matmul(signal, masks_flat, out=flat)
 
     neuropil_rng = np.random.default_rng(neuropil_seed)
-    if neuropil_model != "constant":
-        profile_flat = _generate_vignette_profile(height, width, num_planes).reshape(-1).astype(video.dtype)
+    # Static spatial profile of the background; None means spatially uniform.
+    profile_flat = None
+    fluctuation = np.ones(num_frames)
     if neuropil_model == "vignette":
+        profile_flat = _generate_vignette_profile(height, width, num_planes).reshape(-1).astype(video.dtype)
         fluctuation = 1.0 + neuropil_fluctuation_std * _generate_ou_process(
             num_frames, sampling_frequency, neuropil_rng
         ).reshape(-1)
+    if neuropil_roi_coefficient != 1.0:
+        if profile_flat is None:
+            profile_flat = np.ones(masks_flat.shape[1], dtype=video.dtype)
+        profile_flat[masks_flat.any(axis=0)] *= neuropil_roi_coefficient
 
     # True background level under each ROI's mask (mask-weighted mean, before noise) -- cheap
     # since it only needs the ROI masks, not the full pixel grid. Under `noise_std="poisson"`,
@@ -439,9 +457,9 @@ def generate_imaging_with_rois(
     mask_sums = masks_flat.sum(axis=1)
     if noise_std == "poisson":
         neuropil = np.empty((num_frames, num_rois), dtype=np.float32)
-    elif neuropil_model == "constant":
+    elif profile_flat is None:
         neuropil = np.broadcast_to((background * bleach)[:, np.newaxis], (num_frames, num_rois)).copy()
-    else:  # "vignette"
+    else:
         roi_profile_avg = (masks_flat * profile_flat[np.newaxis, :]).sum(axis=1) / mask_sums
         neuropil = (background * bleach * fluctuation)[:, np.newaxis] * roi_profile_avg[np.newaxis, :]
 
@@ -450,9 +468,9 @@ def generate_imaging_with_rois(
     for t0 in range(0, num_frames, slab_size):
         sl = flat[t0 : t0 + slab_size]
         bleach_sl = bleach[t0 : t0 + slab_size]
-        if neuropil_model == "constant":
+        if profile_flat is None:
             bg_slab = np.broadcast_to((background * bleach_sl)[:, np.newaxis], sl.shape)
-        else:  # "vignette"
+        else:
             bg_slab = (background * bleach_sl * fluctuation[t0 : t0 + slab_size])[:, np.newaxis] * profile_flat[
                 np.newaxis, :
             ]
