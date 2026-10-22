@@ -1295,6 +1295,9 @@ def _cnmf_analyzer_and_fluorescence(masks, movie, method="regression", backgroun
     params = dict(gnb=1, max_iter=40, highpass_sigma=CNMF_HIGHPASS)
     params.update(background_kwargs or {})
     analyzer.compute("background", **params)
+    # These tests are about the joint solve itself, so default to neuropil_weight=1 (the fit's own
+    # split of C and B) rather than the library default of 0.7; tests of the weight pass their own.
+    fluorescence_kwargs.setdefault("neuropil_weight", 1.0)
     return analyzer, analyzer.compute("fluorescence", method=method, **fluorescence_kwargs)
 
 
@@ -1686,15 +1689,32 @@ def test_cnmf_joint_extraction_beats_no_correction(cnmf_truth, method):
     assert np.linalg.norm(corrected - traces_true) < np.linalg.norm(uncorrected - traces_true) / 5
 
 
-def test_cnmf_traces_are_the_joint_solve_by_default(cnmf_truth):
-    # With a CNMF background and the default neuropil_weight (1.0), C is the ROI block of the joint
-    # [C, f] least-squares solve, returned as is: the background is modelled, not subtracted.
+def test_cnmf_traces_are_the_joint_solve_at_neuropil_weight_1(cnmf_truth):
+    # With a CNMF background and neuropil_weight=1, C is the ROI block of the joint [C, f]
+    # least-squares solve, returned as is: the background is modelled, not subtracted.
     masks, movie, _, _, _ = cnmf_truth
-    analyzer, ext = _cnmf_analyzer_and_fluorescence(masks, movie)
+    analyzer, ext = _cnmf_analyzer_and_fluorescence(masks, movie, neuropil_weight=1.0)
     b = analyzer.get_extension("background").get_data().reshape(1, -1)
     design = np.concatenate([masks.reshape(CNMF_ROIS, -1), b], axis=0).T.astype(np.float64)
     expected, *_ = np.linalg.lstsq(design, movie.reshape(CNMF_FRAMES, -1).T.astype(np.float64), rcond=None)
     np.testing.assert_allclose(ext.get_data(), expected[:CNMF_ROIS].T, rtol=1e-4, atol=1e-2)
+
+
+def test_cnmf_neuropil_weight_defaults_to_0_7_as_for_surround(cnmf_truth):
+    masks, movie, _, _, _ = cnmf_truth
+    _, joint = _cnmf_analyzer_and_fluorescence(masks, movie, neuropil_weight=1.0)
+    _, default = _cnmf_analyzer_and_fluorescence(masks, movie, neuropil_weight=0.7)
+    analyzer = create_roi_analyzer(
+        NumpyRois(roi_image_masks=masks, sampling_frequency=SF),
+        NumpyImaging(movie, sampling_frequency=SF),
+        format="memory",
+    )
+    analyzer.compute("background", gnb=1, max_iter=40, highpass_sigma=CNMF_HIGHPASS)
+    omitted = analyzer.compute("fluorescence", method="regression")
+    np.testing.assert_allclose(omitted.get_data(), default.get_data(), rtol=1e-5, atol=1e-5)
+    np.testing.assert_allclose(
+        omitted.get_data(), joint.get_data() + 0.3 * joint.get_data(key="background"), rtol=1e-4, atol=1e-3
+    )
 
 
 @pytest.mark.parametrize("neuropil_weight", [0.0, 0.7])
@@ -1853,7 +1873,9 @@ def test_cnmf_background_is_projected_onto_each_rois_own_footprint():
     movie = movie + (f[:, None, None] * b)[..., None]
     imaging = NumpyImaging(movie, sampling_frequency=SF)
     rois = NumpyRois(roi_image_masks=masks, sampling_frequency=SF)
-    node = FluorescenceNode(imaging, rois, background_spatial=b[None, ..., None], method="regression")
+    node = FluorescenceNode(
+        imaging, rois, neuropil_weight=1.0, background_spatial=b[None, ..., None], method="regression"
+    )
     traces, background = node.compute(movie)
 
     masks_flat = masks.reshape(2, -1).astype(np.float64)
