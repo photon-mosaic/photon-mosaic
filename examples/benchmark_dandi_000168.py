@@ -415,20 +415,6 @@ def run_benchmark(
     return results_dir
 
 
-def add_quality(data_dir):
-    """Add the signal-quality measure to existing results that lack it (fetches missing NWB files)."""
-    data_dir = Path(data_dir).expanduser()
-    for result_file in sorted((data_dir / "results").glob("*.json")):
-        result = json.load(open(result_file))
-        if "signal quality" in result:
-            continue
-        stem, _, movie = result["cell"].partition("_movie")
-        d = load_binned(download(f"{stem.split('_')[0]}/{stem}.nwb", data_dir), int(movie or 0))
-        result["signal quality"] = signal_quality(d["movie"], d["masks"][int(d["ephys_roi"][0])], d["spikes"], d["fs"])
-        json.dump(result, open(result_file, "w"), indent=1)
-        print("quality added:", result_file.name, flush=True)
-
-
 def summary_table(results_dir, cells=None, sigma=MAIN_SIGMA):
     """Mean spike correlation per method, by indicator and by signal quality, as text, over the results in
     ``results_dir`` (only those of the DANDI paths ``cells``, if given)."""
@@ -481,16 +467,13 @@ def main():
     ap.add_argument("--force", action="store_true", help="recompute cells that already have a result")
     ap.add_argument("--delete-nwb", action="store_true", help="delete each NWB file once its cell is processed")
     ap.add_argument("--summary", action="store_true", help="only print the summary table")
-    ap.add_argument("--add-quality", action="store_true", help="add the signal-quality measure to existing results")
     a = ap.parse_args()
     data_dir = Path(a.data_dir).expanduser()
     if a.select:
         counts = spike_counts(data_dir)
         print("\n".join(select_cells(counts, a.per_indicator or PER_INDICATOR, a.min_spikes)))
         return
-    if a.add_quality:
-        add_quality(data_dir)
-    elif not a.summary:
+    if not a.summary:
         run_benchmark(data_dir, a.cells, a.per_indicator, a.all, a.min_spikes, a.delete_nwb, a.force, a.all_movies)
     cells = None if a.all else resolve_cells(data_dir, a.cells, a.per_indicator, False, a.min_spikes)
     print(summary_table(data_dir / "results", cells))
