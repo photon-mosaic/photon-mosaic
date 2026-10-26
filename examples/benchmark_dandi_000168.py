@@ -19,10 +19,12 @@ its first movie with enough spikes is run.
     python benchmark_dandi_000168.py --data-dir /scratch --list --all                    # the paths, one per line
     python benchmark_dandi_000168.py --data-dir /scratch --cells <path> --results-dir /results   # one file, e.g. a task
 
-Needs the photon-mosaic environment (pynwb, h5py, requests, oasis) and ``CAIMAN_PYTHON`` pointing at an environment with
-CaImAn. A cell takes a few minutes plus its download (the files are 1 to 23 GB; ``--delete-nwb`` removes each one once
-it is processed). Finished cells are skipped, so a run can be interrupted and resumed. A file that fails is logged to
-``<results-dir>/<file>.failed`` and the run continues; failed files are retried the next time.
+Needs the photon-mosaic environment (pynwb, h5py, requests, oasis, and suite2p for the surround neuropil: ``pip
+install "photon-mosaic[suite2p-registration]"``) and ``CAIMAN_PYTHON`` pointing at an environment with CaImAn. A cell
+takes a few minutes plus its download (the files are 1 to 23 GB; ``--delete-nwb`` removes each one once it is
+processed). Finished cells are skipped, so a run can be interrupted and resumed. A file that fails is logged to
+``<results-dir>/<file>.failed`` and the run continues (failed files are retried next time); the exit status is 1 if
+any failed.
 """
 
 import argparse
@@ -394,6 +396,7 @@ def run_benchmark(
     results_dir=None,
 ):
     """Download and score the cells, writing ``<results_dir>/<cell>.json`` for each; finished cells are skipped.
+    Returns the names of the files that failed.
     ``results_dir`` defaults to ``<data_dir>/results``. A file that raises is logged to ``<file>.failed`` and skipped.
 
     ``cells``: DANDI paths; otherwise ``per_indicator`` applies the selection rule with that many animals per indicator,
@@ -430,7 +433,7 @@ def run_benchmark(
                 nwb.unlink(missing_ok=True)
     if failed:
         print(f"{len(failed)} files failed: {', '.join(failed)}", flush=True)
-    return results_dir
+    return failed
 
 
 def summary_table(results_dir, cells=None, sigma=MAIN_SIGMA):
@@ -492,12 +495,15 @@ def main():
     if a.list:
         print("\n".join(resolve_cells(data_dir, a.cells, a.per_indicator, a.all, a.min_spikes)))
         return
+    failed = []
     if not a.summary:
-        run_benchmark(
+        failed = run_benchmark(
             data_dir, a.cells, a.per_indicator, a.all, a.min_spikes, a.delete_nwb, a.force, a.all_movies, results_dir
         )
     cells = None if a.all else resolve_cells(data_dir, a.cells, a.per_indicator, False, a.min_spikes)
     print(summary_table(results_dir, cells))
+    if failed:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":  # the guard matters: photon-mosaic's workers are spawned processes
