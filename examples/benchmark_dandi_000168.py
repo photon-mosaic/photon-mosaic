@@ -8,17 +8,21 @@ binned 2x2 in space and 4x in time, and run through photon-mosaic (several neuro
 spikes for the patched cell and its true spikes, both Gaussian-smoothed.
 
 Which cells: by default the ones in ``CELLS``, chosen by one rule for every indicator: each animal's smallest file with
-a movie of at least ``MIN_SPIKES`` spikes, and the 4 animals whose chosen files are smallest (``--select`` prints the
-result). A file is one cell (its extra movies are further recordings of it): its first movie with enough spikes is run.
+a movie of at least ``MIN_SPIKES`` spikes, and the 4 animals whose chosen files are smallest
+(``--list --per-indicator 4`` prints the result). A file is one cell (its extra movies are further recordings of it):
+its first movie with enough spikes is run.
 ``--per-indicator N`` applies the rule with N animals, ``--all`` runs every file in the dandiset.
 
     python benchmark_dandi_000168.py --data-dir ~/data/dandi-000168            # the default cells
     python benchmark_dandi_000168.py --data-dir ~/data/dandi-000168 --summary  # print the table
     python benchmark_dandi_000168.py --data-dir ~/data/dandi-000168 --all --delete-nwb   # everything: hours to days
+    python benchmark_dandi_000168.py --data-dir /scratch --list --all                    # the paths, one per line
+    python benchmark_dandi_000168.py --data-dir /scratch --cells <path> --results-dir /results   # one file, e.g. a task
 
 Needs the photon-mosaic environment (pynwb, h5py, requests, oasis) and ``CAIMAN_PYTHON`` pointing at an environment with
 CaImAn. A cell takes a few minutes plus its download (the files are 1 to 23 GB; ``--delete-nwb`` removes each one once
-it is processed). Finished cells are skipped, so a run can be interrupted and resumed.
+it is processed). Finished cells are skipped, so a run can be interrupted and resumed. A file that fails is logged to
+``<results-dir>/<file>.failed`` and the run continues; failed files are retried the next time.
 """
 
 import argparse
@@ -26,6 +30,7 @@ import io
 import json
 import os
 import subprocess
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -40,7 +45,7 @@ HERE = Path(__file__).parent
 
 INDICATORS = ("jGCaMP8f", "jGCaMP8m", "jGCaMP8s", "jGCaMP7f")
 PER_INDICATOR, MIN_SPIKES = 4, 40
-# The result of that rule (``--select``, 4 animals per indicator, as of the dandiset's current state).
+# The result of that rule (``--list --per-indicator 4``, 4 animals per indicator, as of the dandiset's current state).
 CELLS = [
     "jGCaMP8f/jGCaMP8f_ANM471994_cell06.nwb",
     "jGCaMP8f/jGCaMP8f_ANM478407_cell03.nwb",
@@ -386,32 +391,45 @@ def run_benchmark(
     delete_nwb=False,
     force=False,
     all_movies=False,
+    results_dir=None,
 ):
-    """Download and score the cells, writing ``<data_dir>/results/<cell>.json`` for each; finished cells are skipped.
+    """Download and score the cells, writing ``<results_dir>/<cell>.json`` for each; finished cells are skipped.
+    ``results_dir`` defaults to ``<data_dir>/results``. A file that raises is logged to ``<file>.failed`` and skipped.
 
     ``cells``: DANDI paths; otherwise ``per_indicator`` applies the selection rule with that many animals per indicator,
     ``all_files`` takes every file of the dandiset, and by default it is the ``CELLS`` list. A file is one cell: only
     its first movie with a patched ROI and at least ``min_spikes`` spikes is run, unless ``all_movies``.
     """
     data_dir = Path(data_dir).expanduser()
-    results_dir = data_dir / "results"
+    results_dir = Path(results_dir).expanduser() if results_dir else data_dir / "results"
     data_dir.mkdir(parents=True, exist_ok=True)
-    results_dir.mkdir(exist_ok=True)
+    results_dir.mkdir(parents=True, exist_ok=True)
+    failed = []
     caiman_python = os.environ.get("CAIMAN_PYTHON", str(Path.home() / "miniconda3/envs/caiman/bin/python"))
     for path in resolve_cells(data_dir, cells, per_indicator, all_files, min_spikes):
         stem = Path(path).stem
         if not force and ((results_dir / f"{stem}.json").exists() or list(results_dir.glob(f"{stem}_movie*.json"))):
             print("skip (done):", stem, flush=True)
             continue
-        nwb = download(path, data_dir)
-        for movie_number in movie_numbers(nwb):
-            result = run_cell(nwb, movie_number, data_dir, caiman_python, min_spikes)
-            if result is not None:
-                json.dump(result, open(results_dir / f"{result['cell']}.json", "w"), indent=1)
-                if not all_movies:
-                    break
-        if delete_nwb:
-            nwb.unlink(missing_ok=True)
+        nwb = None
+        try:
+            nwb = download(path, data_dir)
+            for movie_number in movie_numbers(nwb):
+                result = run_cell(nwb, movie_number, data_dir, caiman_python, min_spikes)
+                if result is not None:
+                    json.dump(result, open(results_dir / f"{result['cell']}.json", "w"), indent=1)
+                    if not all_movies:
+                        break
+            (results_dir / f"{stem}.failed").unlink(missing_ok=True)
+        except Exception:
+            (results_dir / f"{stem}.failed").write_text(traceback.format_exc())
+            failed.append(stem)
+            print(f"FAILED: {stem} (see {stem}.failed)", flush=True)
+        finally:
+            if delete_nwb and nwb is not None:
+                nwb.unlink(missing_ok=True)
+    if failed:
+        print(f"{len(failed)} files failed: {', '.join(failed)}", flush=True)
     return results_dir
 
 
@@ -463,20 +481,23 @@ def main():
         "--min-spikes", type=int, default=MIN_SPIKES, help="skip movies with fewer spikes (default: %(default)s)"
     )
     ap.add_argument("--all-movies", action="store_true", help="run every movie of a file, not just the first valid one")
-    ap.add_argument("--select", action="store_true", help="print the cells the selection rule picks and exit")
+    ap.add_argument("--list", action="store_true", help="print the DANDI paths that would be run and exit")
     ap.add_argument("--force", action="store_true", help="recompute cells that already have a result")
     ap.add_argument("--delete-nwb", action="store_true", help="delete each NWB file once its cell is processed")
     ap.add_argument("--summary", action="store_true", help="only print the summary table")
+    ap.add_argument("--results-dir", help="where the result files go (default: <data-dir>/results)")
     a = ap.parse_args()
     data_dir = Path(a.data_dir).expanduser()
-    if a.select:
-        counts = spike_counts(data_dir)
-        print("\n".join(select_cells(counts, a.per_indicator or PER_INDICATOR, a.min_spikes)))
+    results_dir = Path(a.results_dir).expanduser() if a.results_dir else data_dir / "results"
+    if a.list:
+        print("\n".join(resolve_cells(data_dir, a.cells, a.per_indicator, a.all, a.min_spikes)))
         return
     if not a.summary:
-        run_benchmark(data_dir, a.cells, a.per_indicator, a.all, a.min_spikes, a.delete_nwb, a.force, a.all_movies)
+        run_benchmark(
+            data_dir, a.cells, a.per_indicator, a.all, a.min_spikes, a.delete_nwb, a.force, a.all_movies, results_dir
+        )
     cells = None if a.all else resolve_cells(data_dir, a.cells, a.per_indicator, False, a.min_spikes)
-    print(summary_table(data_dir / "results", cells))
+    print(summary_table(results_dir, cells))
 
 
 if __name__ == "__main__":  # the guard matters: photon-mosaic's workers are spawned processes
