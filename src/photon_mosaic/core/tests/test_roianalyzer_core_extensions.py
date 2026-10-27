@@ -152,8 +152,8 @@ def test_compute_matches_dense_result_with_sparse_masks(imaging, chunk, method):
     sparse_rois = generate_rois(num_rois=NUM_ROIS, height=H, width=W, sampling_frequency=SF, seed=SEED, sparse=True)
     dense_rois = generate_rois(num_rois=NUM_ROIS, height=H, width=W, sampling_frequency=SF, seed=SEED)
 
-    fluorescence_sparse, _ = FluorescenceNode(imaging, sparse_rois, method=method).compute(chunk)
-    fluorescence_dense, _ = FluorescenceNode(imaging, dense_rois, method=method).compute(chunk)
+    fluorescence_sparse, _ = FluorescenceNode(imaging, sparse_rois, method=method).compute(chunk, 0, NUM_FRAMES, 0, 0)
+    fluorescence_dense, _ = FluorescenceNode(imaging, dense_rois, method=method).compute(chunk, 0, NUM_FRAMES, 0, 0)
     np.testing.assert_allclose(fluorescence_sparse, fluorescence_dense, rtol=1e-5, atol=1e-6)
 
 
