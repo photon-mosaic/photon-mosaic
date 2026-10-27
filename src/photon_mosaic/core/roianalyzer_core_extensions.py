@@ -29,7 +29,20 @@ class FluorescenceExtension(AnalyzerExtension):
 
     Computed data keys:
 
-    ================  ======================  ===============================================    """
+    ================  ======================  ======================================================
+    Key               Shape                   Contents
+    ================  ======================  ======================================================
+    ``fluorescence``  ``(n_frames, n_rois)``  the extracted traces, ``F - neuropil_weight * Fneu``
+                                              with a surround neuropil
+    ``background``    ``(n_frames, n_rois)``  the surround neuropil correction term, before
+                                              ``neuropil_weight``: the ring mean ``Fneu`` on the
+                                              same L2 scale as ``fluorescence`` (so
+                                              ``fluorescence + neuropil_weight * background`` is
+                                              the uncorrected trace). Equal to the raw ``Fneu``
+                                              for binary masks, ``Fneu * L1 / L2**2`` for weighted
+                                              ones. ``(n_frames, 0)`` without a neuropil.
+    ================  ======================  ======================================================
+    """
 
     extension_name = "fluorescence"
     depend_on: list[str] = []
