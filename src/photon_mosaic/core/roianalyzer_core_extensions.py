@@ -16,6 +16,10 @@ _FLUORESCENCE_METHODS = ("projection", "regression", "nnls")
 class FluorescenceExtension(AnalyzerExtension):
     """Extension to extract fluorescence traces from ROIs.
 
+    In the formulas below, ``A`` stands for the flattened ROI masks, ``(n_rois, n_pixels)`` -- ROI-first,
+    as ``get_roi_image_masks()`` returns them (CaImAn stores the transpose) -- and ``C`` for the traces,
+    ``(n_frames, n_rois)``.
+
     Three extraction methods are supported:
 
     - ``'projection'`` (default): each ROI's trace is the movie projected onto its own mask,
@@ -351,7 +355,8 @@ class FluorescenceNode(PipelineNode):
             # and accepted) would reinstate the singularity.
             fallback = float(own_norm[~empty].mean()) if (~empty).any() else 1.0
             shift = np.where(empty, fallback, ridge * own_norm)
-            self._gram_aa_lu = splu((gram_aa + sp.diags(shift)).tocsc())
+            self._gram_aa_regularized = (gram_aa + sp.diags(shift)).tocsc()
+            self._gram_aa_lu = splu(self._gram_aa_regularized)
             self._aa_inv_ab = self._gram_aa_lu.solve(gram_ab) if self._gnb else gram_ab  # (N, gnb)
             schur = _ridge_regularize(gram_bb, ridge) - gram_ab.T @ self._aa_inv_ab  # (gnb, gnb)
             self._schur_inv = pinvh(schur) if self._gnb else schur
@@ -375,10 +380,28 @@ class FluorescenceNode(PipelineNode):
         # scipy's nnls takes min ||M x - y||, not a Gram: write S = M.T M with M = sqrt(w) V.T, and
         # then M.T y = r gives y = (V.T r) / sqrt(w).
         eigvals, eigvecs = np.linalg.eigh(schur)
-        floor = max(float(eigvals.max(initial=0.0)), 1.0) * np.finfo(np.float64).eps
+        # Relative to the spectrum, so masks with small weights are not attenuated; only an underflow guard
+        # stays absolute. `_ridge_regularize` leaves every eigenvalue positive, so max(eigvals) > 0 here.
+        floor = max(float(eigvals.max(initial=0.0)) * np.finfo(np.float64).eps, np.finfo(np.float64).tiny)
         sqrt_w = np.sqrt(np.maximum(eigvals, floor))
         self._nnls_matrix = (eigvecs * sqrt_w).T
         self._nnls_rhs_map = eigvecs / sqrt_w  # r @ this == y
+
+    def __getstate__(self):
+        # scipy.sparse.linalg.SuperLU (method='regression') isn't picklable, which breaks
+        # n_jobs>1 (spikeinterface's run_node_pipeline sends nodes to worker processes via
+        # ProcessPoolExecutor). Drop it here and rebuild it from the already-picklable
+        # `_gram_aa_regularized` in __setstate__, once per worker process.
+        state = self.__dict__.copy()
+        state.pop("_gram_aa_lu", None)
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        if "_gram_aa_regularized" in self.__dict__:
+            from scipy.sparse.linalg import splu
+
+            self._gram_aa_lu = splu(self._gram_aa_regularized)
 
     def get_dtype(self):
         return np.float32
