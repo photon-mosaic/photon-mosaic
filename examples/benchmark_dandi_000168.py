@@ -357,6 +357,7 @@ def run_cell(nwb, movie_number, data_dir, caiman_python, min_spikes=MIN_SPIKES):
             [caiman_python, str(HERE / "run_caiman.py"), "--movie", str(movie_path), "--masks", str(seed_path),
              "--out", str(result_path), "--fs", str(fs), "--p", "1", "--gnb", "1"],
             capture_output=True, text=True, cwd=work,
+            env={**os.environ, "CAIMAN_TEMP": str(work)},  # else CaImAn writes its memmap to ~/caiman_data/temp
         )  # fmt: skip
         for leftover in work.glob(f"{tag}_memmap_*"):  # CaImAn's memmap of the movie (about 330 MB), not needed again
             leftover.unlink(missing_ok=True)
