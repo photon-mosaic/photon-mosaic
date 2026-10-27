@@ -118,6 +118,25 @@ def test_zero_mask_survives_the_joint_solve_even_without_ridge(imaging, rois, me
     np.testing.assert_allclose(traces[:, 0], 0.0, atol=1e-6)
 
 
+@pytest.mark.parametrize("method", ["regression", "nnls"])
+def test_joint_solve_fluorescence_survives_multiprocessing(imaging, rois, method):
+    """FluorescenceNode caches per-ROI state in __init__ (e.g. `_gram_aa_lu`, a scipy SuperLU
+    factorization for `method='regression'`) that spikeinterface's run_node_pipeline must send to
+    worker processes via ProcessPoolExecutor when n_jobs>1. SuperLU objects aren't picklable, so
+    this only exercises the real bug for 'regression'; 'nnls' is included to confirm it already
+    worked (it only stores plain ndarrays) and keep both joint methods covered the same way.
+    """
+    analyzer = create_roi_analyzer(rois, imaging, format="memory")
+    analyzer.compute("fluorescence", method=method, n_jobs=1)
+    serial = analyzer.get_extension("fluorescence").get_data().copy()
+
+    analyzer2 = create_roi_analyzer(rois, imaging, format="memory")
+    analyzer2.compute("fluorescence", method=method, n_jobs=2)
+    parallel = analyzer2.get_extension("fluorescence").get_data()
+
+    np.testing.assert_allclose(serial, parallel, rtol=1e-5)
+
+
 @pytest.mark.parametrize("method", ["projection", "regression", "nnls"])
 def test_compute_matches_dense_result_with_sparse_masks(imaging, chunk, method):
     """FluorescenceNode should give the same result for sparse (e.g. Suite2p-backed) ROIs
@@ -1057,7 +1076,7 @@ def test_fluorescence_extension_use_neuropil_false_ignores_computed_extension(su
 
 # A hand-built ground truth rather than generate_imaging_with_rois: that generator's `background`
 # is a uniform, non-fluctuating scalar, so a low-rank fit on it is degenerate (f constant, b flat)
-# and could not validate anything. Here Y is literally C A.T + f b.T + noise.
+# and could not validate anything. Here Y is literally C A + f b.T + noise.
 CNMF_H = CNMF_W = 24
 CNMF_FRAMES = 200
 CNMF_ROIS = 4
@@ -1140,7 +1159,7 @@ def test_regression_matches_projection_for_nonoverlapping_masks(cnmf_truth):
 
 
 def _overlapping_problem(num_frames=40, seed=5):
-    """Two ROIs sharing a quarter of their pixels, with an exactly known movie ``C A.T``."""
+    """Two ROIs sharing a quarter of their pixels, with an exactly known movie ``C A``."""
     rng = np.random.default_rng(seed)
     masks = np.zeros((2, 12, 12), dtype=np.float32)
     masks[0, 2:8, 2:8] = 1.0
