@@ -31,7 +31,9 @@ import argparse
 import io
 import json
 import os
+import shutil
 import subprocess
+import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -180,18 +182,40 @@ def select_cells(counts, per_indicator=PER_INDICATOR, min_spikes=MIN_SPIKES, ind
 
 
 # ------------------------------------------------------------------------------------------------------ the data
-def download(path, data_dir):
-    """Fetch ``path`` (e.g. ``jGCaMP8f/jGCaMP8f_ANM471994_cell06.nwb``) from DANDI into ``data_dir`` unless present."""
+def _wait_for_space(directory, nbytes, max_wait_hours):
+    """Wait until the filesystem of ``directory`` has room for ``nbytes`` plus a margin. Parallel runs can fill a small
+    volume with downloads; waiting lets the tasks that are already processing free theirs."""
+    need = int(nbytes * 1.05) + 2 * 10**9
+    deadline = time.time() + max_wait_hours * 3600
+    while shutil.disk_usage(directory).free < need:
+        if time.time() > deadline:
+            raise OSError(f"no room for {nbytes / 1e9:.1f} GB in {directory} after {max_wait_hours} h")
+        time.sleep(60)
+
+
+def download(path, data_dir, wait_hours=3.0, attempts=3):
+    """Fetch ``path`` (e.g. ``jGCaMP8f/jGCaMP8f_ANM471994_cell06.nwb``) from DANDI into ``data_dir`` unless present.
+
+    Waits for free space first (up to ``wait_hours``) and retries a broken connection ``attempts`` times."""
     target = Path(data_dir) / Path(path).name
     assets = requests.get(f"{API}/assets/", params={"path": path}).json()["results"]
     asset = next(a for a in assets if a["path"] == path)
     if target.exists() and target.stat().st_size == asset["size"]:
         return target
+    _wait_for_space(target.parent, asset["size"], wait_hours)
     tmp = target.with_suffix(".part")
-    with requests.get(f"{API}/assets/{asset['asset_id']}/download/", stream=True) as r, open(tmp, "wb") as f:
-        r.raise_for_status()
-        for chunk in r.iter_content(chunk_size=1 << 22):
-            f.write(chunk)
+    for attempt in range(attempts):
+        try:
+            with requests.get(f"{API}/assets/{asset['asset_id']}/download/", stream=True) as r, open(tmp, "wb") as f:
+                r.raise_for_status()
+                for chunk in r.iter_content(chunk_size=1 << 22):
+                    f.write(chunk)
+            break
+        except requests.exceptions.RequestException:
+            if attempt == attempts - 1:
+                tmp.unlink(missing_ok=True)
+                raise
+            time.sleep(30)
     os.replace(tmp, target)
     return target
 
@@ -334,6 +358,8 @@ def run_cell(nwb, movie_number, data_dir, caiman_python, min_spikes=MIN_SPIKES):
              "--out", str(result_path), "--fs", str(fs), "--p", "1", "--gnb", "1"],
             capture_output=True, text=True, cwd=work,
         )  # fmt: skip
+        for leftover in work.glob(f"{tag}_memmap_*"):  # CaImAn's memmap of the movie (about 330 MB), not needed again
+            leftover.unlink(missing_ok=True)
         if run.returncode:
             raise RuntimeError(run.stdout[-2000:] + run.stderr[-2000:])
     movie_path.unlink(missing_ok=True)  # cheap to rebuild
