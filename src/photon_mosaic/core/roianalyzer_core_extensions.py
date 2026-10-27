@@ -383,7 +383,7 @@ class FluorescenceNode(PipelineNode):
     def get_dtype(self):
         return np.float32
 
-    def compute(self, chunk):
+    def compute(self, chunk, *args):
         # chunk shape: (num_frames, H, W, P)
         num_frames = chunk.shape[0]
         chunk_flat = chunk.reshape(num_frames, -1).astype(np.float32)  # (T, spatial)
