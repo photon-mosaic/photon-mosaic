@@ -137,6 +137,21 @@ def test_joint_solve_fluorescence_survives_multiprocessing(imaging, rois, method
     np.testing.assert_allclose(serial, parallel, rtol=1e-5)
 
 
+@pytest.mark.parametrize("weight", [1e-9, 1e-6, 1e-3])
+@pytest.mark.parametrize("method", ["regression", "nnls"])
+def test_joint_solve_recovers_traces_for_small_weight_masks(method, weight):
+    """The joint solve is scale-free in the mask weights: a mask (and so its Gram eigenvalues) 1e9 times
+    smaller must give the same traces. An absolute eigenvalue floor in the `nnls` setup attenuated them."""
+    mask = np.zeros((1, H, W), dtype=np.float32)
+    mask[0, 4:9, 4:9] = weight
+    traces_true = np.linspace(1.0, 3.0, NUM_FRAMES)
+    movie = traces_true[:, None, None] * mask[0][None]
+    imaging = NumpyImaging(movie, sampling_frequency=SF)
+    analyzer = create_roi_analyzer(NumpyRois(roi_image_masks=mask, sampling_frequency=SF), imaging, format="memory")
+    traces = analyzer.compute("fluorescence", method=method, use_neuropil=False, n_jobs=1).get_data()
+    np.testing.assert_allclose(traces[:, 0], traces_true, rtol=1e-3)
+
+
 @pytest.mark.parametrize("method", ["projection", "regression", "nnls"])
 def test_compute_matches_dense_result_with_sparse_masks(imaging, chunk, method):
     """FluorescenceNode should give the same result for sparse (e.g. Suite2p-backed) ROIs

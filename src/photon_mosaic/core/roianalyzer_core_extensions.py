@@ -257,7 +257,9 @@ class FluorescenceNode(PipelineNode):
         # nnls: scipy's nnls takes min ||M x - y||, not a Gram: write G = M.T M with M = sqrt(w) V.T,
         # and then M.T y = r gives y = (V.T r) / sqrt(w).
         eigvals, eigvecs = np.linalg.eigh(_ridge_regularize(gram_aa.toarray(), ridge))
-        floor = max(float(eigvals.max(initial=0.0)), 1.0) * np.finfo(np.float64).eps
+        # Relative to the spectrum, so masks with small weights are not attenuated; only an underflow guard
+        # stays absolute. `_ridge_regularize` leaves every eigenvalue positive, so max(eigvals) > 0 here.
+        floor = max(float(eigvals.max(initial=0.0)) * np.finfo(np.float64).eps, np.finfo(np.float64).tiny)
         sqrt_w = np.sqrt(np.maximum(eigvals, floor))
         self._nnls_matrix = (eigvecs * sqrt_w).T
         self._nnls_rhs_map = eigvecs / sqrt_w  # r @ this == y
