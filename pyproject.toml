@@ -16,6 +16,8 @@ dependencies = [
     "pydantic-settings>=2",
     "pooch",
     "sparse",
+    # 0.15.2 refuses to decode pickled zarr data by default, which the zarr extension storage relies on
+    "numcodecs<0.15.2",
 ]
 
 license = {text = "MIT License"}
