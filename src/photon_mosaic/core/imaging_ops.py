@@ -9,6 +9,7 @@ their parents on read.
 from typing import Sequence
 
 import numpy as np
+from numpy.typing import DTypeLike
 
 from .baseimaging import BaseImaging, BaseImagingEpoch
 
@@ -265,7 +266,7 @@ def frame_slice(
 class _ConcatenatedEpoch(BaseImagingEpoch):
     """Lazy epoch joining several parent epochs end to end along time."""
 
-    def __init__(self, parent_epochs: Sequence[BaseImagingEpoch], shape: tuple, dtype: DtypeLike):
+    def __init__(self, parent_epochs: Sequence[BaseImagingEpoch], shape: tuple, dtype: DTypeLike):
         first = parent_epochs[0]
         BaseImagingEpoch.__init__(  # type: ignore[call-arg]
             self,
@@ -275,6 +276,8 @@ class _ConcatenatedEpoch(BaseImagingEpoch):
         self._parent_epochs = list(parent_epochs)
         self._sizes = [e.get_num_samples() for e in self._parent_epochs]
         self._offsets = np.cumsum([0, *self._sizes]).tolist()
+        self._shape = shape
+        self._dtype = dtype
 
     def get_num_samples(self) -> int:
         return self._offsets[-1]
@@ -291,7 +294,7 @@ class _ConcatenatedEpoch(BaseImagingEpoch):
             return self._parent_epochs[first].get_series(start_frame - offset, end_frame - offset, plane_indices)
 
         # One probe frame gives the spatial shape and dtype shared by all epochs.
-        out = np.empty((end_frame - start_frame, *shape), dtype=dtype)
+        out = np.empty((end_frame - start_frame, *self._shape), dtype=self._dtype)
 
         pos = 0
         for i in range(first, last):
