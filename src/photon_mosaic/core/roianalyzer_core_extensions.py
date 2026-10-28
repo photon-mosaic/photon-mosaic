@@ -30,7 +30,6 @@ class FluorescenceExtension(AnalyzerExtension):
     - ``'nnls'``: the same solve with ``C >= 0`` enforced (fluorescence is a photon count). Solved
       frame by frame with :func:`scipy.optimize.nnls`, so it costs more per chunk than
       ``'regression'``.
-
     Computed data keys:
 
     ================  ======================  ======================================================
