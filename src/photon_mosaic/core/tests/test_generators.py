@@ -465,6 +465,26 @@ def test_generate_fluorescence_leaves_neuropil_none():
     assert fluorescence.neuropil is None
 
 
+def test_generate_imaging_with_rois_poisson_neuropil_is_the_clipped_background():
+    """Poisson counts can't be negative, so a fluctuation that drives the background below zero is
+    clipped; the ground-truth `neuropil` is the unclipped one, floored at zero."""
+    kwargs = dict(
+        num_frames=500,
+        height=40,
+        width=40,
+        num_rois=3,
+        radius_range=(3, 5),
+        neuropil_model="vignette",
+        neuropil_fluctuation_std=1.5,
+        seed=7,
+    )
+    _, _, gaussian = generate_imaging_with_rois(noise_std=0.0, **kwargs)
+    _, _, poisson = generate_imaging_with_rois(noise_std="poisson", **kwargs)
+
+    assert (gaussian.neuropil < 0).any()  # the fluctuation really does go negative here
+    np.testing.assert_allclose(poisson.neuropil, np.maximum(gaussian.neuropil, 0), atol=1e-6)
+
+
 @pytest.mark.parametrize("neuropil_roi_coefficient", [1.0, 0.7])
 @pytest.mark.parametrize("neuropil_model", ["constant", "vignette"])
 def test_generate_imaging_with_rois_neuropil_matches_actual_background(neuropil_model, neuropil_roi_coefficient):

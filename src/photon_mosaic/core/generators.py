@@ -453,35 +453,26 @@ def generate_imaging_with_rois(
             profile_flat = np.ones(masks_flat.shape[1], dtype=video.dtype)
         profile_flat[masks_flat.any(axis=0)] *= neuropil_roi_coefficient
 
-    # True background level under each ROI's mask (mask-weighted mean, before noise) -- cheap
-    # since it only needs the ROI masks, not the full pixel grid. Under `noise_std="poisson"`,
-    # this can't work in closed form (the per-pixel clip to nonnegative is nonlinear), so
-    # `neuropil` is instead accumulated from the clipped per-pixel field in the slab loop.
+    # Both backgrounds are a per-frame scalar times a nonnegative spatial profile, so Poisson's
+    # clip to nonnegative acts on the scalar alone and the true background under each ROI's mask
+    # (mask-weighted mean, before noise) stays closed-form -- it only needs the ROI masks, not the
+    # full pixel grid.
     mask_sums = masks_flat.sum(axis=1)
+    background_scale = background * bleach * fluctuation
     if noise_std == "poisson":
-        neuropil = np.empty((num_frames, num_rois), dtype=np.float32)
-    elif profile_flat is None:
-        neuropil = np.broadcast_to((background * bleach)[:, np.newaxis], (num_frames, num_rois)).copy()
+        background_scale = np.clip(background_scale, 0, None)
+    if profile_flat is None:
+        neuropil = np.broadcast_to(background_scale[:, np.newaxis], (num_frames, num_rois)).copy()
     else:
         roi_profile_avg = (masks_flat * profile_flat[np.newaxis, :]).sum(axis=1) / mask_sums
-        neuropil = (background * bleach * fluctuation)[:, np.newaxis] * roi_profile_avg[np.newaxis, :]
+        neuropil = background_scale[:, np.newaxis] * roi_profile_avg[np.newaxis, :]
 
     noise_rng = np.random.default_rng(noise_seed)
     slab_size = 256
     for t0 in range(0, num_frames, slab_size):
         sl = flat[t0 : t0 + slab_size]
-        bleach_sl = bleach[t0 : t0 + slab_size]
-        if profile_flat is None:
-            bg_slab = np.broadcast_to((background * bleach_sl)[:, np.newaxis], sl.shape)
-        else:
-            bg_slab = (background * bleach_sl * fluctuation[t0 : t0 + slab_size])[:, np.newaxis] * profile_flat[
-                np.newaxis, :
-            ]
-
-        if noise_std == "poisson":
-            bg_slab = np.clip(bg_slab, 0, None)
-            neuropil[t0 : t0 + slab_size] = (bg_slab @ masks_flat.T) / mask_sums
-        sl += bg_slab
+        scale_sl = background_scale[t0 : t0 + slab_size, np.newaxis].astype(sl.dtype)
+        sl += scale_sl if profile_flat is None else scale_sl * profile_flat[np.newaxis, :]
 
         if noise_std == "poisson":
             sl[:] = noise_rng.poisson(np.clip(sl, 0, None))
