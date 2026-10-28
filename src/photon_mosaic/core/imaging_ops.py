@@ -265,7 +265,7 @@ def frame_slice(
 class _ConcatenatedEpoch(BaseImagingEpoch):
     """Lazy epoch joining several parent epochs end to end along time."""
 
-    def __init__(self, parent_epochs: Sequence[BaseImagingEpoch]):
+    def __init__(self, parent_epochs: Sequence[BaseImagingEpoch], shape: tuple, dtype: DtypeLike):
         first = parent_epochs[0]
         BaseImagingEpoch.__init__(  # type: ignore[call-arg]
             self,
@@ -291,9 +291,7 @@ class _ConcatenatedEpoch(BaseImagingEpoch):
             return self._parent_epochs[first].get_series(start_frame - offset, end_frame - offset, plane_indices)
 
         # One probe frame gives the spatial shape and dtype shared by all epochs.
-        probe_frame = start_frame - self._offsets[first]
-        probe = self._parent_epochs[first].get_series(probe_frame, probe_frame + 1, plane_indices)
-        out = np.empty((end_frame - start_frame, *probe.shape[1:]), dtype=probe.dtype)
+        out = np.empty((end_frame - start_frame, *shape), dtype=dtype)
 
         pos = 0
         for i in range(first, last):
@@ -338,19 +336,20 @@ class ConcatenateImaging(BaseImaging):
                 raise ValueError(
                     f"Input {input_index} dtype {imaging.get_dtype()} disagrees with input 0 ({reference.get_dtype()})"
                 )
+        shape = reference.shape
+        dtype = reference.get_dtype()
 
         BaseImaging.__init__(
             self,
             sampling_frequency=reference.sampling_frequency,
-            shape=reference.shape,
-            dtype=reference.get_dtype(),
+            shape=shape,
+            dtype=dtype,
         )
         reference.copy_metadata(self)
         parent_epochs = [epoch for imaging in imagings for epoch in imaging.epochs]
-        self.add_epoch(_ConcatenatedEpoch(parent_epochs))
+        self.add_epoch(_ConcatenatedEpoch(parent_epochs, shape=shape, dtype=dtype))
 
-        self._parents = imagings
-        self._kwargs = {"parent_imagings": imagings}
+        self._kwargs = {"imagings": imagings}
 
 
 def concatenate_epochs(imagings: list[BaseImaging] | BaseImaging) -> ConcatenateImaging:
@@ -401,8 +400,7 @@ class AppendImaging(BaseImaging):
             for epoch in imaging.epochs:
                 self.add_epoch(epoch)
 
-        self._parents = imagings
-        self._kwargs = {"parent_imagings": imagings}
+        self._kwargs = {"imagings": imagings}
 
 
 def append_imaging(imagings: list[BaseImaging]) -> AppendImaging:
