@@ -1,21 +1,5 @@
 import photon_mosaic.extractors as extractors_module
-from photon_mosaic.extractors.roiextractors import (
-    BaseROIExtractorImaging,
-    BaseROIExtractorImagingEpoch,
-    get_classes_and_functions_to_import,
-)
-
-
-def test_base_classes_exported():
-    assert hasattr(extractors_module, "BaseROIExtractorImaging")
-    assert hasattr(extractors_module, "BaseROIExtractorImagingEpoch")
-    assert extractors_module.BaseROIExtractorImaging is BaseROIExtractorImaging
-    assert extractors_module.BaseROIExtractorImagingEpoch is BaseROIExtractorImagingEpoch
-
-
-def test_all_contains_base_exports():
-    assert "BaseROIExtractorImaging" in extractors_module.__all__
-    assert "BaseROIExtractorImagingEpoch" in extractors_module.__all__
+from photon_mosaic.extractors.roiextractors import get_classes_and_functions_to_import
 
 
 def test_dynamic_classes_and_functions_in_module():

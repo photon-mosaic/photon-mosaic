@@ -5,8 +5,8 @@ import numpy as np
 
 from photon_mosaic.core import BaseImaging
 from photon_mosaic.extractors.roiextractors import (
-    BaseROIExtractorImaging,
-    BaseROIExtractorImagingEpoch,
+    _BaseROIExtractorImaging,
+    _BaseROIExtractorImagingEpoch,
     get_classes_and_functions_to_import,
 )
 
@@ -24,12 +24,12 @@ def _make_mock_imaging_extractor(num_samples=100, shape=(64, 64), sampling_frequ
     return mock
 
 
-# --------------- BaseROIExtractorImagingEpoch ---------------
+# --------------- _BaseROIExtractorImagingEpoch ---------------
 
 
 def test_epoch_get_num_samples():
     mock_extractor = _make_mock_imaging_extractor(num_samples=200)
-    epoch = BaseROIExtractorImagingEpoch(mock_extractor)
+    epoch = _BaseROIExtractorImagingEpoch(mock_extractor)
 
     assert epoch.get_num_samples() == 200
     mock_extractor.get_num_samples.assert_called_once()
@@ -37,7 +37,7 @@ def test_epoch_get_num_samples():
 
 def test_epoch_get_series_delegates_to_extractor():
     mock_extractor = _make_mock_imaging_extractor()
-    epoch = BaseROIExtractorImagingEpoch(mock_extractor)
+    epoch = _BaseROIExtractorImagingEpoch(mock_extractor)
 
     epoch.get_series(start_frame=10, end_frame=50)
     mock_extractor.get_series.assert_called_once_with(10, 50)
@@ -48,7 +48,7 @@ def test_epoch_get_series_slices_planes_when_provided():
     # Return 4D data (frames, H, W, planes)
     data_4d = np.random.default_rng(0).random((40, 64, 64, 3))
     mock_extractor.get_series.return_value = data_4d
-    epoch = BaseROIExtractorImagingEpoch(mock_extractor)
+    epoch = _BaseROIExtractorImagingEpoch(mock_extractor)
 
     result = epoch.get_series(start_frame=10, end_frame=50, plane_indices=[0, 2])
     assert result.shape[-1] == 2
@@ -60,14 +60,14 @@ def test_epoch_get_series_adds_plane_axis_for_3d_data():
     mock_extractor = _make_mock_imaging_extractor()
     data_3d = np.random.default_rng(0).random((40, 64, 64))
     mock_extractor.get_series.return_value = data_3d
-    epoch = BaseROIExtractorImagingEpoch(mock_extractor)
+    epoch = _BaseROIExtractorImagingEpoch(mock_extractor)
 
     result = epoch.get_series(start_frame=10, end_frame=50, plane_indices=[0])
     # 3D data should be expanded to 4D and then sliced
     assert result.shape == (40, 64, 64, 1)
 
 
-# --------------- BaseROIExtractorImaging ---------------
+# --------------- _BaseROIExtractorImaging ---------------
 
 
 @patch("photon_mosaic.extractors.roiextractors.imaging_extractor_dict")
@@ -76,14 +76,14 @@ def test_base_roi_extractor_imaging_init(mock_dict):
     mock_class = MagicMock(return_value=mock_extractor)
     mock_dict.__getitem__ = MagicMock(return_value=mock_class)
 
-    imaging = BaseROIExtractorImaging(imaging_name="TestExtractor", file_path="/fake/path.tif")
+    imaging = _BaseROIExtractorImaging(imaging_name="TestExtractor", file_path="/fake/path.tif")
 
     assert isinstance(imaging, BaseImaging)
     assert imaging.sampling_frequency == 30.0
     assert imaging.shape[:2] == (64, 64)
     assert imaging.get_num_epochs() == 1
     assert "TestExtractor" in imaging.name
-    assert imaging._kwargs["imaging_name"] == "TestExtractor"
+    assert imaging._kwargs == {"file_path": "/fake/path.tif"}
 
 
 # --------------- get_classes_and_functions_to_import ---------------
@@ -99,7 +99,7 @@ def test_get_classes_and_functions_returns_lists():
 def test_dynamic_classes_inherit_from_base():
     classes, _ = get_classes_and_functions_to_import()
     for cls in classes:
-        assert issubclass(cls, BaseROIExtractorImaging)
+        assert issubclass(cls, _BaseROIExtractorImaging)
 
 
 def test_dynamic_read_functions_have_read_prefix():
@@ -127,3 +127,20 @@ def test_dynamic_class_names_match_extractor_dict():
     classes, _ = get_classes_and_functions_to_import()
     class_names = {cls.__name__ for cls in classes}
     assert class_names == set(imaging_extractor_dict.keys())
+
+
+def test_dynamic_class_round_trips_through_dict(tmp_path):
+    import tifffile
+    from spikeinterface.core.base import BaseExtractor
+
+    from photon_mosaic.extractors import read_tiff_imaging
+
+    data = np.random.default_rng(0).integers(0, 100, (10, 8, 8), dtype=np.uint16)
+    file_path = tmp_path / "movie.tif"
+    tifffile.imwrite(file_path, data)
+
+    imaging = read_tiff_imaging(file_path=file_path, sampling_frequency=30.0)
+    loaded = BaseExtractor.from_dict(imaging.to_dict())
+
+    assert type(loaded) is type(imaging)
+    np.testing.assert_array_equal(loaded.get_series(), imaging.get_series())
