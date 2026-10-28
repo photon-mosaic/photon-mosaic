@@ -1120,7 +1120,7 @@ def _cnmf_masks(weighted=False):
 def _cnmf_ground_truth(num_frames=CNMF_FRAMES, weighted=False, background_scale=1.0, seed=0):
     """Return ``(masks, movie, traces_true, background_spatial_true, background_temporal_true)``.
 
-    ``movie`` is ``(num_frames, H, W, 1)``; the two background factors are ``(n_pixels, 1)`` and
+    ``movie`` is ``(num_frames, H, W, 1)``; the two background factors are ``(1, n_pixels)`` and
     ``(num_frames, 1)``.
     """
     from scipy.ndimage import gaussian_filter1d
@@ -1134,14 +1134,14 @@ def _cnmf_ground_truth(num_frames=CNMF_FRAMES, weighted=False, background_scale=
 
     yy, xx = np.mgrid[0:CNMF_H, 0:CNMF_W]
     spatial = background_scale * (50.0 + 30.0 * np.exp(-((yy - 8) ** 2 + (xx - 16) ** 2) / 50.0) + 0.5 * yy)
-    spatial = spatial.reshape(-1, 1).astype(np.float32)
+    spatial = spatial.reshape(1, -1).astype(np.float32)
     temporal = (
         (1.0 + 0.3 * np.sin(2 * np.pi * np.arange(num_frames) / num_frames) + 0.2 * np.arange(num_frames) / num_frames)
         .reshape(num_frames, 1)
         .astype(np.float32)
     )
 
-    movie = traces @ masks_flat + temporal @ spatial.T
+    movie = traces @ masks_flat + temporal @ spatial
     movie = (movie + rng.normal(0.0, 0.5, movie.shape)).astype(np.float32)
     return masks, movie.reshape(num_frames, CNMF_H, CNMF_W, 1), traces, spatial, temporal
 
@@ -1338,7 +1338,7 @@ def test_cnmf_recovers_the_background_away_from_rois(cnmf_extension, cnmf_truth)
     # Only off-ROI pixels are identifiable: b -> b + alpha A with C -> C - f alpha leaves the
     # model bit-for-bit unchanged, and that gauge lives exactly on the ROI support.
     off_roi = masks.reshape(CNMF_ROIS, -1).sum(axis=0) == 0
-    assert _corr(spatial.reshape(-1)[off_roi], spatial_true[:, 0][off_roi]) > 0.99
+    assert _corr(spatial.reshape(-1)[off_roi], spatial_true[0][off_roi]) > 0.99
 
 
 def test_cnmf_joint_extraction_recovers_the_background_timecourse(cnmf_fluorescence, cnmf_truth):
@@ -1398,7 +1398,7 @@ def test_cnmf_concatenates_epochs_in_order(cnmf_truth):
     boost = 3.0
     scaled_temporal = temporal_true.copy()
     scaled_temporal[first:] *= boost
-    rebuilt = traces_true @ masks.reshape(CNMF_ROIS, -1) + scaled_temporal @ spatial_true.T
+    rebuilt = traces_true @ masks.reshape(CNMF_ROIS, -1) + scaled_temporal @ spatial_true
     rebuilt = rebuilt.astype(np.float32).reshape(CNMF_FRAMES, CNMF_H, CNMF_W, 1)
     epochs = [rebuilt[:first].copy(), rebuilt[first:].copy()]
 
