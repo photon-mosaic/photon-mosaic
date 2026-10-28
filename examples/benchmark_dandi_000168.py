@@ -33,6 +33,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
@@ -154,7 +155,11 @@ def spike_counts(data_dir, indicators=INDICATORS):
     counts = json.load(open(cache_file)) if cache_file.exists() else {}
     todo = [a for a in list_assets() if a["path"].split("/")[0] in indicators and a["path"] not in counts]
     if todo:
-        print(f"reading spike counts of {len(todo)} files (metadata only, no movies are downloaded) ...", flush=True)
+        print(
+            f"reading spike counts of {len(todo)} files (metadata only, no movies are downloaded) ...",
+            file=sys.stderr,  # stdout is the path list of --list
+            flush=True,
+        )
         with ThreadPoolExecutor(8) as pool:
             for asset, count in zip(todo, pool.map(_count_spikes, todo)):
                 if count is not None:
@@ -359,7 +364,8 @@ def run_cell(nwb, movie_number, data_dir, caiman_python, min_spikes=MIN_SPIKES):
             capture_output=True, text=True, cwd=work,
             env={**os.environ, "CAIMAN_TEMP": str(work)},  # else CaImAn writes its memmap to ~/caiman_data/temp
         )  # fmt: skip
-        for leftover in work.glob(f"{tag}_memmap_*"):  # CaImAn's memmap of the movie (about 330 MB), not needed again
+        # CaImAn's memmap of the movie (about 330 MB), named after the result file; not needed again
+        for leftover in work.glob(f"{result_path.stem}_memmap_*"):
             leftover.unlink(missing_ok=True)
         if run.returncode:
             raise RuntimeError(run.stdout[-2000:] + run.stderr[-2000:])
@@ -421,6 +427,7 @@ def run_benchmark(
     force=False,
     all_movies=False,
     results_dir=None,
+    caiman_python=None,
 ):
     """Download and score the cells, writing ``<results_dir>/<cell>.json`` for each; finished cells are skipped.
     Returns the names of the files that failed.
@@ -428,29 +435,42 @@ def run_benchmark(
 
     ``cells``: DANDI paths; otherwise ``per_indicator`` applies the selection rule with that many animals per indicator,
     ``all_files`` takes every file of the dandiset, and by default it is the ``CELLS`` list. A file is one cell: only
-    its first movie with a patched ROI and at least ``min_spikes`` spikes is run, unless ``all_movies``.
+    its first movie with a patched ROI and at least ``min_spikes`` spikes is run, unless ``all_movies``, which runs
+    every such movie and marks the file ``<file>.complete`` once all are done.
+    ``caiman_python`` is the interpreter that has CaImAn; by default ``$CAIMAN_PYTHON``.
     """
-    data_dir = Path(data_dir).expanduser()
-    results_dir = Path(results_dir).expanduser() if results_dir else data_dir / "results"
+    data_dir = Path(data_dir).expanduser().resolve()  # CaImAn runs with cwd=<data_dir>/work, so paths must be absolute
+    results_dir = Path(results_dir).expanduser().resolve() if results_dir else data_dir / "results"
     data_dir.mkdir(parents=True, exist_ok=True)
     results_dir.mkdir(parents=True, exist_ok=True)
     failed = []
-    caiman_python = os.environ.get("CAIMAN_PYTHON", str(Path.home() / "miniconda3/envs/caiman/bin/python"))
+    caiman_python = caiman_python or os.environ.get(
+        "CAIMAN_PYTHON", str(Path.home() / "miniconda3/envs/caiman/bin/python")
+    )
     for path in resolve_cells(data_dir, cells, per_indicator, all_files, min_spikes):
         stem = Path(path).stem
-        if not force and ((results_dir / f"{stem}.json").exists() or list(results_dir.glob(f"{stem}_movie*.json"))):
+        if all_movies:
+            done = (results_dir / f"{stem}.complete").exists()
+        else:
+            done = (results_dir / f"{stem}.json").exists() or bool(list(results_dir.glob(f"{stem}_movie*.json")))
+        if done and not force:
             print("skip (done):", stem, flush=True)
             continue
         nwb = None
         try:
             nwb = download(path, data_dir)
             for movie_number in movie_numbers(nwb):
+                cell = stem if movie_number == 0 else f"{stem}_movie{movie_number}"
+                if not force and (results_dir / f"{cell}.json").exists():
+                    continue
                 result = run_cell(nwb, movie_number, data_dir, caiman_python, min_spikes)
                 if result is not None:
                     json.dump(result, open(results_dir / f"{result['cell']}.json", "w"), indent=1)
                     if not all_movies:
                         break
             (results_dir / f"{stem}.failed").unlink(missing_ok=True)
+            if all_movies:
+                (results_dir / f"{stem}.complete").touch()
         except Exception:
             (results_dir / f"{stem}.failed").write_text(traceback.format_exc())
             failed.append(stem)
