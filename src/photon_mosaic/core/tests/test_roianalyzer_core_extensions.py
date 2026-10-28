@@ -1303,7 +1303,7 @@ def test_cnmf_background_is_nonnegative_and_l2_normalised(cnmf_extension):
 def test_cnmf_recovers_the_background_away_from_rois(cnmf_extension, cnmf_truth):
     masks, _, _, spatial_true, _ = cnmf_truth
     spatial = cnmf_extension.get_data("background_spatial")
-    # Only off-ROI pixels are identifiable: b -> b + A alpha with C -> C - f alpha.T leaves the
+    # Only off-ROI pixels are identifiable: b -> b + alpha A with C -> C - f alpha leaves the
     # model bit-for-bit unchanged, and that gauge lives exactly on the ROI support.
     off_roi = masks.reshape(CNMF_ROIS, -1).sum(axis=0) == 0
     assert _corr(spatial.reshape(-1)[off_roi], spatial_true[:, 0][off_roi]) > 0.99

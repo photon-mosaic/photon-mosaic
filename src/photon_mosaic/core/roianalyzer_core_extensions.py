@@ -417,7 +417,7 @@ class NeuropilExtension(AnalyzerExtension):
       "shell" neuropil mask, e.g. as in `Suite3D <https://www.biorxiv.org/content/10.1101/2025.03.26.645628v2.full>`_
       (`code <https://github.com/alihaydaroglu/suite3d>`_), rather than this per-plane approach).
 
-    - ``'cnmf'``: CNMF-style low-rank background. Fits ``Y ~= C A.T + f b.T`` with the ROI
+    - ``'cnmf'``: CNMF-style low-rank background. Fits ``Y ~= C A + f b`` with the ROI
       footprints ``A`` held **fixed** at ``rois.get_roi_image_masks()``, and stores only the
       ``gnb`` spatial background components ``b``. The traces ``C`` and the background
       timecourses ``f`` over all frames are then solved for together by
@@ -439,9 +439,9 @@ class NeuropilExtension(AnalyzerExtension):
 
       .. code-block:: text
 
-          b -> b + A alpha        C -> C - f alpha.T
+          b -> b + alpha A        C -> C - f alpha
 
-      leaves ``C A.T + f b.T`` *bit-for-bit* unchanged, so the data cannot distinguish them: what is
+      leaves ``C A + f b`` *bit-for-bit* unchanged, so the data cannot distinguish them: what is
       not identifiable is precisely ``b`` restricted to ROI-support pixels, and the component of
       each trace lying along ``f``. Everything else is. In practice that means ``f``, the background
       away from ROIs, and each trace *after* the ``f`` direction is projected out are all recovered
@@ -1439,8 +1439,8 @@ def _partition_of_unity(spatial_shape, gnb: int):
 def _inpaint_roi_support(image, roi_support, spatial_shape, sigma):
     """Replace ``image`` on ROI pixels by a smooth interpolation of its off-ROI neighbourhood.
 
-    This is what picks the initial point along the model's gauge freedom (``b -> b + A alpha``,
-    ``C -> C - f alpha.T``, see :class:`NeuropilExtension`). The objective is *exactly* flat along
+    This is what picks the initial point along the model's gauge freedom (``b -> b + alpha A``,
+    ``C -> C - f alpha``, see :class:`NeuropilExtension`). The objective is *exactly* flat along
     that direction, so which member of the family the fit lands on is decided by the
     initialisation, not by the data -- and the seeded traces come from a band-passed movie, so they
     carry no baseline and the raw residual image hands every ROI's baseline to ``b``.
@@ -1518,7 +1518,7 @@ def _init_cnmf_background(y_sub, masks_csr, traces_sub, gnb, spatial_shape, init
 
 
 def _cnmf_objective(ynorm_sq, traces, temporal, proj_masks, proj_background, gram_aa, gram_ab, gram_bb):
-    """``||Y - C A.T - f b.T||_F^2``, computed entirely from cached Gram matrices.
+    """``||Y - C A - f b||_F^2``, computed entirely from cached Gram matrices.
 
     Needs no access to the movie, so convergence can be monitored for free every iteration. This is
     also the cheapest possible check on the update algebra: any sign or transpose slip shows up as a
@@ -1571,11 +1571,11 @@ def _fit_cnmf_background(
     n_jobs: int = 1,
     verbose: bool = False,
 ) -> np.ndarray:
-    """Fit the spatial part ``b`` of a low-rank CNMF background ``f b.T`` against *fixed* footprints.
+    """Fit the spatial part ``b`` of a low-rank CNMF background ``f b`` against *fixed* footprints.
 
-    Model: ``Y ~= C A.T + f b.T`` for ``Y`` ``(n_frames, n_pixels)``, ``A`` ``(n_pixels, n_rois)``
-    taken as given from the ROI masks, ``C`` ``(n_frames, n_rois)``, ``b`` ``(n_pixels, gnb)`` and
-    ``f`` ``(n_frames, gnb)``.
+    Model: ``Y ~= C A + f b`` for ``Y`` ``(n_frames, n_pixels)``, ``A`` ``(n_rois, n_pixels)``
+    taken as given from the ROI masks (``masks_csr``), ``C`` ``(n_frames, n_rois)``, ``b``
+    ``(gnb, n_pixels)`` (held transposed as ``background``) and ``f`` ``(n_frames, gnb)``.
 
     ``b`` is fitted by alternating ``C``, ``b`` and ``f`` updates on a deterministic frame subsample,
     which is gathered in **one streaming pass** over the movie. ``C`` and ``f`` over all frames are
@@ -1721,7 +1721,7 @@ def _fit_cnmf_background(
     cond_joint = float(np.linalg.cond(gram_joint))
     if max(cond_aa, cond_joint) > 1e6:
         warnings.warn(
-            f"Ill-conditioned CNMF design (cond(A.T A)={cond_aa:.3g}, cond(D.T D)={cond_joint:.3g}); "
+            f"Ill-conditioned CNMF design (cond(A A.T)={cond_aa:.3g}, cond(D D.T)={cond_joint:.3g}); "
             "heavily overlapping ROIs make the trace/background split poorly determined. Consider "
             "raising `ridge` or reducing `gnb`.",
             stacklevel=2,
