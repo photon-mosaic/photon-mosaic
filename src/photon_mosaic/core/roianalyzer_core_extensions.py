@@ -325,19 +325,19 @@ class FluorescenceNode(PipelineNode):
         num_rois = self._masks_csr.shape[0]
         gram_aa = (self._masks_csr @ self._masks_csr.T).tocsc()  # (N, N), sparse
         if self._gnb:
-            b = np.asarray(background_spatial, dtype=np.float64).reshape(self._gnb, -1).T  # (n_pixels, gnb)
-            if b.shape[0] != self._masks_csr.shape[1]:
+            b = np.asarray(background_spatial, dtype=np.float64).reshape(self._gnb, -1)  # (gnb, n_pixels)
+            if b.shape[1] != self._masks_csr.shape[1]:
                 raise ValueError(
-                    f"background_spatial has {b.shape[0]} pixels per component, "
+                    f"background_spatial has {b.shape[1]} pixels per component, "
                     f"the ROI masks {self._masks_csr.shape[1]}"
                 )
-            gram_ab = np.asarray(self._masks_csr @ b, dtype=np.float64)  # (N, gnb)
-            gram_bb = b.T @ b
+            gram_ab = np.asarray(self._masks_csr @ b.T, dtype=np.float64)  # (N, gnb)
+            gram_bb = b @ b.T
         else:
-            b = np.zeros((self._masks_csr.shape[1], 0))
+            b = np.zeros((0, self._masks_csr.shape[1]))
             gram_ab = np.zeros((num_rois, 0))
             gram_bb = np.zeros((0, 0))
-        self._background = b
+        self._background_spatial = b
         self._gram_ab = gram_ab
 
         # B = f b A.T, the background projected onto each cell's own footprint (as CaImAn's
@@ -363,9 +363,9 @@ class FluorescenceNode(PipelineNode):
             return
 
         # nnls: only C is constrained, so f is eliminated first. Given C, the best f is
-        #   f = (Y b - C A b) inv(b.T b),
-        # which leaves an NNLS problem in C alone with Gram S (the Schur complement of b.T b) and
-        # right-hand side r = Y A.T - Y b inv(b.T b) (A b).T.
+        #   f = (Y b.T - C A b.T) inv(b b.T),
+        # which leaves an NNLS problem in C alone with Gram S (the Schur complement of b b.T) and
+        # right-hand side r = Y A.T - Y b.T inv(b b.T) (A b.T).T.
         gram_aa = gram_aa.toarray()
         gram_bb_inv = _ridge_inverse(gram_bb, ridge)
         self._gram_bb_inv = gram_bb_inv
@@ -426,7 +426,7 @@ class FluorescenceNode(PipelineNode):
             return fluorescence, self._persisted_neuropil(neuropil_trace, num_frames)
 
         rhs_a = np.asarray(self._masks_csr @ chunk_flat.T.astype(np.float64)).T  # (T, N)
-        rhs_b = _project_float64(chunk_flat, self._background)  # (T, gnb)
+        rhs_b = _project_float64(chunk_flat, self._background_spatial.T)  # (T, gnb)
         if self.method == "regression":
             # Block elimination of [C, f] [[A A.T, A b.T], [(A b.T).T, b b.T]] = [rhs_a, rhs_b]: f from
             # the small Schur system, then C from the reused sparse A A.T factorization.

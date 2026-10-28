@@ -1096,7 +1096,7 @@ def test_fluorescence_extension_use_neuropil_false_ignores_computed_extension(su
 
 # A hand-built ground truth rather than generate_imaging_with_rois: that generator's `background`
 # is a uniform, non-fluctuating scalar, so a low-rank fit on it is degenerate (f constant, b flat)
-# and could not validate anything. Here Y is literally C A + f b.T + noise.
+# and could not validate anything. Here Y is literally C A + f b + noise.
 CNMF_H = CNMF_W = 24
 CNMF_FRAMES = 200
 CNMF_ROIS = 4
@@ -1653,8 +1653,8 @@ def test_cnmf_traces_are_the_joint_solve_with_no_neuropil_subtraction(cnmf_truth
 
 @pytest.mark.parametrize("weighted", [False, True])
 def test_cnmf_traces_plus_background_equal_the_regression_without_background(weighted):
-    # The first block of the normal equations reads Y A.T = C A A.T + f (A b).T. For non-overlapping
-    # masks A A.T is diagonal, so C + B (B = f (A b).T / ||a_i||^2) is exactly the regression without
+    # The first block of the normal equations reads Y A.T = C A A.T + f b A.T. For non-overlapping
+    # masks A A.T is diagonal, so C + B (B = f b A.T / ||a_i||^2) is exactly the regression without
     # b. That pins the units of `background` to those of C.
     masks, movie, _, _, _ = _cnmf_ground_truth(weighted=weighted)
     ext = _cnmf_fluorescence(masks, movie)
