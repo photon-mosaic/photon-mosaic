@@ -406,12 +406,10 @@ class FluorescenceNode(PipelineNode):
         gram_bb_inv = _ridge_inverse(gram_bb, ridge)
         self._gram_bb_inv = gram_bb_inv
         self._rhs_correction = gram_bb_inv @ gram_ab.T  # (gnb, N): r = rhs_a - rhs_b @ this
-        # Deliberately on the *reduced* system, not on gram_aa before eliminating f: ridge is
-        # relative to each diagonal entry, and after elimination ROI i's scale is
-        # ||a_i orthogonal to b||^2, not ||a_i||^2. Regularizing gram_aa first would therefore
-        # over-penalize an ROI lying close to span(b). This does make 'regression' and 'nnls' solve
-        # slightly different regularized problems, which only matters where the trace/background
-        # split is unidentifiable anyway (see the gauge freedom in NeuropilExtension's docstring).
+        # Ridge on the *reduced* system: after eliminating f, ROI i's scale is ||a_i orthogonal to b||^2,
+        # not ||a_i||^2, so regularizing gram_aa first would over-penalize an ROI close to span(b).
+        # 'regression' and 'nnls' thus solve slightly different regularized problems, which only matters
+        # where the trace/background split is unidentifiable anyway (the gauge freedom).
         schur = _ridge_regularize(gram_aa - gram_ab @ gram_bb_inv @ gram_ab.T, ridge)
         # scipy's nnls takes min ||M x - y||, not a Gram: write S = M.T M with M = sqrt(w) V.T, and
         # then M.T y = r gives y = (V.T r) / sqrt(w).
@@ -1822,9 +1820,7 @@ def _fit_cnmf_background(
 
     # ---- Alternating fit for b, on the subsample only (no further movie access) -----------------
     # The band-passed seed removes the broad background before the first trace estimate so it does
-    # not leak into C. Note pinv(A) @ (L Y) is not strictly scale-consistent with
-    # pinv(L A) @ (L Y); that is tolerated because this seed only forms the residual the b/f init
-    # works from.
+    # not leak into C.
     traces_sub = proj_masks_hp @ gram_aa_inv
     if nonneg_traces:
         traces_sub = np.maximum(traces_sub, 0.0)

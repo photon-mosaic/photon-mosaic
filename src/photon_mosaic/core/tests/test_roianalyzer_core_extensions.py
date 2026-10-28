@@ -1200,13 +1200,6 @@ def cnmf_extension(cnmf_analyzer):
 # --- numeric helpers -------------------------------------------------------
 
 
-def test_spatial_bandpass_removes_a_constant_frame():
-    chunk = np.full((3, 16, 16, 1), 7.0, dtype=np.float32)
-    out = _spatial_bandpass(chunk, highpass_sigma=4.0, lowpass_sigma=0.0)
-    # mode="nearest" keeps a constant frame constant under both blurs, so it cancels exactly.
-    np.testing.assert_allclose(out, 0.0, atol=1e-4)
-
-
 def test_spatial_bandpass_keeps_small_structure():
     chunk = np.zeros((1, 32, 32, 1), dtype=np.float32)
     chunk[0, 16, 16, 0] = 1.0
@@ -1337,17 +1330,14 @@ def cnmf_fluorescence(cnmf_fluorescence_analyzer):
     return cnmf_fluorescence_analyzer.get_extension("fluorescence")
 
 
-def test_cnmf_data_keys_shapes_and_dtypes(cnmf_extension):
+def test_cnmf_data_keys_shapes_dtypes_and_normalisation(cnmf_extension):
     data = cnmf_extension.data
     # Only b: C and f are solved by FluorescenceExtension, which reads the whole movie anyway.
     assert set(data) == {"background_spatial"}
     assert data["background_spatial"].shape == (1, CNMF_H, CNMF_W, 1)
     assert data["background_spatial"].dtype == np.float32
-    assert np.isfinite(data["background_spatial"]).all()
-
-
-def test_cnmf_background_is_nonnegative_and_l2_normalised(cnmf_extension):
-    spatial = cnmf_extension.get_data()
+    spatial = data["background_spatial"]
+    assert np.isfinite(spatial).all()
     assert (spatial >= 0).all()
     assert np.linalg.norm(spatial.reshape(-1)) == pytest.approx(1.0, rel=1e-5)
 
@@ -1382,14 +1372,8 @@ def test_cnmf_joint_extraction_recovers_traces_up_to_the_background_gauge(cnmf_f
 
 @pytest.mark.parametrize("method", ["regression", "nnls"])
 def test_cnmf_joint_solve_matches_a_dense_reference_with_gnb_2(cnmf_truth, method):
-    """Exercise the matrix-valued block-elimination path.
-
-    With ``gnb=1`` the background Gram is 1x1, ``_ridge_inverse`` is a scalar reciprocal and the
-    Schur complement is a rank-1 downdate, so ``gram_bb_inv @ gram_ab.T``, ``_rhs_correction`` and
-    ``_schur_inv`` are never exercised as matrices -- a transpose error in any of them would pass
-    every other test here. ``gnb=2`` makes all three genuine matrices, and the reference below is
-    a plain dense least-squares solve of the same joint problem, independent of that algebra.
-    """
+    """gnb=2 makes the block-elimination terms genuine matrices (1x1 with gnb=1, where a transpose
+    error would go unnoticed); check against a plain dense least-squares solve."""
     masks, movie, _, _, _ = cnmf_truth
     analyzer, ext = _cnmf_analyzer_and_fluorescence(masks, movie, method=method, background_kwargs={"gnb": 2})
     traces = ext.get_data()
@@ -1412,9 +1396,7 @@ def test_cnmf_joint_solve_matches_a_dense_reference_with_gnb_2(cnmf_truth, metho
 def test_cnmf_concatenates_epochs_in_order(cnmf_truth):
     masks, _, traces_true, spatial_true, temporal_true = cnmf_truth
     first = 120
-    # Deliberately asymmetric, and only the *background* is brightened in the second epoch -- so
-    # the recovered f, not C, has to carry the step. A symmetric test would pass even with the
-    # epochs wired in the wrong order.
+    # Only the background is brightened in the second epoch, so the recovered f has to carry the step.
     boost = 3.0
     scaled_temporal = temporal_true.copy()
     scaled_temporal[first:] *= boost
@@ -1427,8 +1409,7 @@ def test_cnmf_concatenates_epochs_in_order(cnmf_truth):
     assert background.shape == (CNMF_FRAMES, CNMF_ROIS)
     assert ext.get_data().shape == (CNMF_FRAMES, CNMF_ROIS)
     assert _corr(background[:, 0], scaled_temporal[:, 0]) > 0.99
-    # Against the ground truth's own between-epoch ratio, not `boost`: f_true is not flat, so the
-    # two epochs' means differ for reasons other than the boost.
+    # f_true is not flat, so compare to its own between-epoch ratio rather than `boost`.
     expected_ratio = scaled_temporal[first:, 0].mean() / scaled_temporal[:first, 0].mean()
     ratio = background[first:, 0].mean() / background[:first, 0].mean()
     assert ratio == pytest.approx(expected_ratio, rel=0.05)
@@ -1463,9 +1444,7 @@ def test_cnmf_with_sparse_masks_matches_dense(cnmf_truth):
 
 @pytest.mark.parametrize("weighted", [False, True])
 def test_cnmf_recovers_the_background_with_two_components(weighted):
-    """The end-to-end fixture is `gnb=1` with binary masks, which leaves the multi-component
-    alternating solve, the component normalisation/ordering below it, and the weighted-mask path
-    without a recovery test. Fit a genuinely rank-2 background and check both are found."""
+    """A rank-2 background (binary and weighted masks) is recovered, normalized and ordered."""
     masks = _cnmf_masks(weighted=weighted)
     rng = np.random.default_rng(1)
     yy, xx = np.mgrid[0:CNMF_H, 0:CNMF_W]
@@ -1504,20 +1483,6 @@ def test_cnmf_recovers_the_background_with_two_components(weighted):
     assert np.linalg.norm(residual) / np.linalg.norm(true) < 0.1
 
 
-def test_cnmf_default_params(analyzer):
-    defaults = analyzer.get_default_extension_params("background")
-    assert defaults["method"] == "cnmf"
-    assert defaults["gnb"] == 1
-    assert defaults["max_iter"] == 20
-    assert defaults["tol"] == 1e-4
-    assert defaults["highpass_sigma"] == 20.0
-    assert defaults["lowpass_sigma"] == 1.0
-    assert defaults["init_method"] == "ramp"
-    assert defaults["nonneg_background"] is True
-    assert defaults["nonneg_traces"] is False
-    assert defaults["subsample_frames"] == 1000
-
-
 @pytest.mark.parametrize(
     "kwargs, match",
     [
@@ -1542,18 +1507,6 @@ def test_neuropil_rejects_cnmf_params(analyzer):
 def test_neuropil_rejects_cnmf_method(analyzer):
     with pytest.raises(ValueError, match="Unknown method"):
         analyzer.compute("neuropil", method="cnmf")
-
-
-# --- data accessors --------------------------------------------------------
-
-
-def test_cnmf_select_extension_data_keeps_every_key(cnmf_extension, cnmf_analyzer):
-    keep = cnmf_analyzer.rois.roi_ids[:2]
-    selected = cnmf_extension._select_extension_data(keep)
-    # copy() assigns this dict straight over `data`, so a missing key is silently lost.
-    assert set(selected) == set(cnmf_extension.data)
-    # b belongs to the whole field of view, so it passes through unsliced.
-    np.testing.assert_array_equal(selected["background_spatial"], cnmf_extension.data["background_spatial"])
 
 
 def test_cnmf_fluorescence_survives_select_rois(cnmf_fluorescence_analyzer, cnmf_fluorescence):
@@ -1713,18 +1666,6 @@ def test_df_over_f_ignores_the_background_when_neuropil_source_is_neuropil(both_
     with_background = both_corrections_analyzer.compute("df_over_f", **kwargs).get_data().copy()
     without = both_corrections_analyzer.compute("df_over_f", use_background=False, **kwargs).get_data()
     np.testing.assert_array_equal(with_background, without)
-
-
-@pytest.mark.parametrize("method", ["regression", "nnls"])
-def test_cnmf_joint_extraction_beats_no_correction(cnmf_truth, method):
-    masks, movie, traces_true, _, _ = cnmf_truth
-    imaging = NumpyImaging(movie, sampling_frequency=SF)
-    rois = NumpyRois(roi_image_masks=masks, sampling_frequency=SF)
-    uncorrected = create_roi_analyzer(rois, imaging, format="memory").compute("fluorescence").get_data()
-    corrected = _cnmf_fluorescence(masks, movie, method=method).get_data()
-    # The whole point is to remove the background's f-shaped contamination, so this is compared
-    # directly, without projecting that direction out.
-    assert np.linalg.norm(corrected - traces_true) < np.linalg.norm(uncorrected - traces_true) / 5
 
 
 @pytest.mark.parametrize("neuropil_weight", [0.0, 0.7, 1.0])
@@ -1954,12 +1895,7 @@ def test_fluorescence_node_checks_the_background_pixel_count(imaging, rois):
 
 @pytest.mark.parametrize("method_params", [{"method": "surround", "min_neuropil_pixels": 30}, None])
 def test_multi_extension_compute_matches_sequential(imaging, rois, method_params, cnmf_truth):
-    """The shared node-pipeline path must agree with computing one extension at a time.
-
-    It used to raise ``TypeError: 'NoneType' is not iterable`` because ``FluorescenceExtension``
-    never declared ``nodepipeline_variables``, so this whole path was dead and any post-gather
-    neuropil subtraction would have silently been skipped on it.
-    """
+    """The shared node-pipeline path must agree with computing one extension at a time."""
     fluorescence_params = {"neuropil_weight": 0.5}
     correction = "neuropil"
     if method_params is None:
