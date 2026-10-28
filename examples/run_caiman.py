@@ -113,7 +113,9 @@ def main():
             if getattr(e, "g", None) is not None
             else np.array([])
         )
-        np.savez(a.out, A=A, C=e.C, YrA=e.YrA, S=S, g=g, b=e.b, f=e.f, F_dff=e.F_dff, dims=np.array(dims))
+        tmp = a.out + ".tmp.npz"  # written whole, then moved: an interruption never leaves a damaged a.out
+        np.savez(tmp, A=A, C=e.C, YrA=e.YrA, S=S, g=g, b=e.b, f=e.f, F_dff=e.F_dff, dims=np.array(dims))
+        os.replace(tmp, a.out)
     finally:
         cm.stop_server(dview=dview)
 

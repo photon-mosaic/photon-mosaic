@@ -152,7 +152,10 @@ def _count_spikes(asset, retries=3):
 def spike_counts(data_dir, indicators=INDICATORS):
     """``{path: {bytes, spikes_per_movie}}`` for the files of ``indicators`` (cached in ``spike_counts.json``)."""
     cache_file = Path(data_dir) / "spike_counts.json"
-    counts = json.load(open(cache_file)) if cache_file.exists() else {}
+    try:
+        counts = json.load(open(cache_file)) if cache_file.exists() else {}
+    except json.JSONDecodeError:  # a cache damaged by an interruption: rebuild it
+        counts = {}
     todo = [a for a in list_assets() if a["path"].split("/")[0] in indicators and a["path"] not in counts]
     if todo:
         print(
@@ -165,7 +168,7 @@ def spike_counts(data_dir, indicators=INDICATORS):
                 if count is not None:
                     counts[asset["path"]] = count
         Path(data_dir).mkdir(parents=True, exist_ok=True)
-        json.dump(counts, open(cache_file, "w"), indent=1)
+        _write_json(cache_file, counts)
     return {p: c for p, c in counts.items() if p.split("/")[0] in indicators}
 
 
@@ -187,6 +190,14 @@ def select_cells(counts, per_indicator=PER_INDICATOR, min_spikes=MIN_SPIKES, ind
 
 
 # ------------------------------------------------------------------------------------------------------ the data
+def _write_json(path, obj):
+    """Write ``obj`` as JSON to ``path`` all at once, so an interruption never leaves a partial file there."""
+    tmp = Path(f"{path}.tmp")  # not ``*.json``: the summary globs for that
+    with open(tmp, "w") as f:
+        json.dump(obj, f, indent=1)
+    os.replace(tmp, path)
+
+
 def _wait_for_space(directory, nbytes, max_wait_hours):
     """Wait until the filesystem of ``directory`` has room for ``nbytes`` plus a margin. Parallel runs can fill a small
     volume with downloads; waiting lets the tasks that are already processing free theirs."""
@@ -207,8 +218,9 @@ def download(path, data_dir, wait_hours=3.0, attempts=3):
     asset = next(a for a in assets if a["path"] == path)
     if target.exists() and target.stat().st_size == asset["size"]:
         return target
-    _wait_for_space(target.parent, asset["size"], wait_hours)
     tmp = target.with_suffix(".part")
+    tmp.unlink(missing_ok=True)  # an abandoned partial download: restart it, and count its space as free
+    _wait_for_space(target.parent, asset["size"], wait_hours)
     for attempt in range(attempts):
         try:
             with requests.get(f"{API}/assets/{asset['asset_id']}/download/", stream=True) as r, open(tmp, "wb") as f:
@@ -269,12 +281,16 @@ def load_binned(nwb_path, movie_number=0, spatial=SPATIAL_BIN, temporal=TEMPORAL
 
 # ----------------------------------------------------------------------------------------------------- the scores
 def spike_corr(inferred, truth):
-    """Correlation of two spike trains after Gaussian smoothing, per width in ``SIGMAS`` (string keys, as in JSON)."""
+    """Correlation of two spike trains after Gaussian smoothing, per width in ``SIGMAS`` (string keys, as in JSON).
+    A constant inferred train (no spikes) scores 0."""
 
     def smooth(x, s):
         return gaussian_filter1d(np.asarray(x, dtype=float), s)
 
-    return {str(s): float(np.corrcoef(smooth(inferred, s), smooth(truth, s))[0, 1]) for s in SIGMAS}
+    def corr(a, b):  # a constant (for example all-zero) prediction has no correlation: scored 0, not NaN
+        return 0.0 if a.std() == 0 or b.std() == 0 else float(np.corrcoef(a, b)[0, 1])
+
+    return {str(s): corr(smooth(inferred, s), smooth(truth, s)) for s in SIGMAS}
 
 
 def signal_quality(movie, weights, spikes, fs):
@@ -293,10 +309,11 @@ def signal_quality(movie, weights, spikes, fs):
     return {"sta_peak": float(sta.max()), "sta_over_noise": float(sta.max() / noise)}
 
 
-def run_cell(nwb, movie_number, data_dir, caiman_python, min_spikes=MIN_SPIKES):
+def run_cell(nwb, movie_number, data_dir, caiman_python, min_spikes=MIN_SPIKES, force=False):
     """Score every method on the patched cell of one movie: ``{method: {sigma: correlation}}`` plus metadata.
 
-    Returns ``None`` (with a message) for a movie without a patched ROI or with fewer than ``min_spikes`` spikes."""
+    Returns ``None`` (with a message) for a movie without a patched ROI or with fewer than ``min_spikes`` spikes.
+    CaImAn's result is cached in ``<data_dir>/work``; ``force`` runs it again."""
     import photon_mosaic as pm
     from photon_mosaic.core.numpyimaging import NumpyImaging, NumpyRois
     from photon_mosaic.core.roianalyzer_core_extensions import _deconvolve_roi
@@ -355,7 +372,7 @@ def run_cell(nwb, movie_number, data_dir, caiman_python, min_spikes=MIN_SPIKES):
     work = Path(data_dir) / "work"
     work.mkdir(exist_ok=True)
     movie_path, seed_path, result_path = work / f"{tag}_movie.npy", work / f"{tag}_seed.npy", work / f"{tag}_caiman.npz"
-    if not result_path.exists():
+    if force or not result_path.exists():
         np.save(movie_path, movie)
         np.save(seed_path, seed)
         run = subprocess.run(
@@ -449,28 +466,37 @@ def run_benchmark(
     )
     for path in resolve_cells(data_dir, cells, per_indicator, all_files, min_spikes):
         stem = Path(path).stem
+        none_file = results_dir / f"{stem}.none"  # holds the min_spikes with which no movie of the file qualified
         if all_movies:
             done = (results_dir / f"{stem}.complete").exists()
         else:
-            done = (results_dir / f"{stem}.json").exists() or bool(list(results_dir.glob(f"{stem}_movie*.json")))
+            done = (
+                (results_dir / f"{stem}.json").exists()
+                or bool(list(results_dir.glob(f"{stem}_movie*.json")))
+                or (none_file.exists() and int(none_file.read_text()) <= min_spikes)
+            )
         if done and not force:
             print("skip (done):", stem, flush=True)
             continue
         nwb = None
         try:
             nwb = download(path, data_dir)
+            found = False
             for movie_number in movie_numbers(nwb):
                 cell = stem if movie_number == 0 else f"{stem}_movie{movie_number}"
                 if not force and (results_dir / f"{cell}.json").exists():
                     continue
-                result = run_cell(nwb, movie_number, data_dir, caiman_python, min_spikes)
+                result = run_cell(nwb, movie_number, data_dir, caiman_python, min_spikes, force)
                 if result is not None:
-                    json.dump(result, open(results_dir / f"{result['cell']}.json", "w"), indent=1)
+                    _write_json(results_dir / f"{result['cell']}.json", result)
+                    found = True
                     if not all_movies:
                         break
             (results_dir / f"{stem}.failed").unlink(missing_ok=True)
             if all_movies:
                 (results_dir / f"{stem}.complete").touch()
+            elif not found:
+                none_file.write_text(str(min_spikes))
         except Exception:
             (results_dir / f"{stem}.failed").write_text(traceback.format_exc())
             failed.append(stem)
