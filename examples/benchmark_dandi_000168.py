@@ -24,7 +24,8 @@ install "photon-mosaic[suite2p-registration]"``) and ``CAIMAN_PYTHON`` pointing 
 takes a few minutes plus its download (the files are 1 to 23 GB; ``--delete-nwb`` removes each one once it is
 processed). Finished cells are skipped, so a run can be interrupted and resumed. A file that fails is logged to
 ``<results-dir>/<file>.failed`` and the run continues (failed files are retried next time); the exit status is 1 if
-any failed.
+any failed. Results do not record the settings that made them, so changing ``--min-spikes`` or ``--all-movies`` needs a
+fresh ``--results-dir``.
 """
 
 import argparse
@@ -453,7 +454,8 @@ def run_benchmark(
     ``cells``: DANDI paths; otherwise ``per_indicator`` applies the selection rule with that many animals per indicator,
     ``all_files`` takes every file of the dandiset, and by default it is the ``CELLS`` list. A file is one cell: only
     its first movie with a patched ROI and at least ``min_spikes`` spikes is run, unless ``all_movies``, which runs
-    every such movie and marks the file ``<file>.complete`` once all are done.
+    every such movie and marks the file ``<file>.complete`` once all are done. Results are not tied to the settings
+    that made them: changing ``min_spikes`` or ``all_movies`` needs a fresh ``results_dir``.
     ``caiman_python`` is the interpreter that has CaImAn; by default ``$CAIMAN_PYTHON``.
     """
     data_dir = Path(data_dir).expanduser().resolve()  # CaImAn runs with cwd=<data_dir>/work, so paths must be absolute
@@ -467,6 +469,7 @@ def run_benchmark(
     for path in resolve_cells(data_dir, cells, per_indicator, all_files, min_spikes):
         stem = Path(path).stem
         none_file = results_dir / f"{stem}.none"  # holds the min_spikes with which no movie of the file qualified
+        redo = force or (results_dir / f"{stem}.failed").exists()  # a failed file is recomputed, not skipped
         if all_movies:
             done = (results_dir / f"{stem}.complete").exists()
         else:
@@ -475,7 +478,7 @@ def run_benchmark(
                 or bool(list(results_dir.glob(f"{stem}_movie*.json")))
                 or (none_file.exists() and int(none_file.read_text()) <= min_spikes)
             )
-        if done and not force:
+        if done and not redo:
             print("skip (done):", stem, flush=True)
             continue
         nwb = None
@@ -484,9 +487,9 @@ def run_benchmark(
             found = False
             for movie_number in movie_numbers(nwb):
                 cell = stem if movie_number == 0 else f"{stem}_movie{movie_number}"
-                if not force and (results_dir / f"{cell}.json").exists():
+                if not redo and (results_dir / f"{cell}.json").exists():
                     continue
-                result = run_cell(nwb, movie_number, data_dir, caiman_python, min_spikes, force)
+                result = run_cell(nwb, movie_number, data_dir, caiman_python, min_spikes, redo)
                 if result is not None:
                     _write_json(results_dir / f"{result['cell']}.json", result)
                     found = True
