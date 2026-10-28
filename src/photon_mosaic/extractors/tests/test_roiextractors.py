@@ -131,8 +131,8 @@ def test_dynamic_class_names_match_extractor_dict():
 
 def test_dynamic_class_round_trips_through_dict(tmp_path):
     import tifffile
-    from spikeinterface.core.base import BaseExtractor
 
+    from photon_mosaic.core import BaseImaging
     from photon_mosaic.extractors import read_tiff_imaging
 
     data = np.random.default_rng(0).integers(0, 100, (10, 8, 8), dtype=np.uint16)
@@ -140,7 +140,7 @@ def test_dynamic_class_round_trips_through_dict(tmp_path):
     tifffile.imwrite(file_path, data)
 
     imaging = read_tiff_imaging(file_path=file_path, sampling_frequency=30.0)
-    loaded = BaseExtractor.from_dict(imaging.to_dict())
+    loaded = BaseImaging.from_dict(imaging.to_dict())
 
     assert type(loaded) is type(imaging)
     np.testing.assert_array_equal(loaded.get_series(), imaging.get_series())
