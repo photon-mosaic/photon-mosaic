@@ -1234,6 +1234,22 @@ def test_cnmf_background_does_not_depend_on_n_jobs(cnmf_truth):
     np.testing.assert_array_equal(spatial[0], spatial[1])
 
 
+@pytest.mark.parametrize("epoch_split", [None, 120])
+def test_cnmf_subsample_is_the_same_across_chunk_and_epoch_boundaries(cnmf_truth, epoch_split):
+    # With subsample_frames < n_frames the gathered rows depend on the chunk and epoch arithmetic.
+    masks, movie, _, _, _ = cnmf_truth
+    rois = NumpyRois(roi_image_masks=masks, sampling_frequency=SF)
+    params = dict(method="cnmf", gnb=1, max_iter=10, highpass_sigma=CNMF_HIGHPASS, subsample_frames=50)
+
+    def fit(video, chunk_duration):
+        analyzer = create_roi_analyzer(rois, NumpyImaging(video, sampling_frequency=SF), format="memory")
+        return analyzer.compute("neuropil", chunk_duration=chunk_duration, **params).get_data("background_spatial")
+
+    reference = fit(movie, "1000s")  # one chunk
+    epochs = movie if epoch_split is None else [movie[:epoch_split], movie[epoch_split:]]
+    np.testing.assert_array_equal(fit(epochs, "1s"), reference)
+
+
 def test_cnmf_objective_matches_brute_force():
     rng = np.random.default_rng(3)
     n_frames, n_pixels, n_rois, gnb = 12, 20, 3, 2
