@@ -1225,21 +1225,21 @@ def test_cnmf_objective_matches_brute_force():
     rng = np.random.default_rng(3)
     n_frames, n_pixels, n_rois, gnb = 12, 20, 3, 2
     movie = rng.standard_normal((n_frames, n_pixels))
-    masks = rng.standard_normal((n_pixels, n_rois))
+    a = rng.standard_normal((n_rois, n_pixels))
     traces = rng.standard_normal((n_frames, n_rois))
-    background = rng.standard_normal((n_pixels, gnb))
+    b = rng.standard_normal((gnb, n_pixels))
     temporal = rng.standard_normal((n_frames, gnb))
 
-    expected = float(((movie - traces @ masks.T - temporal @ background.T) ** 2).sum())
+    expected = float(((movie - traces @ a - temporal @ b) ** 2).sum())
     got = _cnmf_objective(
         float((movie**2).sum()),
         traces,
         temporal,
-        movie @ masks,
-        movie @ background,
-        masks.T @ masks,
-        masks.T @ background,
-        background.T @ background,
+        movie @ a.T,
+        movie @ b.T,
+        a @ a.T,
+        a @ b.T,
+        b @ b.T,
     )
     assert got == pytest.approx(expected, rel=1e-9)
 

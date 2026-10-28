@@ -508,8 +508,9 @@ class NeuropilExtension(AnalyzerExtension):
       component and ordered by descending temporal energy -- otherwise ``b`` would only be
       determined up to a per-component positive factor and an ordering.
 
-      Cost: one streaming pass over the movie to gather the frame subsample the fit runs on. Peak
-      memory is dominated by that subsample (``subsample_frames x n_pixels``) plus one chunk.
+      Cost: one streaming pass over the movie to gather the frame subsample the fit runs on, then
+      its spatial band-pass (threaded over ``n_jobs``). Peak memory is dominated by that subsample
+      (``subsample_frames x n_pixels``) plus one chunk.
 
       **The trace/background split has an exact gauge freedom.** For any ``alpha``,
 
@@ -1481,11 +1482,11 @@ def _project_float64(data, factor, block: int = 512):
     return out
 
 
-def _project_float64_transposed(data, factor, block: int = 512):
-    """``data.T @ factor`` accumulated in float64, in bounded-memory row blocks of ``data``."""
-    out = np.zeros((data.shape[1], factor.shape[1]), dtype=np.float64)
+def _project_float64_left(factor, data, block: int = 512):
+    """``factor.T @ data`` accumulated in float64, in bounded-memory row blocks of ``data``."""
+    out = np.zeros((factor.shape[1], data.shape[1]), dtype=np.float64)
     for i in range(0, data.shape[0], block):
-        out += data[i : i + block].astype(np.float64).T @ factor[i : i + block]
+        out += factor[i : i + block].T @ data[i : i + block].astype(np.float64)
     return out
 
 
@@ -1543,7 +1544,7 @@ def _inpaint_roi_support(image, roi_support, spatial_shape, sigma):
 
 
 def _init_cnmf_background(y_sub, masks_csr, traces_sub, gnb, spatial_shape, init_method, nonneg, ridge, inpaint_sigma):
-    """Deterministic non-negative initialisation of the background factors ``(b, f)``.
+    """Deterministic non-negative initialisation of the background factors ``b`` ``(gnb, n_pixels)`` and ``f``.
 
     Both methods start from the *mean residual image* ``mean(Y) - A mean(C)``, smoothed across the
     ROI footprints (see :func:`_inpaint_roi_support`, which is what fixes the gauge), since that is
@@ -1554,43 +1555,45 @@ def _init_cnmf_background(y_sub, masks_csr, traces_sub, gnb, spatial_shape, init
     - ``'svd'``: rank-``gnb`` truncated SVD of the residual with an NNDSVD-style sign fix.
     """
     residual_mean = y_sub.mean(axis=0).astype(np.float64) - np.asarray(
-        masks_csr.T @ traces_sub.mean(axis=0), dtype=np.float64
+        traces_sub.mean(axis=0) @ masks_csr, dtype=np.float64
     )
     roi_support = np.asarray(abs(masks_csr).sum(axis=0), dtype=np.float64).ravel() > 0
     residual_mean = _inpaint_roi_support(residual_mean, roi_support, spatial_shape, inpaint_sigma)
 
     if init_method == "ramp":
-        b = (np.maximum(residual_mean, 0.0)[None, :] * _partition_of_unity(spatial_shape, gnb)).T
+        background_spatial = np.maximum(residual_mean, 0.0)[None, :] * _partition_of_unity(spatial_shape, gnb)
     elif init_method == "svd":
         from scipy.sparse.linalg import svds
 
-        residual = y_sub.astype(np.float64) - (masks_csr.T @ traces_sub.T).T
+        residual = y_sub.astype(np.float64) - np.asarray(traces_sub @ masks_csr, dtype=np.float64)
         residual[:, roi_support] = 0.0  # same gauge choice as 'ramp': ignore ROI pixels
         k = min(gnb, min(residual.shape) - 1)
         if k < 1:
-            b = np.maximum(residual_mean, 0.0)[:, None] * np.ones((1, gnb))
+            background_spatial = np.maximum(residual_mean, 0.0)[None, :] * np.ones((gnb, 1))
         else:
             _, _, vt = svds(residual, k=k)
             components = np.abs(vt[::-1])  # svds returns ascending singular values
-            b = np.zeros((residual.shape[1], gnb), dtype=np.float64)
+            background_spatial = np.zeros((gnb, residual.shape[1]), dtype=np.float64)
             for i in range(gnb):
-                b[:, i] = components[min(i, k - 1)]
+                background_spatial[i] = components[min(i, k - 1)]
     else:  # pragma: no cover - validated in _set_params
         raise ValueError(f"Unknown init_method: '{init_method}'. Supported: {_CNMF_INIT_METHODS}.")
 
-    b = np.asarray(b, dtype=np.float64).reshape(-1, gnb)
+    background_spatial = np.asarray(background_spatial, dtype=np.float64).reshape(gnb, -1)
     # A background component that initialises to all-zero can never move (every update is
     # multiplicative in b's own support), so fall back to a flat component.
     for k in range(gnb):
-        if not np.any(b[:, k] > 0):
-            b[:, k] = 1.0
+        if not np.any(background_spatial[k] > 0):
+            background_spatial[k] = 1.0
 
-    gram_b = b.T @ b
-    rhs = _project_float64(y_sub, b) - traces_sub @ np.asarray(masks_csr @ b, dtype=np.float64)
-    f = rhs @ _ridge_inverse(gram_b, ridge)
+    gram_bb = background_spatial @ background_spatial.T
+    rhs = _project_float64(y_sub, background_spatial.T) - traces_sub @ np.asarray(
+        masks_csr @ background_spatial.T, dtype=np.float64
+    )
+    f = rhs @ _ridge_inverse(gram_bb, ridge)
     if nonneg:
-        f = _nnls_block(_ridge_regularize(gram_b, ridge), rhs, f)
-    return b, f
+        f = _nnls_block(_ridge_regularize(gram_bb, ridge), rhs, f)
+    return background_spatial, f
 
 
 def _cnmf_objective(ynorm_sq, traces, temporal, proj_masks, proj_background, gram_aa, gram_ab, gram_bb):
@@ -1651,7 +1654,8 @@ def _fit_cnmf_background(
 
     Model: ``Y ~= C A + f b`` for ``Y`` ``(n_frames, n_pixels)``, ``A`` ``(n_rois, n_pixels)``
     taken as given from the ROI masks (``masks_csr``), ``C`` ``(n_frames, n_rois)``, ``b``
-    ``(gnb, n_pixels)`` (held transposed as ``background``) and ``f`` ``(n_frames, gnb)``.
+    ``(gnb, n_pixels)`` and ``f`` ``(n_frames, gnb)``. In the code ``A`` is ``masks_csr``, ``C`` is
+    ``traces_sub``, ``b`` is ``background_spatial`` and ``f`` is ``temporal_sub``.
 
     ``b`` is fitted by alternating ``C``, ``b`` and ``f`` updates on a deterministic frame subsample,
     which is gathered in **one streaming pass** over the movie. ``C`` and ``f`` over all frames are
@@ -1720,7 +1724,7 @@ def _fit_cnmf_background(
     inpaint_sigma = float(np.sqrt(max(gram_aa.diagonal().max(), 1.0) / np.pi)) + 1.0
     if highpass_sigma:
         inpaint_sigma = min(inpaint_sigma, float(highpass_sigma))
-    background, temporal_sub = _init_cnmf_background(
+    background_spatial, temporal_sub = _init_cnmf_background(
         y_sub,
         masks_csr,
         traces_sub,
@@ -1736,24 +1740,25 @@ def _fit_cnmf_background(
     objective: list[float] = []
 
     for n_iter in range(1, max_iter + 1):
-        gram_ab = np.asarray(masks_csr @ background, dtype=np.float64)
+        gram_ab = np.asarray(masks_csr @ background_spatial.T, dtype=np.float64)
 
         traces_sub = (proj_masks_sub - temporal_sub @ gram_ab.T) @ gram_aa_inv
         if nonneg_traces:
             traces_sub = np.maximum(traces_sub, 0.0)
 
-        gram_hh = temporal_sub.T @ temporal_sub
-        rhs_b = _project_float64_transposed(y_sub, temporal_sub) - np.asarray(
-            masks_csr.T @ (traces_sub.T @ temporal_sub), dtype=np.float64
+        gram_ff = temporal_sub.T @ temporal_sub
+        rhs_b = _project_float64_left(temporal_sub, y_sub) - np.asarray(
+            (temporal_sub.T @ traces_sub) @ masks_csr, dtype=np.float64
         )
         if nonneg_background:
-            background = _nnls_block(_ridge_regularize(gram_hh, ridge), rhs_b, background)
+            # _nnls_block takes one sample per row, here a pixel.
+            background_spatial = _nnls_block(_ridge_regularize(gram_ff, ridge), rhs_b.T, background_spatial.T).T
         else:
-            background = rhs_b @ _ridge_inverse(gram_hh, ridge)
+            background_spatial = _ridge_inverse(gram_ff, ridge) @ rhs_b
 
-        gram_ab = np.asarray(masks_csr @ background, dtype=np.float64)
-        gram_bb = background.T @ background
-        proj_background_sub = _project_float64(y_sub, background)
+        gram_ab = np.asarray(masks_csr @ background_spatial.T, dtype=np.float64)
+        gram_bb = background_spatial @ background_spatial.T
+        proj_background_sub = _project_float64(y_sub, background_spatial.T)
         rhs_f = proj_background_sub - traces_sub @ gram_ab
         if nonneg_background:
             temporal_sub = _nnls_block(_ridge_regularize(gram_bb, ridge), rhs_f, temporal_sub)
@@ -1784,15 +1789,14 @@ def _fit_cnmf_background(
     # b f is invariant under b_k -> alpha_k b_k, f_k -> f_k / alpha_k for any alpha_k > 0, and under
     # permutation of k. Fix it: unit-L2 spatial components, ordered by descending temporal energy.
     for k in range(gnb):
-        scale = float(np.linalg.norm(background[:, k]))
+        scale = float(np.linalg.norm(background_spatial[k]))
         if scale > 0:
-            background[:, k] /= scale
+            background_spatial[k] /= scale
             temporal_sub[:, k] *= scale
-    order = np.argsort(-np.linalg.norm(temporal_sub, axis=0))
-    background = background[:, order]
+    background_spatial = background_spatial[np.argsort(-np.linalg.norm(temporal_sub, axis=0))]
 
-    gram_ab = np.asarray(masks_csr @ background, dtype=np.float64)
-    gram_joint = np.block([[gram_aa, gram_ab], [gram_ab.T, background.T @ background]])
+    gram_ab = np.asarray(masks_csr @ background_spatial.T, dtype=np.float64)
+    gram_joint = np.block([[gram_aa, gram_ab], [gram_ab.T, background_spatial @ background_spatial.T]])
     cond_aa = float(np.linalg.cond(gram_aa))
     cond_joint = float(np.linalg.cond(gram_joint))
     if max(cond_aa, cond_joint) > 1e6:
@@ -1803,7 +1807,7 @@ def _fit_cnmf_background(
             stacklevel=2,
         )
 
-    return np.ascontiguousarray(background.T.reshape((gnb,) + spatial_shape), dtype=np.float32)
+    return np.ascontiguousarray(background_spatial.reshape((gnb,) + spatial_shape), dtype=np.float32)
 
 
 register_result_extension(FluorescenceExtension)
