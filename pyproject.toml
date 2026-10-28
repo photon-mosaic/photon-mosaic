@@ -84,7 +84,8 @@ include = ["photon_mosaic*"]
 exclude = ["tests*"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=photon_mosaic"
+addopts = "--cov=photon_mosaic -m 'not network'"
+markers = ["network: downloads data; run with -m network"]
 
 [tool.ruff]
 line-length = 120
