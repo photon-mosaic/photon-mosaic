@@ -1398,7 +1398,7 @@ def test_cnmf_concatenates_epochs_in_order(cnmf_truth):
     boost = 3.0
     scaled_temporal = temporal_true.copy()
     scaled_temporal[first:] *= boost
-    rebuilt = traces_true @ masks.reshape(CNMF_ROIS, -1) + scaled_temporal @ spatial_true.T
+    rebuilt = traces_true @ masks.reshape(CNMF_ROIS, -1) + scaled_temporal @ spatial_true
     rebuilt = rebuilt.astype(np.float32).reshape(CNMF_FRAMES, CNMF_H, CNMF_W, 1)
     epochs = [rebuilt[:first].copy(), rebuilt[first:].copy()]
 
