@@ -1207,6 +1207,20 @@ def test_spatial_bandpass_disabled_is_identity():
     np.testing.assert_allclose(_spatial_bandpass(chunk, None, None), chunk)
 
 
+def test_cnmf_background_does_not_depend_on_n_jobs(cnmf_truth):
+    # n_jobs > 1 filters the 200 frames in threads, over several blocks; no value may change.
+    masks, movie, _, _, _ = cnmf_truth
+    rois = NumpyRois(roi_image_masks=masks, sampling_frequency=SF)
+    spatial = []
+    for n_jobs in (1, 2):
+        analyzer = create_roi_analyzer(rois, NumpyImaging(movie, sampling_frequency=SF), format="memory")
+        extension = analyzer.compute(
+            "neuropil", method="cnmf", gnb=1, max_iter=10, highpass_sigma=CNMF_HIGHPASS, n_jobs=n_jobs
+        )
+        spatial.append(extension.get_data("background_spatial"))
+    np.testing.assert_array_equal(spatial[0], spatial[1])
+
+
 def test_cnmf_objective_matches_brute_force():
     rng = np.random.default_rng(3)
     n_frames, n_pixels, n_rois, gnb = 12, 20, 3, 2

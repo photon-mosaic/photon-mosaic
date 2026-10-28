@@ -629,6 +629,7 @@ class NeuropilExtension(AnalyzerExtension):
                 ridge=self.params["ridge"],
                 subsample_frames=self.params["subsample_frames"],
                 chunk_size=chunk_size,
+                n_jobs=job_kwargs["n_jobs"],
                 verbose=verbose,
             )
         else:
@@ -1289,20 +1290,45 @@ def _check_finite_non_negative(name: str, value: float) -> None:
 def _spatial_bandpass(chunk, highpass_sigma, lowpass_sigma):
     """Difference-of-Gaussians spatial band-pass, applied per frame and per plane.
 
-    ``chunk`` has shape ``(n_frames, Ly, Lx, n_planes)``; ``sigma=0`` on the frame and plane axes
-    makes this a strictly 2D filter without a Python loop, so multi-plane input is handled for free.
-    ``mode="nearest"`` rather than scipy's default ``"reflect"`` (and definitely not ``"constant"``,
-    which darkens the field-of-view border and so manufactures a spurious high-pass ring).
+    ``chunk`` has shape ``(n_frames, Ly, Lx, n_planes)``; each frame is filtered in 2D with the planes as
+    channels. The border is replicated, not reflected or constant (a constant border darkens the field-of-view
+    edge and so manufactures a spurious high-pass ring).
     """
-    from scipy.ndimage import gaussian_filter
+    import cv2
 
     x = np.asarray(chunk, dtype=np.float32)
-    low = x
-    if lowpass_sigma:
-        low = gaussian_filter(x, sigma=(0, lowpass_sigma, lowpass_sigma, 0), mode="nearest")
-    if not highpass_sigma:
-        return low
-    return low - gaussian_filter(x, sigma=(0, highpass_sigma, highpass_sigma, 0), mode="nearest")
+
+    def blur(frame, sigma):
+        out = cv2.GaussianBlur(frame, (0, 0), sigmaX=sigma, sigmaY=sigma, borderType=cv2.BORDER_REPLICATE)
+        return out.reshape(frame.shape)  # cv2 drops a trailing axis of size 1
+
+    out = np.empty_like(x)
+    for k, frame in enumerate(x):
+        low = blur(frame, lowpass_sigma) if lowpass_sigma else frame
+        out[k] = low - blur(frame, highpass_sigma) if highpass_sigma else low
+    return out
+
+
+def _spatial_bandpass_blocks(frames, highpass_sigma, lowpass_sigma, n_jobs=1, block=64):
+    """:func:`_spatial_bandpass` of ``frames`` ``(n_frames, Ly, Lx, n_planes)``, in blocks of ``block`` frames.
+
+    Frames are independent, so the blocks run in a thread pool (cv2 releases the GIL) without changing the result.
+    """
+    out = np.empty(frames.shape, dtype=np.float32)
+
+    def filter_block(start):
+        out[start : start + block] = _spatial_bandpass(frames[start : start + block], highpass_sigma, lowpass_sigma)
+
+    starts = range(0, len(frames), block)
+    if n_jobs <= 1:
+        for start in starts:
+            filter_block(start)
+    else:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=n_jobs) as pool:
+            list(pool.map(filter_block, starts))
+    return out
 
 
 def _ridge_regularize(gram, ridge: float):
@@ -1542,6 +1568,7 @@ def _fit_cnmf_background(
     ridge: float,
     subsample_frames: int | None,
     chunk_size: int | None,
+    n_jobs: int = 1,
     verbose: bool = False,
 ) -> np.ndarray:
     """Fit the spatial part ``b`` of a low-rank CNMF background ``f b.T`` against *fixed* footprints.
@@ -1589,15 +1616,16 @@ def _fit_cnmf_background(
         sub_rows = np.unique(np.round(np.linspace(0, num_frames - 1, subsample_frames)).astype(int))
 
     y_sub = np.zeros((len(sub_rows), n_pixels), dtype=np.float32)
-    y_sub_hp = np.zeros((len(sub_rows), n_pixels), dtype=np.float32)
-    for global_start, flat, shaped in _iter_movie_chunks(imaging, chunk_size, epoch_offsets):
+    for global_start, flat, _ in _iter_movie_chunks(imaging, chunk_size, epoch_offsets):
         n = flat.shape[0]
         in_chunk = np.flatnonzero((sub_rows >= global_start) & (sub_rows < global_start + n))
         if len(in_chunk) == 0:
             continue
-        local = sub_rows[in_chunk] - global_start
-        y_sub[in_chunk] = flat[local]
-        y_sub_hp[in_chunk] = _spatial_bandpass(shaped[local], highpass_sigma, lowpass_sigma).reshape(len(local), -1)
+        y_sub[in_chunk] = flat[sub_rows[in_chunk] - global_start]
+    # Band-pass the gathered frames once, in threads.
+    y_sub_hp = _spatial_bandpass_blocks(
+        y_sub.reshape((len(sub_rows),) + spatial_shape), highpass_sigma, lowpass_sigma, n_jobs
+    ).reshape(len(sub_rows), -1)
     proj_masks_sub = np.asarray(masks_csr @ y_sub.T.astype(np.float64)).T
     proj_masks_hp = np.asarray(masks_csr @ y_sub_hp.T.astype(np.float64)).T
     del y_sub_hp
