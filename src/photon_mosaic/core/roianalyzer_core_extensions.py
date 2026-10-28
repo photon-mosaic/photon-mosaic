@@ -462,7 +462,10 @@ class FluorescenceNode(PipelineNode):
             return fluorescence, self._persisted_neuropil(neuropil_trace, num_frames)
 
         rhs_a = np.asarray(self._masks_csr @ chunk_flat.T.astype(np.float64)).T  # (T, N)
-        rhs_b = _project_float64(chunk_flat, self._background_spatial.T)  # (T, gnb)
+        if self._gnb:
+            rhs_b = _project_float64(chunk_flat, self._background_spatial.T)  # (T, gnb)
+        else:
+            rhs_b = np.zeros((num_frames, 0))
         if self.method == "regression":
             # Block elimination of [C, f] [[A A.T, A b.T], [(A b.T).T, b b.T]] = [rhs_a, rhs_b]: f from
             # the small Schur system, then C from the reused sparse A A.T factorization.
@@ -1813,8 +1816,8 @@ def _fit_cnmf_background(
     y_sub_hp = _spatial_bandpass_blocks(
         y_sub.reshape((len(sub_rows),) + spatial_shape), highpass_sigma, lowpass_sigma, n_jobs
     ).reshape(len(sub_rows), -1)
-    proj_masks_sub = np.asarray(masks_csr @ y_sub.T.astype(np.float64)).T
-    proj_masks_hp = np.asarray(masks_csr @ y_sub_hp.T.astype(np.float64)).T
+    proj_masks_sub = _project_float64(y_sub, masks_csr.T)  # (n_sub, n_rois)
+    proj_masks_hp = _project_float64(y_sub_hp, masks_csr.T)
     del y_sub_hp
 
     # ---- Alternating fit for b, on the subsample only (no further movie access) -----------------
@@ -1843,7 +1846,7 @@ def _fit_cnmf_background(
         inpaint_sigma,
     )
 
-    ysub_norm_sq = float(np.sum(y_sub.astype(np.float64) ** 2))
+    ysub_norm_sq = sum(float(np.square(y_sub[i : i + 512], dtype=np.float64).sum()) for i in range(0, len(y_sub), 512))
     objective: list[float] = []
 
     for n_iter in range(1, max_iter + 1):
