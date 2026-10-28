@@ -707,7 +707,8 @@ class BackgroundExtension(AnalyzerExtension):
         nonneg_traces : bool, optional
             Also constrain the demixed traces to be non-negative. Only used with
             ``method='cnmf'``. Default is ``False``, since a band-passed seed legitimately goes
-            negative.
+            negative. The traces are clipped at zero, which is the exact non-negative solution only
+            for non-overlapping ROIs.
         ridge : float, optional
             Tikhonov regularisation applied to the least-squares solves, relative to *each diagonal
             entry* of the Gram matrix rather than to its mean diagonal (see
