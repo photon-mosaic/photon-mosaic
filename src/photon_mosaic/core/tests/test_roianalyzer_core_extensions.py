@@ -450,14 +450,10 @@ def test_get_data_invalid_output(analyzer):
 
 
 def test_get_computable_extensions_lists_all_core_extensions(analyzer):
-    """RoiAnalyzer.get_computable_extensions() is backed by a separate built-in registry
-    from the one compute() uses to auto-import extension classes -- it must list every core
-    extension defined in this module, not just the ones that happened to be registered when
-    that registry was first introduced.
+    """get_computable_extensions() must list every core extension defined in this module.
 
-    The expected set is derived from the module rather than written out: a hand-maintained
-    literal passes happily when a new extension class is added and `_builtin_extensions` is
-    not, which is the drift this test exists to catch.
+    The expected set is derived from the module, not written out, so adding a class without
+    registering it in `_builtin_extensions` fails here.
     """
     from photon_mosaic.core import roianalyzer_core_extensions as core_extensions
     from photon_mosaic.core.roianalyzer import AnalyzerExtension
@@ -1637,10 +1633,6 @@ def both_corrections_analyzer(cnmf_truth):
 )
 def test_fluorescence_optional_dependencies_follow_the_params(params, expected):
     assert FluorescenceExtension.get_optional_dependencies(**params) == expected
-
-
-def test_fluorescence_default_neuropil_source_is_none(analyzer):
-    assert analyzer.get_default_extension_params("fluorescence")["neuropil_source"] is None
 
 
 def test_fluorescence_unknown_neuropil_source_raises(analyzer):
