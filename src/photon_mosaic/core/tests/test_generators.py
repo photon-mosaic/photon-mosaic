@@ -406,7 +406,7 @@ def test_generate_imaging_with_rois_decay_affects_trace():
 # ── generate_imaging_with_rois neuropil_model tests ──
 
 
-def test_generate_imaging_with_rois_neuropil_model_constant_is_default_and_unchanged():
+def test_generate_imaging_with_rois_neuropil_model_constant_is_the_default():
     """`neuropil_model="constant"` (explicit) should be identical to omitting it."""
     kwargs = dict(num_frames=100, height=30, width=40, num_rois=3, radius_range=(3, 5), seed=42)
     _, default, _ = generate_imaging_with_rois(**kwargs)
@@ -443,18 +443,17 @@ def test_generate_imaging_with_rois_vignette_properties():
     assert np.corrcoef(trace_a, trace_b)[0, 1] > 0.999
 
 
-@pytest.mark.parametrize("neuropil_model", ["vignette"])
-def test_generate_imaging_with_rois_neuropil_model_reproducible_and_does_not_perturb_others(neuropil_model):
+def test_generate_imaging_with_rois_neuropil_model_reproducible_and_does_not_perturb_others():
     """Same seed/model twice gives identical output; switching `neuropil_model` (a dedicated RNG
     sub-stream) must not change ROI placement or the injected fluorescence traces -- only the
     background."""
     kwargs = dict(num_frames=60, height=30, width=40, num_rois=4, radius_range=(3, 5), seed=99)
-    _, im1, _ = generate_imaging_with_rois(**kwargs, neuropil_model=neuropil_model)
-    _, im2, _ = generate_imaging_with_rois(**kwargs, neuropil_model=neuropil_model)
+    _, im1, _ = generate_imaging_with_rois(**kwargs, neuropil_model="vignette")
+    _, im2, _ = generate_imaging_with_rois(**kwargs, neuropil_model="vignette")
     np.testing.assert_array_equal(im1.get_series(), im2.get_series())
 
     rois_a, _, fluor_a = generate_imaging_with_rois(**kwargs, neuropil_model="constant")
-    rois_b, _, fluor_b = generate_imaging_with_rois(**kwargs, neuropil_model=neuropil_model)
+    rois_b, _, fluor_b = generate_imaging_with_rois(**kwargs, neuropil_model="vignette")
     np.testing.assert_array_equal(rois_a.get_roi_image_masks(), rois_b.get_roi_image_masks())
     np.testing.assert_array_equal(fluor_a.traces, fluor_b.traces)
 

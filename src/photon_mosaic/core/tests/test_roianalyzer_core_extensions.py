@@ -1707,11 +1707,12 @@ def test_cnmf_neuropil_weight_defaults_to_0_7_as_for_surround(cnmf_truth):
     )
 
 
-@pytest.mark.parametrize("neuropil_weight", [0.0, 0.7])
-def test_cnmf_neuropil_weight_keeps_a_share_of_the_background_in_the_traces(cnmf_truth, neuropil_weight):
+def test_cnmf_neuropil_weight_keeps_a_share_of_the_background_in_the_traces(cnmf_truth):
     # neuropil_weight w < 1 is the same two-step correction as for surround with B as the neuropil:
     # fluorescence = (C + B) - w B, while `background` stays B (before the weight), so that
-    # fluorescence + w * background is the uncorrected trace. w = 1 is the joint solve itself.
+    # fluorescence + w * background is the uncorrected trace. w = 1 is the joint solve itself, and
+    # the default 0.7 is checked above.
+    neuropil_weight = 0.0
     masks, movie, _, _, _ = cnmf_truth
     _, joint = _cnmf_analyzer_and_fluorescence(masks, movie)
     _, weighted = _cnmf_analyzer_and_fluorescence(masks, movie, neuropil_weight=neuropil_weight)

@@ -220,13 +220,10 @@ def _generate_ou_process(
 ) -> np.ndarray:
     """Ornstein-Uhlenbeck-like fluctuation(s): exactly zero-mean per trace, asymptotically unit variance.
 
-    Discrete-time AR(1) via exact IIR recurrence (same `lfilter` style as
-    `generate_fluorescence`'s exponential-kernel convolution): ``x[t] = phi * x[t-1] +
-    sqrt(1 - phi**2) * white[t]``, with ``phi = exp(-1 / (_NEUROPIL_TAU_SECONDS *
-    sampling_frequency))``. Starts at 0 and reaches unit variance within a few
-    `_NEUROPIL_TAU_SECONDS` -- an accepted simplification (the brief initial transient is
-    negligible for the frame counts this is meant for) rather than seeding the recurrence from
-    its stationary distribution. Each trace is then centered to exactly zero mean.
+    Discrete-time AR(1), ``x[t] = phi * x[t-1] + sqrt(1 - phi**2) * white[t]`` with
+    ``phi = exp(-1 / (_NEUROPIL_TAU_SECONDS * sampling_frequency))``, run through `lfilter`. It starts
+    at 0 and reaches unit variance within a few `_NEUROPIL_TAU_SECONDS`; the brief initial transient
+    is ignored. Each trace is then centered to exactly zero mean.
 
     Parameters
     ----------
@@ -351,10 +348,8 @@ def generate_imaging_with_rois(
         ``"vignette"`` is normalized to preserve `background`'s mean-photon-count semantics
         (see `background` above); only its *spatial and temporal structure* differs from
         ``"constant"``. Kept intentionally simple -- just enough realism to make neuropil
-        subtraction demonstrably matter, not an optically/biologically precise model. A further
-        ``"diffuse"`` model (many independently-fluctuating sources, rather than one shared
-        fluctuation) is tracked separately (#142), deferred until there's a background-estimation
-        method suited to comparing against it.
+        subtraction demonstrably matter, not an optically/biologically precise model. A
+        ``"diffuse"`` model (many independently-fluctuating sources) is not implemented.
     neuropil_fluctuation_std : float, default: 0.5
         How strongly the background fluctuates relative to `background`, for
         ``neuropil_model="vignette"`` (ignored for ``"constant"``). The fluctuation is additive
