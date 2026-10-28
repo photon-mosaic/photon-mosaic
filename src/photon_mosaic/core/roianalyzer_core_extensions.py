@@ -65,8 +65,10 @@ class FluorescenceExtension(AnalyzerExtension):
     need_job_kwargs = True
 
     @classmethod
-    def get_optional_dependencies(cls, **params):
-        return list(_NEUROPIL_SOURCES)
+    def get_optional_dependencies(cls, use_neuropil=True, neuropil_source=None, **params):
+        if not use_neuropil:
+            return []
+        return list(_NEUROPIL_SOURCES) if neuropil_source is None else [neuropil_source]
 
     def _set_params(
         self, use_neuropil=True, neuropil_weight=0.7, method="projection", ridge=1e-6, neuropil_source=None
@@ -142,14 +144,17 @@ class FluorescenceExtension(AnalyzerExtension):
         self.data["fluorescence"] = fluorescence
         self.data["background"] = background
 
-    def _get_pipeline_nodes(self):
-        neuropil = None
-        background_spatial = None
+    def _neuropil_and_background(self):
+        """``(neuropil, background_spatial)`` for the node; at most one of the two is not ``None``."""
         source = self._neuropil_source()
-        if source == "neuropil":
-            neuropil = self.roi_analyzer.get_extension("neuropil").get_data()
-        elif source == "background":
-            background_spatial = self.roi_analyzer.get_extension("background").get_data()
+        neuropil = self.roi_analyzer.get_extension("neuropil").get_data() if source == "neuropil" else None
+        background_spatial = (
+            self.roi_analyzer.get_extension("background").get_data() if source == "background" else None
+        )
+        return neuropil, background_spatial
+
+    def _get_pipeline_nodes(self):
+        neuropil, background_spatial = self._neuropil_and_background()
         return [
             FluorescenceNode(
                 self.roi_analyzer.imaging,

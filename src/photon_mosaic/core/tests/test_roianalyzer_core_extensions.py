@@ -8,6 +8,7 @@ from photon_mosaic.core import create_roi_analyzer, load_roi_analyzer
 from photon_mosaic.core.generators import generate_fluorescence, generate_random_imaging, generate_rois
 from photon_mosaic.core.numpyimaging import NumpyImaging, NumpyRois
 from photon_mosaic.core.roianalyzer_core_extensions import (
+    FluorescenceExtension,
     FluorescenceNode,
     _build_surround_neuropil_masks,
     _cnmf_objective,
@@ -1651,6 +1652,19 @@ def _analyzer_with(cnmf_truth, *corrections):
 @pytest.fixture(scope="module")
 def both_corrections_analyzer(cnmf_truth):
     return _analyzer_with(cnmf_truth, "neuropil", "background")
+
+
+@pytest.mark.parametrize(
+    "params, expected",
+    [
+        ({}, ["neuropil", "background"]),
+        ({"neuropil_source": "background"}, ["background"]),
+        ({"neuropil_source": "neuropil", "method": "regression"}, ["neuropil"]),
+        ({"use_neuropil": False}, []),
+    ],
+)
+def test_fluorescence_optional_dependencies_follow_the_params(params, expected):
+    assert FluorescenceExtension.get_optional_dependencies(**params) == expected
 
 
 def test_fluorescence_default_neuropil_source_is_none(analyzer):
