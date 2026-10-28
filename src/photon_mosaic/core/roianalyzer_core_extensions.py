@@ -426,7 +426,10 @@ class FluorescenceNode(PipelineNode):
             return fluorescence, self._persisted_neuropil(neuropil_trace, num_frames)
 
         rhs_a = np.asarray(self._masks_csr @ chunk_flat.T.astype(np.float64)).T  # (T, N)
-        rhs_b = _project_float64(chunk_flat, self._background_spatial.T)  # (T, gnb)
+        if self._gnb:
+            rhs_b = _project_float64(chunk_flat, self._background_spatial.T)  # (T, gnb)
+        else:
+            rhs_b = np.zeros((num_frames, 0))
         if self.method == "regression":
             # Block elimination of [C, f] [[A A.T, A b.T], [(A b.T).T, b b.T]] = [rhs_a, rhs_b]: f from
             # the small Schur system, then C from the reused sparse A A.T factorization.
