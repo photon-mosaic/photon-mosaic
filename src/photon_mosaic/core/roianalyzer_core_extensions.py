@@ -577,8 +577,8 @@ class NeuropilExtension(AnalyzerExtension):
         Parameters
         ----------
         method : str, optional
-            Neuropil mask construction method. Only ``'surround'`` (Suite2p-style neighborhood mask,
-            rectangular or circular) is currently supported. Default is ``'surround'``.
+            ``'surround'`` (Suite2p-style neighborhood mask, rectangular or circular) or ``'cnmf'``
+            (low-rank background fit; see the class docstring). Default is ``'surround'``.
         inner_neuropil_radius : int, optional
             Pixels around each ROI to exclude before the ring starts. Only used with
             ``method='surround'``. Default is ``2``.
@@ -1715,9 +1715,7 @@ def _fit_cnmf_background(
 
     # ---- Alternating fit for b, on the subsample only (no further movie access) -----------------
     # The band-passed seed removes the broad background before the first trace estimate so it does
-    # not leak into C. Note pinv(A) @ (L Y) is not strictly scale-consistent with
-    # pinv(L A) @ (L Y); that is tolerated because this seed only forms the residual the b/f init
-    # works from.
+    # not leak into C.
     traces_sub = proj_masks_hp @ gram_aa_inv
     if nonneg_traces:
         traces_sub = np.maximum(traces_sub, 0.0)

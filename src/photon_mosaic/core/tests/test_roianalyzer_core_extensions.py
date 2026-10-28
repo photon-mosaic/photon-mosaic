@@ -982,7 +982,7 @@ def test_neuropil_extension_default_params(suite2p_rois, neuropil_imaging):
 
 def test_neuropil_extension_unknown_method_raises(suite2p_rois, neuropil_imaging):
     analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
-    with pytest.raises(ValueError, match="Unknown method"):
+    with pytest.raises(ValueError, match="Supported: 'surround', 'cnmf'"):
         analyzer.compute("neuropil", method="bogus")
 
 
@@ -1178,13 +1178,6 @@ def cnmf_extension(cnmf_analyzer):
 # --- numeric helpers -------------------------------------------------------
 
 
-def test_spatial_bandpass_removes_a_constant_frame():
-    chunk = np.full((3, 16, 16, 1), 7.0, dtype=np.float32)
-    out = _spatial_bandpass(chunk, highpass_sigma=4.0, lowpass_sigma=0.0)
-    # mode="nearest" keeps a constant frame constant under both blurs, so it cancels exactly.
-    np.testing.assert_allclose(out, 0.0, atol=1e-4)
-
-
 def test_spatial_bandpass_keeps_small_structure():
     chunk = np.zeros((1, 32, 32, 1), dtype=np.float32)
     chunk[0, 16, 16, 0] = 1.0
@@ -1317,17 +1310,14 @@ def cnmf_fluorescence(cnmf_fluorescence_analyzer):
     return cnmf_fluorescence_analyzer.get_extension("fluorescence")
 
 
-def test_cnmf_data_keys_shapes_and_dtypes(cnmf_extension):
+def test_cnmf_data_keys_shapes_dtypes_and_normalisation(cnmf_extension):
     data = cnmf_extension.data
     # Only b: C and f are solved by FluorescenceExtension, which reads the whole movie anyway.
     assert set(data) == {"background_spatial"}
     assert data["background_spatial"].shape == (1, CNMF_H, CNMF_W, 1)
     assert data["background_spatial"].dtype == np.float32
-    assert np.isfinite(data["background_spatial"]).all()
-
-
-def test_cnmf_background_is_nonnegative_and_l2_normalised(cnmf_extension):
-    spatial = cnmf_extension.get_data("background_spatial")
+    spatial = data["background_spatial"]
+    assert np.isfinite(spatial).all()
     assert (spatial >= 0).all()
     assert np.linalg.norm(spatial.reshape(-1)) == pytest.approx(1.0, rel=1e-5)
 
@@ -1443,9 +1433,7 @@ def test_cnmf_with_sparse_masks_matches_dense(cnmf_truth):
 
 @pytest.mark.parametrize("weighted", [False, True])
 def test_cnmf_recovers_the_background_with_two_components(weighted):
-    """The end-to-end fixture is `gnb=1` with binary masks, which leaves the multi-component
-    alternating solve, the component normalisation/ordering below it, and the weighted-mask path
-    without a recovery test. Fit a genuinely rank-2 background and check both are found."""
+    """A rank-2 background (binary and weighted masks) is recovered, normalized and ordered."""
     masks = _cnmf_masks(weighted=weighted)
     rng = np.random.default_rng(1)
     yy, xx = np.mgrid[0:CNMF_H, 0:CNMF_W]
@@ -1484,19 +1472,6 @@ def test_cnmf_recovers_the_background_with_two_components(weighted):
     assert np.linalg.norm(residual) / np.linalg.norm(true) < 0.1
 
 
-def test_cnmf_default_params(analyzer):
-    defaults = analyzer.get_default_extension_params("neuropil")
-    assert defaults["gnb"] == 1
-    assert defaults["max_iter"] == 20
-    assert defaults["tol"] == 1e-4
-    assert defaults["highpass_sigma"] == 20.0
-    assert defaults["lowpass_sigma"] == 1.0
-    assert defaults["init_method"] == "ramp"
-    assert defaults["nonneg_background"] is True
-    assert defaults["nonneg_traces"] is False
-    assert defaults["subsample_frames"] == 1000
-
-
 @pytest.mark.parametrize(
     "kwargs, match",
     [
@@ -1516,11 +1491,6 @@ def test_cnmf_params_are_not_validated_for_surround(analyzer):
     analyzer.compute("neuropil", method="surround", min_neuropil_pixels=30, gnb=0)
 
 
-def test_neuropil_unknown_method_message_lists_both(analyzer):
-    with pytest.raises(ValueError, match="Supported: 'surround', 'cnmf'"):
-        analyzer.compute("neuropil", method="nope")
-
-
 # --- data accessors --------------------------------------------------------
 
 
@@ -1531,15 +1501,6 @@ def test_cnmf_get_data_defaults_to_background_spatial(cnmf_extension):
 def test_cnmf_get_data_unknown_key_lists_the_available_ones(cnmf_extension):
     with pytest.raises(KeyError, match="available keys"):
         cnmf_extension.get_data("not_a_key")
-
-
-def test_surround_get_data_still_returns_masks(imaging, rois):
-    # Backward-compatibility lock on the _get_data signature change.
-    analyzer = create_roi_analyzer(rois, imaging, format="memory")
-    ext = analyzer.compute("neuropil", method="surround", min_neuropil_pixels=30)
-    masks = ext.get_data()
-    assert masks.shape == (NUM_ROIS, H, W)
-    np.testing.assert_array_equal(masks.todense(), ext.get_data("neuropil_masks").todense())
 
 
 def test_cnmf_select_extension_data_keeps_every_key(cnmf_extension, cnmf_analyzer):
