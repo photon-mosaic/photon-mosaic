@@ -85,6 +85,9 @@ exclude = ["tests*"]
 
 [tool.pytest.ini_options]
 addopts = "--cov=photon_mosaic"
+markers = [
+    "network: tests that require access to external network resources",
+]
 
 [tool.ruff]
 line-length = 120
