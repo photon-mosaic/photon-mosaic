@@ -1207,6 +1207,20 @@ def test_spatial_bandpass_disabled_is_identity():
     np.testing.assert_allclose(_spatial_bandpass(chunk, None, None), chunk)
 
 
+def test_cnmf_background_does_not_depend_on_n_jobs(cnmf_truth):
+    # n_jobs > 1 filters the 200 frames in threads, over several blocks; no value may change.
+    masks, movie, _, _, _ = cnmf_truth
+    rois = NumpyRois(roi_image_masks=masks, sampling_frequency=SF)
+    spatial = []
+    for n_jobs in (1, 2):
+        analyzer = create_roi_analyzer(rois, NumpyImaging(movie, sampling_frequency=SF), format="memory")
+        extension = analyzer.compute(
+            "neuropil", method="cnmf", gnb=1, max_iter=10, highpass_sigma=CNMF_HIGHPASS, n_jobs=n_jobs
+        )
+        spatial.append(extension.get_data("background_spatial"))
+    np.testing.assert_array_equal(spatial[0], spatial[1])
+
+
 def test_cnmf_objective_matches_brute_force():
     rng = np.random.default_rng(3)
     n_frames, n_pixels, n_rois, gnb = 12, 20, 3, 2
@@ -1321,7 +1335,7 @@ def test_cnmf_background_is_nonnegative_and_l2_normalised(cnmf_extension):
 def test_cnmf_recovers_the_background_away_from_rois(cnmf_extension, cnmf_truth):
     masks, _, _, spatial_true, _ = cnmf_truth
     spatial = cnmf_extension.get_data("background_spatial")
-    # Only off-ROI pixels are identifiable: b -> b + A alpha with C -> C - f alpha.T leaves the
+    # Only off-ROI pixels are identifiable: b -> b + alpha A with C -> C - f alpha leaves the
     # model bit-for-bit unchanged, and that gauge lives exactly on the ROI support.
     off_roi = masks.reshape(CNMF_ROIS, -1).sum(axis=0) == 0
     assert _corr(spatial.reshape(-1)[off_roi], spatial_true[:, 0][off_roi]) > 0.99
