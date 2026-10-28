@@ -455,8 +455,9 @@ def run_benchmark(
     ``all_files`` takes every file of the dandiset, and by default it is the ``CELLS`` list. A file is one cell: only
     its first movie with a patched ROI and at least ``min_spikes`` spikes is run, unless ``all_movies``, which runs
     every such movie and marks the file ``<file>.complete`` once all are done. Without ``all_movies``, a file in
-    which no movie qualified is marked ``<file>.none`` (with the ``min_spikes`` used) and skipped on resume. Results are not tied to the settings
-    that made them: changing ``min_spikes`` or ``all_movies`` needs a fresh ``results_dir``.
+    which no movie qualified is marked ``<file>.none`` (with the ``min_spikes`` used) and skipped on resume.
+    Results are not tied to the settings that made them: changing ``min_spikes`` or ``all_movies`` needs a fresh
+    ``results_dir``.
     ``caiman_python`` is the interpreter that has CaImAn; by default ``$CAIMAN_PYTHON``.
     """
     data_dir = Path(data_dir).expanduser().resolve()  # CaImAn runs with cwd=<data_dir>/work, so paths must be absolute
