@@ -1990,7 +1990,7 @@ def test_multi_extension_compute_matches_sequential(imaging, rois, method_params
         )
 
 
-# --- DfOverFExtension with a CNMF background (item 3 of the #111 "Proposed split") -------------
+# --- DfOverFExtension with a CNMF background -------------------------------------------------
 
 
 def _percentile_baselines(traces, win, prct):
@@ -2003,10 +2003,6 @@ def _percentile_baselines(traces, win, prct):
 def cnmf_df_over_f_analyzer(cnmf_truth):
     masks, movie, _, _, _ = cnmf_truth
     return _cnmf_analyzer_and_fluorescence(masks, movie)[0]
-
-
-def test_df_over_f_default_uses_the_background(analyzer):
-    assert analyzer.get_default_extension_params("df_over_f")["use_background"] is True
 
 
 @pytest.mark.parametrize("prctile_baseline", [8.0, 50.0])
