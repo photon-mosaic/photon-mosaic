@@ -2,7 +2,7 @@
 
 ``--mode seeded`` (default) starts from given ROI masks (no detection). ``--mode corr_pnr`` detects the ROIs
 with CaImAn's ``corr_pnr`` initialisation (the one meant for a strong shared background) and keeps the
-low-rank ``f bᵀ`` background, so the two modes differ only in where the footprints come from.
+low-rank ``f b`` background, so the two modes differ only in where the footprints come from.
 
 Run inside an environment that has CaImAn installed (the notebook calls this via subprocess).
 """
