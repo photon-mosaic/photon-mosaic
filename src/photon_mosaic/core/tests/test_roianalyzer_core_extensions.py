@@ -1117,7 +1117,7 @@ def test_fluorescence_extension_use_neuropil_false_ignores_computed_extension(su
 
 # A hand-built ground truth rather than generate_imaging_with_rois: that generator's `background`
 # is a uniform, non-fluctuating scalar, so a low-rank fit on it is degenerate (f constant, b flat)
-# and could not validate anything. Here Y is literally C A + f b.T + noise.
+# and could not validate anything. Here Y is literally C A + f b + noise.
 CNMF_H = CNMF_W = 24
 CNMF_FRAMES = 200
 CNMF_ROIS = 4
@@ -1228,25 +1228,37 @@ def test_spatial_bandpass_disabled_is_identity():
     np.testing.assert_allclose(_spatial_bandpass(chunk, None, None), chunk)
 
 
+def test_cnmf_background_does_not_depend_on_n_jobs(cnmf_truth):
+    # n_jobs > 1 filters the 200 frames in threads, over several blocks; no value may change.
+    masks, movie, _, _, _ = cnmf_truth
+    rois = NumpyRois(roi_image_masks=masks, sampling_frequency=SF)
+    spatial = []
+    for n_jobs in (1, 2):
+        analyzer = create_roi_analyzer(rois, NumpyImaging(movie, sampling_frequency=SF), format="memory")
+        extension = analyzer.compute("background", gnb=1, max_iter=10, highpass_sigma=CNMF_HIGHPASS, n_jobs=n_jobs)
+        spatial.append(extension.get_data())
+    np.testing.assert_array_equal(spatial[0], spatial[1])
+
+
 def test_cnmf_objective_matches_brute_force():
     rng = np.random.default_rng(3)
     n_frames, n_pixels, n_rois, gnb = 12, 20, 3, 2
     movie = rng.standard_normal((n_frames, n_pixels))
-    masks = rng.standard_normal((n_pixels, n_rois))
+    a = rng.standard_normal((n_rois, n_pixels))
     traces = rng.standard_normal((n_frames, n_rois))
-    background = rng.standard_normal((n_pixels, gnb))
+    b = rng.standard_normal((gnb, n_pixels))
     temporal = rng.standard_normal((n_frames, gnb))
 
-    expected = float(((movie - traces @ masks.T - temporal @ background.T) ** 2).sum())
+    expected = float(((movie - traces @ a - temporal @ b) ** 2).sum())
     got = _cnmf_objective(
         float((movie**2).sum()),
         traces,
         temporal,
-        movie @ masks,
-        movie @ background,
-        masks.T @ masks,
-        masks.T @ background,
-        background.T @ background,
+        movie @ a.T,
+        movie @ b.T,
+        a @ a.T,
+        a @ b.T,
+        b @ b.T,
     )
     assert got == pytest.approx(expected, rel=1e-9)
 
@@ -1345,7 +1357,7 @@ def test_cnmf_background_is_nonnegative_and_l2_normalised(cnmf_extension):
 def test_cnmf_recovers_the_background_away_from_rois(cnmf_extension, cnmf_truth):
     masks, _, _, spatial_true, _ = cnmf_truth
     spatial = cnmf_extension.get_data()
-    # Only off-ROI pixels are identifiable: b -> b + A alpha with C -> C - f alpha.T leaves the
+    # Only off-ROI pixels are identifiable: b -> b + alpha A with C -> C - f alpha leaves the
     # model bit-for-bit unchanged, and that gauge lives exactly on the ROI support.
     off_roi = masks.reshape(CNMF_ROIS, -1).sum(axis=0) == 0
     assert _corr(spatial.reshape(-1)[off_roi], spatial_true[:, 0][off_roi]) > 0.99
@@ -1768,8 +1780,8 @@ def test_df_over_f_scales_the_cnmf_background_by_neuropil_weight(cnmf_truth):
 
 @pytest.mark.parametrize("weighted", [False, True])
 def test_cnmf_traces_plus_background_equal_the_regression_without_background(weighted):
-    # The first block of the normal equations reads Y A.T = C A A.T + f (A b).T. For non-overlapping
-    # masks A A.T is diagonal, so C + B (B = f (A b).T / ||a_i||^2) is exactly the regression without
+    # The first block of the normal equations reads Y A.T = C A A.T + f b A.T. For non-overlapping
+    # masks A A.T is diagonal, so C + B (B = f b A.T / ||a_i||^2) is exactly the regression without
     # b. That pins the units of `background` to those of C.
     masks, movie, _, _, _ = _cnmf_ground_truth(weighted=weighted)
     ext = _cnmf_fluorescence(masks, movie)
