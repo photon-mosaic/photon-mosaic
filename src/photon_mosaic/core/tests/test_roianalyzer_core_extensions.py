@@ -1239,11 +1239,11 @@ def test_cnmf_subsample_is_the_same_across_chunk_and_epoch_boundaries(cnmf_truth
     # With subsample_frames < n_frames the gathered rows depend on the chunk and epoch arithmetic.
     masks, movie, _, _, _ = cnmf_truth
     rois = NumpyRois(roi_image_masks=masks, sampling_frequency=SF)
-    params = dict(method="cnmf", gnb=1, max_iter=10, highpass_sigma=CNMF_HIGHPASS, subsample_frames=50)
+    params = dict(gnb=1, max_iter=10, highpass_sigma=CNMF_HIGHPASS, subsample_frames=50)
 
     def fit(video, chunk_duration):
         analyzer = create_roi_analyzer(rois, NumpyImaging(video, sampling_frequency=SF), format="memory")
-        return analyzer.compute("neuropil", chunk_duration=chunk_duration, **params).get_data("background_spatial")
+        return analyzer.compute("background", chunk_duration=chunk_duration, **params).get_data()
 
     reference = fit(movie, "1000s")  # one chunk
     epochs = movie if epoch_split is None else [movie[:epoch_split], movie[epoch_split:]]
