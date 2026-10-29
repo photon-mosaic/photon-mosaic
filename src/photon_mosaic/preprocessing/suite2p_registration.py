@@ -393,11 +393,11 @@ class Suite2PMotion(Motion):
                     sample = np.concatenate([_plane_frames(epoch, p, estimation_region, i, i + 1) for i in picks])
                     refImgs[p], bidiphases[p] = _compute_reference_wrapper(sample, ops, refImg=None, device=device)
 
-                # Compute shifts without applying them, one sub-epoch (= one suite2p batch) per call
-                offsets_all: list | None = None
-                blocks: Any = None
+                # Compute shifts without applying them, one sub-epoch (= one suite2p batch) per call.
+                # Only the offsets are kept per batch: the other returns include a mean image per call.
+                batch_offsets = []
                 for batch in batches:
-                    _, _, _, offsets, batch_blocks = register_frames(
+                    _, _, _, offsets, blocks = register_frames(
                         _plane_frames(batch, p, estimation_region, 0, batch.get_num_samples()),
                         refImg=refImgs[p],
                         f_align_out=None,
@@ -415,18 +415,11 @@ class Suite2PMotion(Motion):
                         device=device,
                         apply_shifts=False,
                     )
-                    blocks = blocks if blocks is not None else batch_blocks
-                    # suite2p's eight offset arrays, concatenated as register_frames does across its batches
-                    offsets_all = (
-                        offsets
-                        if offsets_all is None
-                        else [
-                            None if old is None else np.concatenate((old, new), axis=0)
-                            for old, new in zip(offsets_all, offsets)
-                        ]
-                    )
-                assert offsets_all is not None  # every epoch has at least one batch
-                yoff, xoff, corrXY, yoff1, xoff1, corrXY1, zest, cmax_all = offsets_all
+                    batch_offsets.append(offsets)
+                # suite2p's eight offset arrays, concatenated across batches as register_frames does internally
+                yoff, xoff, corrXY, yoff1, xoff1, corrXY1, zest, cmax_all = [
+                    None if parts[0] is None else np.concatenate(parts, axis=0) for parts in zip(*batch_offsets)
+                ]
 
                 epoch_yoff.append(yoff)
                 epoch_xoff.append(xoff)
