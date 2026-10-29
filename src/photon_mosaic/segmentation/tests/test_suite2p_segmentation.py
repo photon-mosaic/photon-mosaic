@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from photon_mosaic.core import NumpyImaging
+from photon_mosaic.core.generators import generate_imaging_with_rois
 from photon_mosaic.extractors import Suite2pRois
 from photon_mosaic.segmentation import (
     Suite2pEpochSegmentations,
@@ -138,6 +139,32 @@ class TestDetectRoisSuite2p:
         )
 
         np.testing.assert_array_equal(bin_calls[0]["badframes"], np.array([False, True, True, False, False]))
+
+
+class TestDetectRoisSuite2pUnmocked:
+    """Run suite2p's own detection end-to-end (no mocks)."""
+
+    def test_sparsery_with_estimated_spatial_scale(self, monkeypatch):
+        from suite2p.detection import sparsedetect
+
+        find_best_scale = sparsedetect.find_best_scale
+        modes = []
+
+        def record_mode(**kwargs):
+            scale, mode = find_best_scale(**kwargs)
+            modes.append(mode)
+            return scale, mode
+
+        monkeypatch.setattr(sparsedetect, "find_best_scale", record_mode)
+        _, imaging, _ = generate_imaging_with_rois(
+            num_frames=300, height=64, width=64, num_rois=10, radius_range=(4, 6), seed=0
+        )
+
+        rois = detect_rois_suite2p(imaging)
+
+        # The scale must come from the data: a failed estimate falls back to a forced scalar.
+        assert modes == [sparsedetect.EstimateMode.Estimated]
+        assert rois.get_num_rois() > 0
 
 
 # ---------------------------------------------------------------------------

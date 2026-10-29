@@ -394,7 +394,7 @@ class Suite2PMotion(Motion):
                 plane_batches = select_planes(batched, [plane_id])
                 batch_offsets = []
                 for b in range(plane_batches.get_num_epochs()):
-                    _, _, _, offsets, blocks = register_frames(
+                    _, _, _, offsets, blocks, _, _, _ = register_frames(
                         plane_batches.get_series(epoch_index=b)[:, rows, cols, 0].astype(np.float32),
                         refImg=refImgs[p],
                         f_align_out=None,
