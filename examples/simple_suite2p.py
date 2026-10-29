@@ -1,5 +1,6 @@
 """Run a minimal Suite2p analysis workflow."""
 
+# %%
 import matplotlib
 from photon_mosaic.preprocessing import compute_motion, register_motion
 from photon_mosaic.sample_data import download_suite2p_google_drive
