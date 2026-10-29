@@ -13,10 +13,18 @@ Modular, extensible Python API for flexible analysis of multi-photon imaging dat
 > We welcome feedback from users: get in touch with the core developer team via [zulip chat](https://neuroinformatics.zulipchat.com/#narrow/channel/500681-photon-mosaic) or open a [GitHub issue](https://github.com/photon-mosaic/photon-mosaic/issues/new/choose). It would be great to hear from you!
 <!-- note-end -->
 
+## Installation
+
+```bash
+pip install "photon-mosaic[widgets,suite2p-registration] @ git+https://github.com/photon-mosaic/photon-mosaic@dev"
+```
+
+See the [installation instructions](https://api.photon-mosaic.org/user-guide.html#installation) for setting up an environment.
+
 ## Usage
 
-Check out the [User Guide](todo-userguide) for instructions about using `photon-mosaic`.
+Check out the [User Guide](https://api.photon-mosaic.org/user-guide.html) for instructions about using `photon-mosaic`.
 
 ## Contributing
 
-Contributions to `photon-mosaic` are very welcome. Check out the [Contributing section](todo-devs) on the website.
+Contributions to `photon-mosaic` are very welcome. Check out the [Contributing section](https://api.photon-mosaic.org/contributing.html) on the website.

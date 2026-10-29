@@ -2,13 +2,13 @@
 
 ## Installation
 
-We currently support Python versions 3.12, 3.13, and 3.14. There is currently no release on PyPI yet, but you can install `photon-mosaic` from Github.
+We currently support Python versions 3.11, 3.12 and 3.13. There is currently no release on PyPI yet, but you can install `photon-mosaic` from Github.
 We strongly recommend that you use an environment manager (e.g. `conda` from [Miniforge](https://conda-forge.org/download/)). In your terminal, you can then run:
 
 ```bash
-conda create -n photon-mosaic
+conda create -n photon-mosaic python=3.13
 conda activate photon-mosaic
-pip install git+https://github.com/photon-mosaic/photon-mosaic@dev
+pip install "photon-mosaic[widgets,suite2p-registration] @ git+https://github.com/photon-mosaic/photon-mosaic@dev"
 ```
 
 ### Optional dependencies

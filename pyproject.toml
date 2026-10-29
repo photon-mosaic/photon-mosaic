@@ -38,7 +38,7 @@ classifiers = [
 [project.urls]
 "Homepage" = "https://github.com/photon-mosaic/photon-mosaic"
 "Bug Tracker" = "https://github.com/photon-mosaic/photon-mosaic/issues"
-"Documentation" = "https://github.com/photon-mosaic/photon-mosaic"
+"Documentation" = "https://api.photon-mosaic.org"
 "Source Code" = "https://github.com/photon-mosaic/photon-mosaic"
 "User Support" = "https://github.com/photon-mosaic/photon-mosaic/issues"
 
