@@ -1,4 +1,5 @@
-"""Tests for FluorescenceNode, FluorescenceExtension, DfOverFExtension, NeuropilExtension, DeconvolutionExtension."""
+"""Tests for FluorescenceNode, FluorescenceExtension, DfOverFExtension, NeuropilExtension, BackgroundExtension,
+DeconvolutionExtension."""
 
 import numpy as np
 import pytest
@@ -7,6 +8,7 @@ from photon_mosaic.core import create_roi_analyzer, load_roi_analyzer
 from photon_mosaic.core.generators import generate_fluorescence, generate_random_imaging, generate_rois
 from photon_mosaic.core.numpyimaging import NumpyImaging, NumpyRois
 from photon_mosaic.core.roianalyzer_core_extensions import (
+    FluorescenceExtension,
     FluorescenceNode,
     _build_surround_neuropil_masks,
     _cnmf_objective,
@@ -448,16 +450,32 @@ def test_get_data_invalid_output(analyzer):
 
 
 def test_get_computable_extensions_lists_all_core_extensions(analyzer):
-    """RoiAnalyzer.get_computable_extensions() is backed by a separate built-in registry
-    from the one compute() uses to auto-import extension classes -- it must list every core
-    extension defined in this module, not just the ones that happened to be registered when
-    that registry was first introduced."""
-    assert set(analyzer.get_computable_extensions()) == {
-        "fluorescence",
-        "df_over_f",
-        "deconvolution",
-        "neuropil",
+    """get_computable_extensions() must list every core extension defined in this module.
+
+    The expected set is derived from the module, not written out, so adding a class without
+    registering it in `_builtin_extensions` fails here.
+    """
+    from photon_mosaic.core import roianalyzer_core_extensions as core_extensions
+    from photon_mosaic.core.roianalyzer import AnalyzerExtension
+
+    defined_here = {
+        obj.extension_name
+        for obj in vars(core_extensions).values()
+        # __module__ keeps out AnalyzerExtension itself and any extension another module
+        # registered (e.g. a test's own) that merely happens to be in this namespace.
+        if isinstance(obj, type)
+        and issubclass(obj, AnalyzerExtension)
+        and obj.__module__ == core_extensions.__name__
+        and obj.extension_name is not None
     }
+    assert defined_here, "found no extension classes -- the scan is broken, not the registry"
+
+    computable = set(analyzer.get_computable_extensions())
+    assert not defined_here - computable, (
+        f"defined in {core_extensions.__name__} but missing from _builtin_extensions: "
+        f"{sorted(defined_here - computable)}"
+    )
+    assert not computable - defined_here, f"registered but no longer defined: {sorted(computable - defined_here)}"
 
 
 # ---------------------------------------------------------------------------
@@ -982,7 +1000,7 @@ def test_neuropil_extension_default_params(suite2p_rois, neuropil_imaging):
 
 def test_neuropil_extension_unknown_method_raises(suite2p_rois, neuropil_imaging):
     analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
-    with pytest.raises(ValueError, match="Supported: 'surround', 'cnmf'"):
+    with pytest.raises(ValueError, match="Unknown method"):
         analyzer.compute("neuropil", method="bogus")
 
 
@@ -1091,7 +1109,7 @@ def test_fluorescence_extension_use_neuropil_false_ignores_computed_extension(su
 
 
 # ---------------------------------------------------------------------------
-# NeuropilExtension ("cnmf" / CNMF-style low-rank background)
+# BackgroundExtension ("cnmf" / CNMF-style low-rank background)
 # ---------------------------------------------------------------------------
 
 # A hand-built ground truth rather than generate_imaging_with_rois: that generator's `background`
@@ -1166,13 +1184,13 @@ def cnmf_analyzer(cnmf_truth):
     imaging = NumpyImaging(movie, sampling_frequency=SF)
     rois = NumpyRois(roi_image_masks=masks, sampling_frequency=SF)
     analyzer = create_roi_analyzer(rois, imaging, format="memory")
-    analyzer.compute("neuropil", method="cnmf", gnb=1, max_iter=40, highpass_sigma=CNMF_HIGHPASS)
+    analyzer.compute("background", gnb=1, max_iter=40, highpass_sigma=CNMF_HIGHPASS)
     return analyzer
 
 
 @pytest.fixture(scope="module")
 def cnmf_extension(cnmf_analyzer):
-    return cnmf_analyzer.get_extension("neuropil")
+    return cnmf_analyzer.get_extension("background")
 
 
 # --- numeric helpers -------------------------------------------------------
@@ -1207,10 +1225,8 @@ def test_cnmf_background_does_not_depend_on_n_jobs(cnmf_truth):
     spatial = []
     for n_jobs in (1, 2):
         analyzer = create_roi_analyzer(rois, NumpyImaging(movie, sampling_frequency=SF), format="memory")
-        extension = analyzer.compute(
-            "neuropil", method="cnmf", gnb=1, max_iter=10, highpass_sigma=CNMF_HIGHPASS, n_jobs=n_jobs
-        )
-        spatial.append(extension.get_data("background_spatial"))
+        extension = analyzer.compute("background", gnb=1, max_iter=10, highpass_sigma=CNMF_HIGHPASS, n_jobs=n_jobs)
+        spatial.append(extension.get_data())
     np.testing.assert_array_equal(spatial[0], spatial[1])
 
 
@@ -1219,11 +1235,11 @@ def test_cnmf_subsample_is_the_same_across_chunk_and_epoch_boundaries(cnmf_truth
     # With subsample_frames < n_frames the gathered rows depend on the chunk and epoch arithmetic.
     masks, movie, _, _, _ = cnmf_truth
     rois = NumpyRois(roi_image_masks=masks, sampling_frequency=SF)
-    params = dict(method="cnmf", gnb=1, max_iter=10, highpass_sigma=CNMF_HIGHPASS, subsample_frames=50)
+    params = dict(gnb=1, max_iter=10, highpass_sigma=CNMF_HIGHPASS, subsample_frames=50)
 
     def fit(video, chunk_duration):
         analyzer = create_roi_analyzer(rois, NumpyImaging(video, sampling_frequency=SF), format="memory")
-        return analyzer.compute("neuropil", chunk_duration=chunk_duration, **params).get_data("background_spatial")
+        return analyzer.compute("background", chunk_duration=chunk_duration, **params).get_data()
 
     reference = fit(movie, "1000s")  # one chunk
     epochs = movie if epoch_split is None else [movie[:epoch_split], movie[epoch_split:]]
@@ -1294,24 +1310,24 @@ def test_partition_of_unity_sums_to_one_per_pixel():
 # --- ground-truth recovery -------------------------------------------------
 
 
-def _cnmf_fluorescence(masks, movie, method="regression", neuropil_kwargs=None, **fluorescence_kwargs):
-    """Compute a CNMF neuropil then the joint extraction on it; return the fluorescence extension.
+def _cnmf_fluorescence(masks, movie, method="regression", background_kwargs=None, **fluorescence_kwargs):
+    """Compute a CNMF background then the joint extraction on it; return the fluorescence extension.
 
     The extension holds its analyzer only weakly, so callers that need ``ext.roi_analyzer`` must
     keep the analyzer alive themselves: use :func:`_cnmf_analyzer_and_fluorescence`.
     """
-    return _cnmf_analyzer_and_fluorescence(masks, movie, method, neuropil_kwargs, **fluorescence_kwargs)[1]
+    return _cnmf_analyzer_and_fluorescence(masks, movie, method, background_kwargs, **fluorescence_kwargs)[1]
 
 
-def _cnmf_analyzer_and_fluorescence(masks, movie, method="regression", neuropil_kwargs=None, **fluorescence_kwargs):
+def _cnmf_analyzer_and_fluorescence(masks, movie, method="regression", background_kwargs=None, **fluorescence_kwargs):
     analyzer = create_roi_analyzer(
         NumpyRois(roi_image_masks=masks, sampling_frequency=SF),
         NumpyImaging(movie, sampling_frequency=SF),
         format="memory",
     )
-    params = dict(method="cnmf", gnb=1, max_iter=40, highpass_sigma=CNMF_HIGHPASS)
-    params.update(neuropil_kwargs or {})
-    analyzer.compute("neuropil", **params)
+    params = dict(gnb=1, max_iter=40, highpass_sigma=CNMF_HIGHPASS)
+    params.update(background_kwargs or {})
+    analyzer.compute("background", **params)
     return analyzer, analyzer.compute("fluorescence", method=method, **fluorescence_kwargs)
 
 
@@ -1340,7 +1356,7 @@ def test_cnmf_data_keys_shapes_dtypes_and_normalisation(cnmf_extension):
 
 def test_cnmf_recovers_the_background_away_from_rois(cnmf_extension, cnmf_truth):
     masks, _, _, spatial_true, _ = cnmf_truth
-    spatial = cnmf_extension.get_data("background_spatial")
+    spatial = cnmf_extension.get_data()
     # Only off-ROI pixels are identifiable: b -> b + alpha A with C -> C - f alpha leaves the
     # model bit-for-bit unchanged, and that gauge lives exactly on the ROI support.
     off_roi = masks.reshape(CNMF_ROIS, -1).sum(axis=0) == 0
@@ -1371,12 +1387,12 @@ def test_cnmf_joint_solve_matches_a_dense_reference_with_gnb_2(cnmf_truth, metho
     """gnb=2 makes the block-elimination terms genuine matrices (1x1 with gnb=1, where a transpose
     error would go unnoticed); check against a plain dense least-squares solve."""
     masks, movie, _, _, _ = cnmf_truth
-    analyzer, ext = _cnmf_analyzer_and_fluorescence(masks, movie, method=method, neuropil_kwargs={"gnb": 2})
+    analyzer, ext = _cnmf_analyzer_and_fluorescence(masks, movie, method=method, background_kwargs={"gnb": 2})
     traces = ext.get_data()
 
     # Reference: least squares for [C, f] in movie ~= [C, f] @ [A; b], using the same b the
     # extension fitted. No ridge here; the extension's 1e-6 is far below the tolerance.
-    b = analyzer.get_extension("neuropil").get_data("background_spatial").reshape(2, -1).astype(np.float64)
+    b = analyzer.get_extension("background").get_data().reshape(2, -1).astype(np.float64)
     a = masks.reshape(CNMF_ROIS, -1).astype(np.float64)
     design = np.vstack([a, b])  # (n_rois + gnb, n_pixels)
     flat = movie.reshape(movie.shape[0], -1).astype(np.float64)
@@ -1400,7 +1416,7 @@ def test_cnmf_concatenates_epochs_in_order(cnmf_truth):
     rebuilt = rebuilt.astype(np.float32).reshape(CNMF_FRAMES, CNMF_H, CNMF_W, 1)
     epochs = [rebuilt[:first].copy(), rebuilt[first:].copy()]
 
-    ext = _cnmf_fluorescence(masks, epochs, neuropil_kwargs={"max_iter": 30})
+    ext = _cnmf_fluorescence(masks, epochs, background_kwargs={"max_iter": 30})
     background = ext.get_data(key="background")
     assert background.shape == (CNMF_FRAMES, CNMF_ROIS)
     assert ext.get_data().shape == (CNMF_FRAMES, CNMF_ROIS)
@@ -1417,8 +1433,8 @@ def test_cnmf_handles_multiplane_masks():
     masks = np.zeros((CNMF_ROIS, CNMF_H, CNMF_W, 2), dtype=np.float32)
     masks[..., 0] = masks_2d
     volume = np.concatenate([movie, movie * np.float32(0.5)], axis=3)
-    analyzer, ext = _cnmf_analyzer_and_fluorescence(masks, volume, neuropil_kwargs={"max_iter": 10})
-    spatial = analyzer.get_extension("neuropil").get_data("background_spatial")
+    analyzer, ext = _cnmf_analyzer_and_fluorescence(masks, volume, background_kwargs={"max_iter": 10})
+    spatial = analyzer.get_extension("background").get_data()
     assert spatial.shape == (1, CNMF_H, CNMF_W, 2)
     assert np.isfinite(ext.get_data()).all()
     assert np.isfinite(ext.get_data(key="background")).all()
@@ -1428,9 +1444,9 @@ def test_cnmf_with_sparse_masks_matches_dense(cnmf_truth):
     import sparse as sparse_lib
 
     masks, movie, _, _, _ = cnmf_truth
-    dense = _cnmf_fluorescence(masks, movie, neuropil_kwargs={"max_iter": 10})
+    dense = _cnmf_fluorescence(masks, movie, background_kwargs={"max_iter": 10})
     spare = _cnmf_fluorescence(
-        sparse_lib.GCXS.from_numpy(masks, compressed_axes=(0,)), movie, neuropil_kwargs={"max_iter": 10}
+        sparse_lib.GCXS.from_numpy(masks, compressed_axes=(0,)), movie, background_kwargs={"max_iter": 10}
     )
     np.testing.assert_allclose(dense.get_data(), spare.get_data(), rtol=1e-5, atol=1e-4)
 
@@ -1467,8 +1483,8 @@ def test_cnmf_recovers_the_background_with_two_components(weighted):
         NumpyImaging(movie, sampling_frequency=SF),
         format="memory",
     )
-    ext = analyzer.compute("neuropil", method="cnmf", gnb=2, max_iter=40, highpass_sigma=CNMF_HIGHPASS)
-    b = ext.get_data("background_spatial").reshape(2, -1)
+    ext = analyzer.compute("background", gnb=2, max_iter=40, highpass_sigma=CNMF_HIGHPASS)
+    b = ext.get_data().reshape(2, -1)
 
     assert b.shape == (2, CNMF_H * CNMF_W)
     np.testing.assert_allclose(np.linalg.norm(b, axis=1), 1.0, rtol=1e-4)
@@ -1486,28 +1502,23 @@ def test_cnmf_recovers_the_background_with_two_components(weighted):
         ({"init_method": "bogus"}, "Unknown init_method"),
         ({"subsample_frames": 1}, "subsample_frames must be None or >= 2"),
         ({"max_iter": 0}, "max_iter must be >= 1"),
+        ({"method": "surround"}, "Supported: 'cnmf'"),
     ],
 )
 def test_cnmf_invalid_params_raise(analyzer, kwargs, match):
     with pytest.raises(ValueError, match=match):
-        analyzer.compute("neuropil", method="cnmf", **kwargs)
+        analyzer.compute("background", **kwargs)
 
 
-def test_cnmf_params_are_not_validated_for_surround(analyzer):
-    # gnb is a cnmf-only knob, so an absurd value must not block the surround method.
-    analyzer.compute("neuropil", method="surround", min_neuropil_pixels=30, gnb=0)
+def test_neuropil_rejects_cnmf_params(analyzer):
+    # The CNMF knobs now live on BackgroundExtension only.
+    with pytest.raises(TypeError, match="gnb"):
+        analyzer.compute("neuropil", method="surround", min_neuropil_pixels=30, gnb=1)
 
 
-# --- data accessors --------------------------------------------------------
-
-
-def test_cnmf_get_data_defaults_to_background_spatial(cnmf_extension):
-    np.testing.assert_array_equal(cnmf_extension.get_data(), cnmf_extension.get_data("background_spatial"))
-
-
-def test_cnmf_get_data_unknown_key_lists_the_available_ones(cnmf_extension):
-    with pytest.raises(KeyError, match="available keys"):
-        cnmf_extension.get_data("not_a_key")
+def test_neuropil_rejects_cnmf_method(analyzer):
+    with pytest.raises(ValueError, match="Unknown method"):
+        analyzer.compute("neuropil", method="cnmf")
 
 
 def test_cnmf_fluorescence_survives_select_rois(cnmf_fluorescence_analyzer, cnmf_fluorescence):
@@ -1517,7 +1528,7 @@ def test_cnmf_fluorescence_survives_select_rois(cnmf_fluorescence_analyzer, cnmf
     ext = sub.get_extension("fluorescence")
     np.testing.assert_array_equal(ext.get_data(), cnmf_fluorescence.get_data()[:, :2])
     np.testing.assert_array_equal(ext.get_data(key="background"), cnmf_fluorescence.get_data(key="background")[:, :2])
-    assert sub.get_extension("neuropil").get_data().shape == (1, CNMF_H, CNMF_W, 1)
+    assert sub.get_extension("background").get_data().shape == (1, CNMF_H, CNMF_W, 1)
 
 
 @pytest.mark.parametrize("fmt", ["binary_folder", "zarr"])
@@ -1530,12 +1541,12 @@ def test_cnmf_roundtrips_through_disk(cnmf_truth, tmp_path, fmt):
         format=fmt,
         folder=folder,
     )
-    neuropil = analyzer.compute("neuropil", method="cnmf", gnb=1, max_iter=10, highpass_sigma=CNMF_HIGHPASS)
+    background = analyzer.compute("background", gnb=1, max_iter=10, highpass_sigma=CNMF_HIGHPASS)
     fluorescence = analyzer.compute("fluorescence", method="regression")
     reloaded = load_roi_analyzer(folder)
 
-    assert reloaded.get_extension("neuropil").params["method"] == "cnmf"
-    np.testing.assert_array_equal(reloaded.get_extension("neuropil").get_data(), neuropil.get_data())
+    assert reloaded.get_extension("background").params["method"] == "cnmf"
+    np.testing.assert_array_equal(reloaded.get_extension("background").get_data(), background.get_data())
     assert reloaded.get_extension("fluorescence").params["method"] == "regression"
     for key in ("fluorescence", "background"):
         np.testing.assert_array_equal(
@@ -1566,7 +1577,7 @@ def test_fluorescence_unknown_method_raises(analyzer):
         analyzer.compute("fluorescence", method="nope")
 
 
-def test_fluorescence_cnmf_neuropil_requires_a_joint_method(cnmf_analyzer):
+def test_fluorescence_cnmf_background_requires_a_joint_method(cnmf_analyzer):
     with pytest.raises(ValueError, match="method='regression'"):
         cnmf_analyzer.compute("fluorescence", method="projection")
 
@@ -1585,7 +1596,7 @@ def test_fluorescence_use_neuropil_false_ignores_a_cnmf_extension(cnmf_truth):
         NumpyImaging(movie, sampling_frequency=SF),
         format="memory",
     )
-    analyzer.compute("neuropil", method="cnmf", gnb=1, max_iter=5, highpass_sigma=CNMF_HIGHPASS)
+    analyzer.compute("background", gnb=1, max_iter=5, highpass_sigma=CNMF_HIGHPASS)
     traces = analyzer.compute("fluorescence", use_neuropil=False).get_data()
 
     masks_flat = masks.reshape(CNMF_ROIS, -1).astype(np.float32)
@@ -1595,13 +1606,92 @@ def test_fluorescence_use_neuropil_false_ignores_a_cnmf_extension(cnmf_truth):
     np.testing.assert_allclose(traces, expected, rtol=1e-4, atol=1e-3)
 
 
+# --- neuropil_source: choosing between NeuropilExtension and BackgroundExtension --------------
+
+
+def _analyzer_with(cnmf_truth, *corrections):
+    masks, movie, _, _, _ = cnmf_truth
+    analyzer = create_roi_analyzer(
+        NumpyRois(roi_image_masks=masks, sampling_frequency=SF),
+        NumpyImaging(movie, sampling_frequency=SF),
+        format="memory",
+    )
+    if "neuropil" in corrections:
+        analyzer.compute("neuropil", min_neuropil_pixels=30)
+    if "background" in corrections:
+        analyzer.compute("background", gnb=1, max_iter=5, highpass_sigma=CNMF_HIGHPASS)
+    return analyzer
+
+
+@pytest.fixture(scope="module")
+def both_corrections_analyzer(cnmf_truth):
+    return _analyzer_with(cnmf_truth, "neuropil", "background")
+
+
+@pytest.mark.parametrize(
+    "params, expected",
+    [
+        ({}, ["neuropil", "background"]),
+        ({"neuropil_source": "background"}, ["background"]),
+        ({"neuropil_source": "neuropil", "method": "regression"}, ["neuropil"]),
+        ({"use_neuropil": False}, []),
+    ],
+)
+def test_fluorescence_optional_dependencies_follow_the_params(params, expected):
+    assert FluorescenceExtension.get_optional_dependencies(**params) == expected
+
+
+def test_fluorescence_unknown_neuropil_source_raises(analyzer):
+    with pytest.raises(ValueError, match="Unknown neuropil_source"):
+        analyzer.compute("fluorescence", neuropil_source="bogus")
+
+
+def test_fluorescence_with_both_corrections_needs_a_neuropil_source(both_corrections_analyzer):
+    with pytest.raises(ValueError, match="Both 'neuropil' and 'background' are computed"):
+        both_corrections_analyzer.compute("fluorescence", method="regression")
+
+
+@pytest.mark.parametrize("source", ["neuropil", "background"])
+def test_fluorescence_neuropil_source_must_be_computed(cnmf_truth, source):
+    other = "background" if source == "neuropil" else "neuropil"
+    analyzer = _analyzer_with(cnmf_truth, other)
+    with pytest.raises(ValueError, match=f"the '{source}' extension has not been computed"):
+        analyzer.compute("fluorescence", method="regression", neuropil_source=source)
+
+
+@pytest.mark.parametrize("source", ["neuropil", "background"])
+def test_fluorescence_neuropil_source_picks_that_correction(cnmf_truth, both_corrections_analyzer, source):
+    # With both computed, naming one must give exactly what having only that one gives.
+    only = _analyzer_with(cnmf_truth, source).compute("fluorescence", method="regression")
+    picked = both_corrections_analyzer.compute("fluorescence", method="regression", neuropil_source=source)
+    for key in ("fluorescence", "background"):
+        np.testing.assert_array_equal(picked.get_data(key=key), only.get_data(key=key))
+
+
+@pytest.mark.parametrize("source", ["neuropil", "background"])
+def test_fluorescence_auto_picks_the_only_computed_correction(cnmf_truth, source):
+    analyzer = _analyzer_with(cnmf_truth, source)
+    auto = analyzer.compute("fluorescence", method="regression").get_data().copy()
+    named = analyzer.compute("fluorescence", method="regression", neuropil_source=source).get_data()
+    np.testing.assert_array_equal(auto, named)
+
+
+def test_df_over_f_ignores_the_background_when_neuropil_source_is_neuropil(both_corrections_analyzer):
+    # A computed BackgroundExtension must not leak into dF/F when the traces were not fitted with it.
+    both_corrections_analyzer.compute("fluorescence", method="regression", neuropil_source="neuropil")
+    kwargs = dict(method="percentile", prctile_baseline=8.0)
+    with_background = both_corrections_analyzer.compute("df_over_f", **kwargs).get_data().copy()
+    without = both_corrections_analyzer.compute("df_over_f", use_background=False, **kwargs).get_data()
+    np.testing.assert_array_equal(with_background, without)
+
+
 @pytest.mark.parametrize("neuropil_weight", [0.0, 0.7, 1.0])
 def test_cnmf_traces_are_the_joint_solve_with_no_neuropil_subtraction(cnmf_truth, neuropil_weight):
-    # With a CNMF neuropil, C is the ROI block of the joint [C, f] least-squares solve, returned
+    # With a CNMF background, C is the ROI block of the joint [C, f] least-squares solve, returned
     # as is: the background is modelled, not subtracted, so neuropil_weight must have no effect.
     masks, movie, _, _, _ = cnmf_truth
     analyzer, ext = _cnmf_analyzer_and_fluorescence(masks, movie, neuropil_weight=neuropil_weight)
-    b = analyzer.get_extension("neuropil").get_data().reshape(1, -1)
+    b = analyzer.get_extension("background").get_data().reshape(1, -1)
     design = np.concatenate([masks.reshape(CNMF_ROIS, -1), b], axis=0).T.astype(np.float64)
     expected, *_ = np.linalg.lstsq(design, movie.reshape(CNMF_FRAMES, -1).T.astype(np.float64), rcond=None)
     np.testing.assert_allclose(ext.get_data(), expected[:CNMF_ROIS].T, rtol=1e-4, atol=1e-2)
@@ -1670,12 +1760,12 @@ def test_nnls_matches_a_bounded_least_squares_solve_per_frame(cnmf_truth):
     # Take away more than the ~100 trace offset from the ROI pixels, more than a non-negative b can
     # hand back there, so some traces have to hit the C >= 0 bound.
     movie = movie - np.float32(150.0) * masks.sum(axis=0)[None, :, :, None]
-    analyzer, ext = _cnmf_analyzer_and_fluorescence(masks, movie, method="nnls", neuropil_kwargs={"max_iter": 10})
+    analyzer, ext = _cnmf_analyzer_and_fluorescence(masks, movie, method="nnls", background_kwargs={"max_iter": 10})
     traces = ext.get_data()
     assert (traces >= 0).all()
     assert (traces == 0).any()
 
-    b = analyzer.get_extension("neuropil").get_data().reshape(1, -1)
+    b = analyzer.get_extension("background").get_data().reshape(1, -1)
     design = np.concatenate([masks.reshape(CNMF_ROIS, -1), b], axis=0).T.astype(np.float64)
     lower = np.r_[np.zeros(CNMF_ROIS), -np.inf]
     for t in (0, 57, 199):
@@ -1757,8 +1847,8 @@ def test_joint_methods_keep_an_all_zero_mask_at_zero(method):
 @pytest.mark.parametrize("method", ["regression", "nnls"])
 def test_cnmf_joint_extraction_is_invariant_to_chunk_size(cnmf_truth, method):
     masks, movie, _, _, _ = cnmf_truth
-    whole = _cnmf_fluorescence(masks, movie, method=method, neuropil_kwargs={"max_iter": 10})
-    chunked = _cnmf_fluorescence(masks, movie, method=method, neuropil_kwargs={"max_iter": 10}, chunk_duration="1s")
+    whole = _cnmf_fluorescence(masks, movie, method=method, background_kwargs={"max_iter": 10})
+    chunked = _cnmf_fluorescence(masks, movie, method=method, background_kwargs={"max_iter": 10}, chunk_duration="1s")
     for key in ("fluorescence", "background"):
         np.testing.assert_allclose(whole.get_data(key=key), chunked.get_data(key=key), rtol=1e-4, atol=1e-3)
 
@@ -1824,18 +1914,20 @@ def test_fluorescence_node_checks_the_background_pixel_count(imaging, rois):
 def test_multi_extension_compute_matches_sequential(imaging, rois, method_params, cnmf_truth):
     """The shared node-pipeline path must agree with computing one extension at a time."""
     fluorescence_params = {"neuropil_weight": 0.5}
+    correction = "neuropil"
     if method_params is None:
         masks, movie, _, _, _ = cnmf_truth
         imaging = NumpyImaging(movie, sampling_frequency=SF)
         rois = NumpyRois(roi_image_masks=masks, sampling_frequency=SF)
-        method_params = {"method": "cnmf", "gnb": 1, "max_iter": 5, "highpass_sigma": CNMF_HIGHPASS}
+        correction = "background"
+        method_params = {"gnb": 1, "max_iter": 5, "highpass_sigma": CNMF_HIGHPASS}
         fluorescence_params["method"] = "regression"
 
     together = create_roi_analyzer(rois, imaging, format="memory")
-    together.compute({"neuropil": method_params, "fluorescence": fluorescence_params})
+    together.compute({correction: method_params, "fluorescence": fluorescence_params})
 
     one_by_one = create_roi_analyzer(rois, imaging, format="memory")
-    one_by_one.compute("neuropil", **method_params)
+    one_by_one.compute(correction, **method_params)
     one_by_one.compute("fluorescence", **fluorescence_params)
 
     for key in ("fluorescence", "background"):
@@ -1844,7 +1936,7 @@ def test_multi_extension_compute_matches_sequential(imaging, rois, method_params
         )
 
 
-# --- DfOverFExtension with a CNMF background (item 3 of the #111 "Proposed split") -------------
+# --- DfOverFExtension with a CNMF background -------------------------------------------------
 
 
 def _percentile_baselines(traces, win, prct):
@@ -1857,10 +1949,6 @@ def _percentile_baselines(traces, win, prct):
 def cnmf_df_over_f_analyzer(cnmf_truth):
     masks, movie, _, _, _ = cnmf_truth
     return _cnmf_analyzer_and_fluorescence(masks, movie)[0]
-
-
-def test_df_over_f_default_uses_the_background(analyzer):
-    assert analyzer.get_default_extension_params("df_over_f")["use_background"] is True
 
 
 @pytest.mark.parametrize("prctile_baseline", [8.0, 50.0])
@@ -1899,7 +1987,7 @@ def test_df_over_f_is_unchanged_when_baseline_moves_between_c_and_b(cnmf_truth, 
     # Moving a constant per ROI from C into B must leave dF/F as it was: C_baseline drops and
     # B_baseline rises by the same amount, so the denominator does not move.
     masks, movie, _, _, _ = cnmf_truth
-    analyzer, fluorescence = _cnmf_analyzer_and_fluorescence(masks, movie, neuropil_kwargs={"max_iter": 10})
+    analyzer, fluorescence = _cnmf_analyzer_and_fluorescence(masks, movie, background_kwargs={"max_iter": 10})
     kwargs = dict(method=method, win_baseline=2.0, prctile_baseline=20.0)
     before = analyzer.compute("df_over_f", **kwargs).get_data().copy()
 
