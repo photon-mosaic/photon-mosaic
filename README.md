@@ -16,10 +16,10 @@ Modular, extensible Python API for flexible analysis of multi-photon imaging dat
 ## Installation
 
 ```bash
-pip install "photon-mosaic[widgets,suite2p-registration] @ git+https://github.com/photon-mosaic/photon-mosaic@dev"
+uv pip install "photon-mosaic[widgets,suite2p,deconvolution]"
 ```
 
-See the [installation instructions](https://api.photon-mosaic.org/user-guide.html#installation) for setting up an environment.
+See the [installation instructions](https://api.photon-mosaic.org/user-guide.html#installation) for setting up an environment and for what each extra installs.
 
 ## Usage
 
