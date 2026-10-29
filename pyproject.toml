@@ -16,6 +16,8 @@ dependencies = [
     "pydantic-settings>=2",
     "pooch",
     "sparse",
+    # spatial band-pass of the CNMF background
+    "opencv-python-headless",
     # 0.15.2 refuses to decode pickled zarr data by default, which the zarr extension storage relies on
     "numcodecs<0.15.2",
 ]
@@ -84,8 +86,10 @@ include = ["photon_mosaic*"]
 exclude = ["tests*"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=photon_mosaic -m 'not network'"
-markers = ["network: downloads data; run with -m network"]
+addopts = "--cov=photon_mosaic"
+markers = [
+    "network: tests that require access to external network resources",
+]
 
 [tool.ruff]
 line-length = 120
