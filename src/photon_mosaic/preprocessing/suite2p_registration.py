@@ -394,7 +394,7 @@ class Suite2PMotion(Motion):
                 plane_batches = select_planes(batched, [plane_id])
                 batch_offsets = []
                 for b in range(plane_batches.get_num_epochs()):
-                    _, _, _, offsets, blocks = register_frames(
+                    _, _, _, offsets, blocks, _, _, _ = register_frames(
                         plane_batches.get_series(epoch_index=b)[:, rows, cols, 0].astype(np.float32),
                         refImg=refImgs[p],
                         f_align_out=None,
@@ -411,7 +411,7 @@ class Suite2PMotion(Motion):
                         maxregshiftNR=ops["max_nonrigid_shift"],
                         device=device,
                         apply_shifts=False,
-                    )[:5]
+                    )
                     batch_offsets.append(offsets)
                 # suite2p's eight offset arrays, concatenated across batches as register_frames does internally
                 yoff, xoff, corrXY, yoff1, xoff1, corrXY1, zest, cmax_all = [
