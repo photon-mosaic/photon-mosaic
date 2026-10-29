@@ -135,6 +135,13 @@ class TestComputeMotionSuite2p:
         motion = compute_motion(imaging, method="suite2p", settings=settings, batch_size=3)
         assert motion.displacements[0].shape == (8, 1, 2)
 
+    def test_smooth_sigma_time_kwarg_is_rejected(self):
+        imaging = _make_shifted_imaging(
+            num_frames=4, num_planes=1, height=12, width=12, shifts=[[(0, 0)] * 4], sampling_frequency=10.0
+        )
+        with pytest.raises(ValueError, match="smooth_sigma_time > 0"):
+            compute_motion(imaging, method="suite2p", smooth_sigma_time=1)
+
     def test_multi_epoch_single_plane_alignment(self):
         shifts = [
             [(0, 0), (0, 0), (1, 0), (1, 0), (0, 1)],

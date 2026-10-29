@@ -106,7 +106,8 @@ class Suite2pRegistrationSettings(RegistrationSettings):
     )
     smooth_sigma_time: int = Field(
         default=0,
-        description="gaussian smoothing in time. If do_optimize_motion_params is set, this will be overridden",
+        description="gaussian smoothing in time. Must be 0: suite2p 1.x crashes for values > 0 "
+        "(https://github.com/MouseLand/suite2p/issues/1271).",
     )
     smooth_sigma: float = Field(
         default=1.15,
@@ -332,6 +333,8 @@ class Suite2PMotion(Motion):
         if "maxregshiftNR" in params:
             raise ValueError("'maxregshiftNR' is now 'max_nonrigid_shift'.")
         ops.update(params)
+        if ops["smooth_sigma_time"] > 0:
+            raise ValueError("smooth_sigma_time > 0 crashes suite2p 1.x registration.")
         bounds = ops["bounds"]
         if bounds is not None and ops["nonrigid"]:
             raise ValueError(
