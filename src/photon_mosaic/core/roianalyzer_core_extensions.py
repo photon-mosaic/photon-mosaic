@@ -68,7 +68,7 @@ class FluorescenceExtension(AnalyzerExtension):
     def get_optional_dependencies(cls, use_neuropil=True, neuropil_source=None, **params):
         if not use_neuropil:
             return []
-        return list(_NEUROPIL_SOURCES) if neuropil_source is None else [neuropil_source]
+        return ["|".join(_NEUROPIL_SOURCES)] if neuropil_source is None else [neuropil_source]
 
     def _set_params(
         self, use_neuropil=True, neuropil_weight=0.7, method="projection", ridge=1e-6, neuropil_source=None
