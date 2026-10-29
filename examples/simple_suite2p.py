@@ -45,7 +45,7 @@ detected_rois = detect_rois_suite2p(
 )
 
 print(detect_rois_suite2p)
-plot_rois(detected_rois)
+plot_rois(detected_rois)  # type: ignore[arg-type]
 
 
 # %% [markdown]
