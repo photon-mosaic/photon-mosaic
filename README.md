@@ -1,4 +1,5 @@
-# <img src="_static/logo.png" alt="photon-mosaic logo" width="36" style="vertical-align: middle; margin-right:8px"> photon-mosaic
+# <img src="https://raw.githubusercontent.com/photon-mosaic/photon-mosaic/dev/docs/source/_static/logo.png" alt="photon-mosaic logo" width="36" style="vertical-align: middle; margin-right:8px"> photon-mosaic
+<!-- title-end -->
 
 Modular, extensible Python API for flexible analysis of multi-photon imaging data, part of the broader [**PhotonMosaic** framework](https://photon-mosaic.org).
 
