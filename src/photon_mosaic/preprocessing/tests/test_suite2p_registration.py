@@ -424,4 +424,4 @@ class TestStreamingEstimation:
 
         epoch.get_series = spy
         compute_motion(imaging, method="suite2p", batch_size=4, nonrigid=False)
-        assert all(len(range(3)[planes]) == 1 for planes in requested)
+        assert all(np.arange(3)[planes].size == 1 for planes in requested)

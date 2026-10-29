@@ -13,6 +13,7 @@ from photon_mosaic.core import (
     register_registration_class,
     split_epoch_at_frames,
 )
+from photon_mosaic.core.selectplanes import select_planes
 
 from .registration import RegisterImaging, RegisterImagingEpoch, RegistrationSettings
 
@@ -171,13 +172,6 @@ class Suite2pRegistrationSettings(RegistrationSettings):
         "Large values will add significant time to motion correction",
     )
     model_config = ConfigDict(env_prefix="SUITE2P_REGISTRATION_", case_sensitive=False, env_file=".env")
-
-
-def _plane_frames(epoch: Any, plane_index: int, region: tuple[slice, slice], start: int, stop: int) -> NDArray:
-    """Frames ``start:stop`` of one plane of an epoch, cropped to ``region``, as float32 ``(n, Ly, Lx)``."""
-    frames = epoch.get_series(start, stop, slice(plane_index, plane_index + 1))
-    frames = frames[..., 0] if frames.ndim == 4 else frames
-    return np.ascontiguousarray(frames[:, region[0], region[1]], dtype=np.float32)
 
 
 def _compute_reference_wrapper(
@@ -349,7 +343,7 @@ class Suite2PMotion(Motion):
                 "'bounds' (an estimation crop) is supported by the suite2p backend for rigid registration only: "
                 "its non-rigid block geometry is defined on the frame the shifts are applied to."
             )
-        estimation_region = (slice(None), slice(None)) if bounds is None else (slice(*bounds[0]), slice(*bounds[1]))
+        rows, cols = (slice(None), slice(None)) if bounds is None else (slice(*bounds[0]), slice(*bounds[1]))
 
         device = torch.device(ops.get("device", "cpu"))
 
@@ -382,23 +376,26 @@ class Suite2PMotion(Motion):
 
             # sub-epochs of batch_size frames: each is read whole, so one batch is in memory at a time
             batch_size = ops["batch_size"]
-            batches = split_epoch_at_frames(imaging, epoch_idx, range(batch_size, n_frames, batch_size)).epochs
+            batched = split_epoch_at_frames(imaging, epoch_idx, range(batch_size, n_frames, batch_size))
 
-            for p in range(n_planes):
+            for p, plane_id in enumerate(imaging.plane_ids):
                 # Reference once, from the first epoch: read only the nimg_init evenly spaced frames suite2p
                 # samples (the wrapper then uses all of them)
                 if epoch_idx == 0:
                     picks = np.linspace(0, n_frames, 1 + min(ops.get("nimg_init", 200), n_frames), dtype=int)[:-1]
-                    epoch = imaging.epochs[epoch_idx]
-                    sample = np.concatenate([_plane_frames(epoch, p, estimation_region, i, i + 1) for i in picks])
+                    plane = select_planes(imaging, [plane_id])
+                    sample = np.concatenate([plane.get_series(i, i + 1, epoch_index=0) for i in picks])
+                    sample = sample[:, rows, cols, 0].astype(np.float32)
                     refImgs[p], bidiphases[p] = _compute_reference_wrapper(sample, ops, refImg=None, device=device)
 
                 # Compute shifts without applying them, one sub-epoch (= one suite2p batch) per call.
                 # Only the offsets are kept per batch: the other returns include a mean image per call.
+                # Select the plane after splitting: selection is applied by get_series, not by the epochs.
+                plane_batches = select_planes(batched, [plane_id])
                 batch_offsets = []
-                for batch in batches:
+                for b in range(plane_batches.get_num_epochs()):
                     _, _, _, offsets, blocks = register_frames(
-                        _plane_frames(batch, p, estimation_region, 0, batch.get_num_samples()),
+                        plane_batches.get_series(epoch_index=b)[:, rows, cols, 0].astype(np.float32),
                         refImg=refImgs[p],
                         f_align_out=None,
                         batch_size=batch_size,
