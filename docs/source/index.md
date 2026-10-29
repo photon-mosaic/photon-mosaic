@@ -27,6 +27,7 @@ Contributions to `photon-mosaic` are very welcome. Check out the [Contributing s
 :hidden:
 
 user-guide
+Examples <examples/index>
 developer-intro
 contributing
 api_index
