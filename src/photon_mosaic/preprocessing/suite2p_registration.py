@@ -1,6 +1,8 @@
+import contextlib
 import logging
 import time
-from typing import Any, Sequence
+from typing import Any, Iterator, Sequence
+from unittest import mock
 
 import numpy as np
 from numpy.typing import NDArray
@@ -228,6 +230,57 @@ def _compute_reference_wrapper(
     return refImg, bidiphase
 
 
+def _temporal_smooth_torch(data, sigma: float, truncate: float = 4.0):
+    """Torch equivalent of ``scipy.ndimage.gaussian_filter1d(data, sigma, axis=0)``.
+
+    Suite2p's ``temporal_smooth`` calls scipy on a torch tensor and returns a numpy
+    array, which breaks ``rigid.phasecorr`` whenever ``smooth_sigma_time > 0``
+    (on any device). This keeps the data a tensor on its own device.
+
+    Parameters
+    ----------
+    data : torch.Tensor
+        Tensor shaped ``(n_frames, ...)``, smoothed along axis 0.
+    sigma : float
+        Standard deviation of the Gaussian kernel, in frames.
+    truncate : float, optional
+        Kernel radius in standard deviations, as in scipy. Defaults to 4.0.
+
+    Returns
+    -------
+    torch.Tensor
+        Smoothed tensor with the same shape, dtype and device as ``data``.
+    """
+    import torch
+    from torch.nn.functional import conv1d
+
+    radius = int(truncate * sigma + 0.5)  # scipy's radius formula
+    x = torch.arange(-radius, radius + 1, dtype=data.dtype, device=data.device)
+    kernel = torch.exp(-0.5 * (x / sigma) ** 2)
+    kernel = (kernel / kernel.sum()).reshape(1, 1, -1)
+
+    nimg, Ly, Lx = data.shape
+    idx = torch.arange(-radius, nimg + radius, device=data.device) % (2 * nimg)
+    idx = torch.where(idx >= nimg, 2 * nimg - 1 - idx, idx)
+    data_padded = data[idx].reshape(-1, Ly * Lx).T.unsqueeze(1)
+
+    smoothed = conv1d(data_padded, kernel)
+    return smoothed.squeeze(1).T.reshape(nimg, Ly, Lx)
+
+
+@contextlib.contextmanager
+def _torch_temporal_smooth() -> Iterator[None]:
+    """Temporarily route suite2p's rigid registration through :func:`_temporal_smooth_torch`.
+
+    Patches the name where it is looked up (``rigid``), not where it is defined
+    (``utils``): ``rigid.py`` does ``from .utils import temporal_smooth``. ``mock.patch``
+    raises if suite2p ever drops that name, so a refactor upstream fails loudly.
+    Remove once suite2p's own ``temporal_smooth`` accepts torch tensors.
+    """
+    with mock.patch("suite2p.registration.rigid.temporal_smooth", _temporal_smooth_torch):
+        yield
+
+
 class Suite2PMotion(Motion):
     """Motion artifacts produced by Suite2P registration.
 
@@ -380,31 +433,33 @@ class Suite2PMotion(Motion):
                     plane_frames = all_frames.astype(np.float32)
                 plane_frames = plane_frames[:, estimation_region[0], estimation_region[1]]
 
-                # Compute reference once from the first epoch
-                if epoch_idx == 0:
-                    refImgs[p], bidiphases[p] = _compute_reference_wrapper(
-                        plane_frames, ops, refImg=None, device=device
-                    )
+                # Both suite2p calls below smooth in time when smooth_sigma_time > 0
+                with _torch_temporal_smooth():
+                    # Compute reference once from the first epoch
+                    if epoch_idx == 0:
+                        refImgs[p], bidiphases[p] = _compute_reference_wrapper(
+                            plane_frames, ops, refImg=None, device=device
+                        )
 
-                # Compute shifts without applying them to the frames
-                _, _, _, offsets_all, blocks = register_frames(
-                    plane_frames,
-                    refImg=refImgs[p],
-                    f_align_out=None,
-                    batch_size=ops["batch_size"],
-                    bidiphase=bidiphases[p],
-                    norm_frames=ops.get("norm_frames", True),
-                    smooth_sigma=ops["smooth_sigma"],
-                    spatial_taper=ops.get("spatial_taper", 3.45),
-                    block_size=ops["block_size"],
-                    nonrigid=ops["nonrigid"],
-                    maxregshift=ops["maxregshift"],
-                    smooth_sigma_time=ops["smooth_sigma_time"],
-                    snr_thresh=ops["snr_thresh"],
-                    maxregshiftNR=ops["max_nonrigid_shift"],
-                    device=device,
-                    apply_shifts=False,
-                )
+                    # Compute shifts without applying them to the frames
+                    _, _, _, offsets_all, blocks = register_frames(
+                        plane_frames,
+                        refImg=refImgs[p],
+                        f_align_out=None,
+                        batch_size=ops["batch_size"],
+                        bidiphase=bidiphases[p],
+                        norm_frames=ops.get("norm_frames", True),
+                        smooth_sigma=ops["smooth_sigma"],
+                        spatial_taper=ops.get("spatial_taper", 3.45),
+                        block_size=ops["block_size"],
+                        nonrigid=ops["nonrigid"],
+                        maxregshift=ops["maxregshift"],
+                        smooth_sigma_time=ops["smooth_sigma_time"],
+                        snr_thresh=ops["snr_thresh"],
+                        maxregshiftNR=ops["max_nonrigid_shift"],
+                        device=device,
+                        apply_shifts=False,
+                    )
                 yoff, xoff, corrXY, yoff1, xoff1, corrXY1, zest, cmax_all = offsets_all
 
                 epoch_yoff.append(yoff)

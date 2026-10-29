@@ -9,6 +9,7 @@ from photon_mosaic.preprocessing.suite2p_registration import (
     RegisterSuite2PImagingEpoch,
     Suite2PMotion,
     Suite2pRegistrationSettings,
+    _temporal_smooth_torch,
 )
 
 
@@ -125,6 +126,16 @@ class TestComputeMotionSuite2p:
         # Applying the computed motion should restore the unshifted template (first frame)
         registered = RegisterSuite2PImaging(imaging, motion).epochs[0].get_series(0, 6)
         np.testing.assert_allclose(registered, registered[0:1].repeat(6, axis=0), atol=1e-3)
+
+    @pytest.mark.parametrize("nonrigid", [False, True])
+    def test_smooth_sigma_time_runs(self, nonrigid):
+        # suite2p's own temporal_smooth returns numpy and breaks phasecorr; this exercises our patch
+        shifts = [[(0, 0), (0, 0), (1, 0), (1, 0), (0, 1), (0, 1), (0, 0)]]
+        imaging = _make_shifted_imaging(num_frames=7, height=12, width=12, shifts=shifts)
+        settings = Suite2pRegistrationSettings(batch_size=3, nonrigid=nonrigid, block_size=[8, 8], smooth_sigma_time=1)
+        motion = compute_motion(imaging, method="suite2p", settings=settings)
+        assert motion.displacements[0].shape == (7, 1, 2)
+        assert np.all(np.isfinite(motion.displacements[0]))
 
     def test_kwargs_override_settings_and_batching(self):
         shifts = [[(0, 0)] * 8]
@@ -384,3 +395,27 @@ class TestSharedSettingsOnSuite2p:
 
 def test_register_suite2p_imaging_is_the_generic_class():
     assert issubclass(RegisterSuite2PImaging, RegisterImaging)
+
+
+class TestTemporalSmoothTorch:
+    """The torch replacement for suite2p's temporal_smooth must match scipy's gaussian_filter1d."""
+
+    # n_frames below the kernel radius (1, 2) covers suite2p's short final batch
+    @pytest.mark.parametrize("n_frames", [1, 2, 7, 50])
+    @pytest.mark.parametrize("sigma", [0.5, 1.0, 3.7])
+    def test_matches_scipy(self, n_frames, sigma):
+        import torch
+        from scipy.ndimage import gaussian_filter1d
+
+        data = np.random.default_rng(0).random((n_frames, 5, 6)).astype(np.float32)
+        expected = gaussian_filter1d(data, sigma=sigma, axis=0)
+        result = _temporal_smooth_torch(torch.from_numpy(data), sigma)
+        assert isinstance(result, torch.Tensor)
+        np.testing.assert_allclose(result.numpy(), expected, atol=1e-6)
+
+    def test_patch_is_restored_after_compute(self):
+        from suite2p.registration import rigid, utils
+
+        imaging = _make_shifted_imaging(num_frames=4, height=12, width=12)
+        compute_motion(imaging, method="suite2p", settings={"smooth_sigma_time": 1, "nonrigid": False})
+        assert rigid.temporal_smooth is utils.temporal_smooth
