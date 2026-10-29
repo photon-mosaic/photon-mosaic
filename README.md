@@ -5,7 +5,7 @@ Modular, extensible Python API for flexible analysis of multi-photon imaging dat
 
 <!-- note-start -->
 > [!NOTE]
-<!-- note-text-start -->
+> <!-- note-text-start -->
 > **`photon-mosaic` is experimental software in its early stages.**
 >
 > Things may change significantly.
