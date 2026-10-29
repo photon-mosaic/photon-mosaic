@@ -35,4 +35,6 @@ uv pip install "photon-mosaic[widgets,suite2p,deconvolution]"
 
 ## Example notebooks
 
-`photon-mosaic` is a Python API, so it is meant to be called from other Python code, such as user scripts, notebooks or downstream Python packages. We provide example notebooks showing typical applications of multi-photon imaging analysis in [the examples folder of the `photon-mosaic` GitHub repository](https://github.com/photon-mosaic/photon-mosaic/tree/dev/examples).
+`photon-mosaic` is a Python API, so it is meant to be called from other Python code, such as user scripts, notebooks or downstream Python packages. We provide introductory notebooks showing typical applications of multi-photon imaging analysis in our [examples gallery](examples/index.html).
+
+More complex examples can be found in [the examples folder of the `photon-mosaic` GitHub repository](https://github.com/photon-mosaic/photon-mosaic/tree/dev/examples).

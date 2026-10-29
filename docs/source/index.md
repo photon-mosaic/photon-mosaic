@@ -30,5 +30,4 @@ user-guide
 developer-intro
 contributing
 api_index
-examples-gallery
 ```
