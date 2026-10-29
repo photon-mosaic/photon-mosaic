@@ -1631,7 +1631,7 @@ def both_corrections_analyzer(cnmf_truth):
 @pytest.mark.parametrize(
     "params, expected",
     [
-        ({}, ["neuropil", "background"]),
+        ({}, ["neuropil|background"]),
         ({"neuropil_source": "background"}, ["background"]),
         ({"neuropil_source": "neuropil", "method": "regression"}, ["neuropil"]),
         ({"use_neuropil": False}, []),
