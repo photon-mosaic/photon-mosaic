@@ -11,6 +11,23 @@ conda activate photon-mosaic
 pip install git+https://github.com/photon-mosaic/photon-mosaic@dev
 ```
 
+### Optional dependencies
+
+Some features need extra packages. Install them through these extras:
+
+| Extra | Installs | Needed for |
+|---|---|---|
+| `widgets` | matplotlib, ipywidgets, ipympl, ipykernel | the interactive widgets in `photon_mosaic.widgets` |
+| `suite2p` | suite2p | suite2p registration (`compute_motion`, whose default method is `"suite2p"`), suite2p segmentation (`detect_rois_suite2p`) and the surround neuropil mask (`compute("neuropil", method="surround")`, the default) |
+| `deconvolution` | oasis-deconv | spike deconvolution (`compute("deconvolution")`) |
+| `dev` | test and lint tools, suite2p, oasis-deconv | [contributing](./contributing.md) |
+
+The example notebooks need `widgets`, `suite2p` and `deconvolution`:
+
+```bash
+pip install "photon-mosaic[widgets,suite2p,deconvolution] @ git+https://github.com/photon-mosaic/photon-mosaic@dev"
+```
+
 ## Example notebooks
 
 `photon-mosaic` is a Python API, so it is meant to be called from other Python code, such as user scripts, notebooks or downstream Python packages. We provide example notebooks showing typical applications of multi-photon imaging analysis in [the examples folder of the `photon-mosaic` GitHub repository](https://github.com/photon-mosaic/photon-mosaic/tree/dev/examples).

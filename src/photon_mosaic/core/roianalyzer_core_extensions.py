@@ -1331,7 +1331,7 @@ def _build_surround_neuropil_masks(
     except ImportError as e:
         raise ImportError(
             "NeuropilExtension(method='surround') requires suite2p. Install it with "
-            "'pip install \"photon-mosaic[suite2p-registration]\"'."
+            "'pip install \"photon-mosaic[suite2p]\"'."
         ) from e
 
     if masks.ndim == 3:
