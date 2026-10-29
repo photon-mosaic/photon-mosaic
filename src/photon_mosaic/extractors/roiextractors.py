@@ -10,7 +10,7 @@ from roiextractors.imagingextractor import ImagingExtractor
 from photon_mosaic.core import BaseImaging, BaseImagingEpoch
 
 
-class BaseROIExtractorImaging(BaseImaging):
+class _BaseROIExtractorImaging(BaseImaging):
     """Base class for ROI extractors that work with BaseImaging data."""
 
     def __init__(self, imaging_name: str, **kwargs):
@@ -18,7 +18,7 @@ class BaseROIExtractorImaging(BaseImaging):
 
         roi_extractor = self.roiextractor_imaging_class(**kwargs)
 
-        segment = BaseROIExtractorImagingEpoch(roi_extractor)
+        segment = _BaseROIExtractorImagingEpoch(roi_extractor)
         BaseImaging.__init__(
             self,
             shape=roi_extractor.get_sample_shape(),
@@ -28,10 +28,11 @@ class BaseROIExtractorImaging(BaseImaging):
         self.add_epoch(segment)
         self.name = f"{imaging_name} (ROIExtractors)"
 
-        self._kwargs = {"imaging_name": imaging_name, **kwargs}
+        # imaging_name is fixed by the generated subclass, so it must not be re-passed on from_dict
+        self._kwargs = kwargs
 
 
-class BaseROIExtractorImagingEpoch(BaseImagingEpoch):
+class _BaseROIExtractorImagingEpoch(BaseImagingEpoch):
     """Base class for ROI extractors that work with BaseImaging data."""
 
     def __init__(self, roi_extractor_imaging: ImagingExtractor):
@@ -57,12 +58,12 @@ def get_classes_and_functions_to_import():
     import_classes, import_functions = [], []
     for imaging_name, imaging_class in imaging_extractor_dict.items():
         # Dynamically create a class for each imaging extractor
-        # The class inherits from BaseROIExtractorImaging and sets imaging_name automatically
+        # The class inherits from _BaseROIExtractorImaging and sets imaging_name automatically
 
         def make_class(extractor_name):
             """Factory function to create a class with proper closure over extractor_name."""
 
-            class DynamicImagingClass(BaseROIExtractorImaging):
+            class DynamicImagingClass(_BaseROIExtractorImaging):
                 """Dynamically generated imaging class for {extractor_name}."""
 
                 def __init__(self, **kwargs):
@@ -71,6 +72,8 @@ def get_classes_and_functions_to_import():
             # Set proper class name and module
             DynamicImagingClass.__name__ = extractor_name
             DynamicImagingClass.__qualname__ = extractor_name
+            # the classes are attached to photon_mosaic.extractors, so from_dict must look them up there
+            DynamicImagingClass.__module__ = "photon_mosaic.extractors"
             DynamicImagingClass.__doc__ = imaging_class.__doc__
 
             return DynamicImagingClass
