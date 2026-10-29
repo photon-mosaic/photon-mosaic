@@ -411,7 +411,7 @@ class Suite2PMotion(Motion):
                         maxregshiftNR=ops["max_nonrigid_shift"],
                         device=device,
                         apply_shifts=False,
-                    )
+                    )[:5]
                     batch_offsets.append(offsets)
                 # suite2p's eight offset arrays, concatenated across batches as register_frames does internally
                 yoff, xoff, corrXY, yoff1, xoff1, corrXY1, zest, cmax_all = [
