@@ -14,7 +14,7 @@ and install with their favourite environment management tool (for example, [the 
 ```bash
 uv venv
 source .venv/bin/activate
-uv pip install -e .
+uv pip install -e ".[dev]"
 ```
 
 ## The `photon-mosaic` architecture
