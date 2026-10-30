@@ -15,10 +15,8 @@ import setuptools_scm
 # of any class you are documenting here
 autodoc_mock_imports: list[str] = []
 
-# Add the module path to sys.path here.
-# If the directory is relative to the documentation root,
-# use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath("../.."))
+# Add the source module path to sys.path here.
+sys.path.insert(0, os.path.abspath("../../src"))
 
 project = "photon-mosaic"
 copyright = "2025, University College London"
@@ -46,7 +44,7 @@ extensions = [
     "sphinx_autodoc_typehints",
     "sphinx_design",
     "sphinxarg.ext",
-    # 'sphinx_gallery.gen_gallery',
+    "sphinx_gallery.gen_gallery",
 ]
 
 # Configure the myst parser to enable cool markdown features
@@ -178,25 +176,25 @@ html_css_files = [
 html_favicon = "_static/logo.png"
 html_logo = "_static/logo.png"
 
-# # Configure Sphinx gallery
-# sphinx_gallery_conf = {
-#     "examples_dirs": ["../../examples"],
-#     "filename_pattern": "/*.py",  # which files to execute before inclusion
-#     "gallery_dirs": ["examples"],  # output directory
-#     "run_stale_examples": True,  # re-run examples on each build
-#     # Integration with Binder, see https://sphinx-gallery.github.io/stable/configuration.html#generate-binder-links-for-gallery-notebooks-experimental
-#     "binder": {
-#         "org": "neuroinformatics-unit",
-#         "repo": "photon-mosaic",
-#         "branch": "gh-pages",
-#         "binderhub_url": "https://mybinder.org",
-#         "dependencies": ["requirements.txt"],
-#     },
-#     "reference_url": {"photon-mosaic": None},
-#     # "default_thumb_file": "source/_static/data_icon.png",  # default thumbnail image
-#     "remove_config_comments": True,
-#     # do not render config params set as # sphinx_gallery_config [= value]
-# }
+# Configure Sphinx gallery
+sphinx_gallery_conf = {
+    "examples_dirs": ["../../examples"],
+    "filename_pattern": "/*.py",  # which files to execute before inclusion
+    "gallery_dirs": ["examples"],  # output directory
+    "run_stale_examples": True,  # re-run examples on each build
+    # Integration with Binder, see https://sphinx-gallery.github.io/stable/configuration.html#generate-binder-links-for-gallery-notebooks-experimental
+    "binder": {
+        "org": "photon-mosaic",
+        "repo": "photon-mosaic",
+        "branch": "gh-pages",
+        "binderhub_url": "https://mybinder.org",
+        "dependencies": ["../requirements.txt"],
+    },
+    "reference_url": {"photon-mosaic": None},
+    # "default_thumb_file": "source/_static/data_icon.png",  # default thumbnail image
+    "remove_config_comments": True,
+    # do not render config params set as # sphinx_gallery_config [= value]
+}
 
 linkcheck_ignore = [
     "https://neuroinformatics.zulipchat.com/#narrow/channel/500681-photon-mosaic",
