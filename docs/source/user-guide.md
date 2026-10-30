@@ -2,7 +2,7 @@
 
 ## Installation
 
-We currently support Python versions 3.11, 3.12 and 3.13.
+We currently support Python versions 3.12 and 3.13.
 We recommend installing `photon-mosaic` into a virtual environment managed by [uv](https://docs.astral.sh/uv/getting-started/installation/). In your terminal, you can then run:
 
 ```bash
