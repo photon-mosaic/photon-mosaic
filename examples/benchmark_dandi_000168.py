@@ -47,6 +47,7 @@ from scipy.optimize import linear_sum_assignment
 
 DANDISET, VERSION = "000168", "draft"
 API = f"https://api.dandiarchive.org/api/dandisets/{DANDISET}/versions/{VERSION}"
+TIMEOUT = (30, 300)  # (connect, read) seconds for every request: a stalled connection raises instead of hanging
 HERE = Path(__file__).parent
 
 INDICATORS = ("jGCaMP8f", "jGCaMP8m", "jGCaMP8s", "jGCaMP7f")
@@ -83,7 +84,7 @@ def list_assets():
     """All files of the dandiset (dicts with ``path``, ``asset_id`` and ``size``)."""
     url, params, assets = f"{API}/assets/", {"page_size": 200}, []
     while url:
-        page = requests.get(url, params=params).json()
+        page = requests.get(url, params=params, timeout=TIMEOUT).json()
         assets += page["results"]
         url, params = page.get("next"), None
     return assets
@@ -113,7 +114,7 @@ class _RangeFile(io.RawIOBase):
         if i not in self.cache:
             start = i * self.block
             end = min(start + self.block, self.size) - 1
-            r = self.session.get(self.url, headers={"Range": f"bytes={start}-{end}"})
+            r = self.session.get(self.url, headers={"Range": f"bytes={start}-{end}"}, timeout=TIMEOUT)
             r.raise_for_status()
             self.cache[i] = r.content
         return self.cache[i]
@@ -135,7 +136,9 @@ def _count_spikes(asset, retries=3):
 
     for attempt in range(retries):
         try:
-            url = requests.head(f"{API}/assets/{asset['asset_id']}/download/", allow_redirects=True).url
+            url = requests.head(
+                f"{API}/assets/{asset['asset_id']}/download/", allow_redirects=True, timeout=TIMEOUT
+            ).url
             with h5py.File(_RangeFile(url, asset["size"]), "r") as f:
                 ap = f["analysis/responses/ap_time"][:]
                 names = [k for k in f["acquisition"] if k.startswith("Registered movie")]
@@ -148,6 +151,7 @@ def _count_spikes(asset, retries=3):
         except Exception:
             if attempt == retries - 1:
                 return None
+            time.sleep(10)
 
 
 def spike_counts(data_dir, indicators=INDICATORS):
@@ -164,10 +168,19 @@ def spike_counts(data_dir, indicators=INDICATORS):
             file=sys.stderr,  # stdout is the path list of --list
             flush=True,
         )
+        unread = []
         with ThreadPoolExecutor(8) as pool:
             for asset, count in zip(todo, pool.map(_count_spikes, todo)):
-                if count is not None:
+                if count is None:
+                    unread.append(asset["path"])
+                else:
                     counts[asset["path"]] = count
+        if unread:  # not cached, so retried next time; until then the selection is made without them
+            print(
+                f"could not read {len(unread)} files, left out of the selection: {', '.join(unread)}",
+                file=sys.stderr,
+                flush=True,
+            )
         Path(data_dir).mkdir(parents=True, exist_ok=True)
         _write_json(cache_file, counts)
     return {p: c for p, c in counts.items() if p.split("/")[0] in indicators}
@@ -215,7 +228,7 @@ def download(path, data_dir, wait_hours=3.0, attempts=3):
 
     Waits for free space first (up to ``wait_hours``) and retries a broken connection ``attempts`` times."""
     target = Path(data_dir) / Path(path).name
-    assets = requests.get(f"{API}/assets/", params={"path": path}).json()["results"]
+    assets = requests.get(f"{API}/assets/", params={"path": path}, timeout=TIMEOUT).json()["results"]
     asset = next(a for a in assets if a["path"] == path)
     if target.exists() and target.stat().st_size == asset["size"]:
         return target
@@ -224,7 +237,10 @@ def download(path, data_dir, wait_hours=3.0, attempts=3):
     _wait_for_space(target.parent, asset["size"], wait_hours)
     for attempt in range(attempts):
         try:
-            with requests.get(f"{API}/assets/{asset['asset_id']}/download/", stream=True) as r, open(tmp, "wb") as f:
+            with (
+                requests.get(f"{API}/assets/{asset['asset_id']}/download/", stream=True, timeout=TIMEOUT) as r,
+                open(tmp, "wb") as f,
+            ):
                 r.raise_for_status()
                 for chunk in r.iter_content(chunk_size=1 << 22):
                     f.write(chunk)
