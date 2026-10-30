@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from pydantic import ValidationError
 
 from photon_mosaic.core import NumpyImaging
 from photon_mosaic.core.generators import generate_imaging_with_rois
@@ -166,6 +167,15 @@ class TestDetectRoisSuite2pUnmocked:
         assert modes == [sparsedetect.EstimateMode.Estimated]
         assert rois.get_num_rois() > 0
 
+    def test_cellpose_rejects_zero_diameter(self):
+        # suite2p 1.x has no diameter=0 auto-estimate; it crashes inside roi_detect.
+        _, imaging, _ = generate_imaging_with_rois(
+            num_frames=300, height=64, width=64, num_rois=10, radius_range=(4, 6), seed=0
+        )
+
+        with pytest.raises(ValidationError, match="diameter"):
+            detect_rois_suite2p(imaging, settings={"algorithm": "cellpose", "diameter": [0, 0]})
+
 
 # ---------------------------------------------------------------------------
 # _stream_bin_movie
@@ -228,3 +238,13 @@ class TestMergedDefaults:
         assert "sparsery_settings" in merged
         assert "sourcery_settings" in merged
         assert "cellpose_settings" in merged
+
+
+class TestDiameter:
+    def test_accepts_diameter_of_at_least_one(self):
+        assert seg.Suite2pSegmentationSettings(diameter=[1, 12]).diameter == [1.0, 12.0]
+
+    @pytest.mark.parametrize("diameter", [[0, 0], [0, 12], [12, -1]])
+    def test_rejects_diameter_below_one(self, diameter):
+        with pytest.raises(ValidationError, match="greater than or equal to 1"):
+            seg.Suite2pSegmentationSettings(diameter=diameter)
