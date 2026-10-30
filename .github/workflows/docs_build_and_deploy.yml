@@ -3,7 +3,7 @@ name: Docs
 on:
   push:
     branches:
-      - dev
+      - main
     tags:
       - "*"
   pull_request:
@@ -20,11 +20,22 @@ jobs:
           python-version: 3.12
           use-make: true
 
+  check_tag:
+    name: Check if trigger is a tag on main
+    runs-on: ubuntu-latest
+    outputs:
+      tag_on_main: ${{ steps.check.outputs.tag_on_main }}
+    steps:
+      - uses: neuroinformatics-unit/actions/check_tag_on_main@34bedfdfd70c6010be02182c9ca37fae8a1fd99d # v3.0.0
+        id: check
+
+  # Deploy only for a pushed tag that points to a commit on main, or by hand
   deploy_sphinx_docs:
     name: Deploy Sphinx Docs
+    needs: [build_sphinx_docs, check_tag]
     permissions:
       contents: write
-    if: (github.event_name == 'push' && github.ref_type == 'tag') || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' && needs.check_tag.outputs.tag_on_main == 'true') || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: neuroinformatics-unit/actions/deploy_sphinx_docs@34bedfdfd70c6010be02182c9ca37fae8a1fd99d # v3.0.0
