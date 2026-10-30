@@ -8,7 +8,7 @@ authors = [
 ]
 description = "Library for modular calcium imaging analysis"
 readme = "README.md"
-requires-python = ">=3.11.0"
+requires-python = ">=3.12.0"
 dynamic = ["version"]
 dependencies = [
     "spikeinterface>=0.105.1",
@@ -28,7 +28,6 @@ classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Operating System :: OS Independent",
@@ -38,7 +37,7 @@ classifiers = [
 [project.urls]
 "Homepage" = "https://github.com/photon-mosaic/photon-mosaic"
 "Bug Tracker" = "https://github.com/photon-mosaic/photon-mosaic/issues"
-"Documentation" = "https://github.com/photon-mosaic/photon-mosaic"
+"Documentation" = "https://api.photon-mosaic.org"
 "Source Code" = "https://github.com/photon-mosaic/photon-mosaic"
 "User Support" = "https://github.com/photon-mosaic/photon-mosaic/issues"
 
@@ -49,8 +48,8 @@ widgets = [
   "ipympl",
   "ipykernel"
 ]
-suite2p-registration = [
-  "suite2p==1.0.0.1",
+suite2p = [
+  "suite2p==1.1.0",
 ]
 deconvolution = [
   "oasis-deconv>=0.3.2",
@@ -65,7 +64,7 @@ dev = [
   "ruff",
   "nbstripout",
   "setuptools-scm",
-  "suite2p==1.0.0.1",
+  "suite2p==1.1.0",
   "oasis-deconv>=0.3.2",
 ]
 
@@ -99,6 +98,9 @@ fix = true
 [tool.ruff.lint]
 select = ["I", "E", "F"]
 
+[tool.ruff.lint.per-file-ignores]
+"examples/*.py" = ["E501"]
+
 [tool.mypy]
 ignore_missing_imports = true
 
@@ -114,11 +116,10 @@ ignore-words-list = "coo"
 [tool.tox]
 legacy_tox_ini = """
 [tox]
-envlist = py{311,312,313}
+envlist = py{312,313}
 
 [gh-actions]
 python =
-    3.11: py311
     3.12: py312
     3.13: py313
 

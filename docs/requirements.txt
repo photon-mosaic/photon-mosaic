@@ -1,4 +1,4 @@
--e .[widgets]
+-e .[widgets,suite2p]
 ipython
 linkify-it-py
 myst-parser

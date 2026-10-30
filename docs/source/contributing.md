@@ -14,16 +14,12 @@ and [opening a pull request](#pull-requests).
 To install ``photon-mosaic`` for development, first the
 [GitHub repository](https://github.com/photon-mosaic/photon-mosaic)
 should be cloned. Then, you can change-directory
-to the cloned repository and run pip install with the developer tag:
+to the cloned repository and install it with [uv](https://docs.astral.sh/uv/getting-started/installation/), with the developer tag:
 
 ```sh
-pip install -e .[dev]
-```
-
-or if using `zsh`:
-
-```sh
-pip install -e '.[dev]'
+uv venv
+source .venv/bin/activate
+uv pip install -e ".[dev]"
 ```
 
 Finally, initialise the pre-commit hooks:
@@ -49,10 +45,10 @@ to the following conventions:
 The documentation is found in the `docs/source` folder, where the structure mirrors the rendered website.
 
 Dependencies for building the documentation locally can be found at `docs/requirements.txt`.
-To install these, change directory to the `docs` folder in your terminal and type:
+To install these, from the root of the repository type:
 
 ```
-pip install -r docs/requirements.txt
+uv pip install -r docs/requirements.txt
 ```
 
 The command to build the documentation from within the `docs/` folder is:

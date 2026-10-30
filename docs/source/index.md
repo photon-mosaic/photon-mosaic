@@ -1,7 +1,7 @@
 # <img src="_static/logo.png" alt="photon-mosaic logo" width="36" style="vertical-align: middle; margin-right:8px"> photon-mosaic
 
 ```{include} ../../README.md
-:start-after: '# <img src="_static/logo.png" alt="photon-mosaic logo" width="36" style="vertical-align: middle; margin-right:8px"> photon-mosaic'
+:start-after: '<!-- title-end -->'
 :end-before: '<!-- note-start -->'
 ```
 
@@ -27,6 +27,7 @@ Contributions to `photon-mosaic` are very welcome. Check out the [Contributing s
 :hidden:
 
 user-guide
+Examples <examples/index>
 developer-intro
 contributing
 api_index

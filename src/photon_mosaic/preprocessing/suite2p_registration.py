@@ -11,7 +11,9 @@ from photon_mosaic.core import (
     Motion,
     register_motion_class,
     register_registration_class,
+    split_epoch_at_frames,
 )
+from photon_mosaic.core.selectplanes import select_planes
 
 from .registration import RegisterImaging, RegisterImagingEpoch, RegistrationSettings
 
@@ -106,7 +108,8 @@ class Suite2pRegistrationSettings(RegistrationSettings):
     )
     smooth_sigma_time: int = Field(
         default=0,
-        description="gaussian smoothing in time. If do_optimize_motion_params is set, this will be overridden",
+        description="gaussian smoothing in time. Must be 0: suite2p 1.x crashes for values > 0 "
+        "(https://github.com/MouseLand/suite2p/issues/1271).",
     )
     smooth_sigma: float = Field(
         default=1.15,
@@ -332,13 +335,15 @@ class Suite2PMotion(Motion):
         if "maxregshiftNR" in params:
             raise ValueError("'maxregshiftNR' is now 'max_nonrigid_shift'.")
         ops.update(params)
+        if ops["smooth_sigma_time"] > 0:
+            raise ValueError("smooth_sigma_time > 0 crashes suite2p 1.x registration.")
         bounds = ops["bounds"]
         if bounds is not None and ops["nonrigid"]:
             raise ValueError(
                 "'bounds' (an estimation crop) is supported by the suite2p backend for rigid registration only: "
                 "its non-rigid block geometry is defined on the frame the shifts are applied to."
             )
-        estimation_region = (slice(None), slice(None)) if bounds is None else (slice(*bounds[0]), slice(*bounds[1]))
+        rows, cols = (slice(None), slice(None)) if bounds is None else (slice(*bounds[0]), slice(*bounds[1]))
 
         device = torch.device(ops.get("device", "cpu"))
 
@@ -358,11 +363,7 @@ class Suite2PMotion(Motion):
         all_corrected_badframes: list[NDArray] = []
 
         for epoch_idx in range(n_epochs):
-            epoch = imaging.epochs[epoch_idx]
             n_frames = imaging.get_num_samples(segment_index=epoch_idx)
-
-            # Load entire epoch: (n_frames, H, W, n_planes) or (n_frames, H, W)
-            all_frames = epoch.get_series(0, n_frames)
             Ly, Lx = imaging.shape[0], imaging.shape[1]
 
             badframes0 = np.zeros(n_frames, dtype=bool) if badframes is None else badframes.copy()
@@ -373,39 +374,49 @@ class Suite2PMotion(Motion):
             epoch_nr: list[tuple[NDArray, NDArray] | None] = []
             epoch_blocks: list[Any] = []
 
-            for p in range(n_planes):
-                if all_frames.ndim == 4:
-                    plane_frames = all_frames[:, :, :, p].astype(np.float32)
-                else:
-                    plane_frames = all_frames.astype(np.float32)
-                plane_frames = plane_frames[:, estimation_region[0], estimation_region[1]]
+            # sub-epochs of batch_size frames: each is read whole, so one batch is in memory at a time
+            batch_size = ops["batch_size"]
+            batched = split_epoch_at_frames(imaging, epoch_idx, range(batch_size, n_frames, batch_size))
 
-                # Compute reference once from the first epoch
+            for p, plane_id in enumerate(imaging.plane_ids):
+                # Reference once, from the first epoch: read only the nimg_init evenly spaced frames suite2p
+                # samples (the wrapper then uses all of them)
                 if epoch_idx == 0:
-                    refImgs[p], bidiphases[p] = _compute_reference_wrapper(
-                        plane_frames, ops, refImg=None, device=device
-                    )
+                    picks = np.linspace(0, n_frames, 1 + min(ops.get("nimg_init", 200), n_frames), dtype=int)[:-1]
+                    plane = select_planes(imaging, [plane_id])
+                    sample = np.concatenate([plane.get_series(i, i + 1, epoch_index=0) for i in picks])
+                    sample = sample[:, rows, cols, 0].astype(np.float32)
+                    refImgs[p], bidiphases[p] = _compute_reference_wrapper(sample, ops, refImg=None, device=device)
 
-                # Compute shifts without applying them to the frames
-                _, _, _, offsets_all, blocks = register_frames(
-                    plane_frames,
-                    refImg=refImgs[p],
-                    f_align_out=None,
-                    batch_size=ops["batch_size"],
-                    bidiphase=bidiphases[p],
-                    norm_frames=ops.get("norm_frames", True),
-                    smooth_sigma=ops["smooth_sigma"],
-                    spatial_taper=ops.get("spatial_taper", 3.45),
-                    block_size=ops["block_size"],
-                    nonrigid=ops["nonrigid"],
-                    maxregshift=ops["maxregshift"],
-                    smooth_sigma_time=ops["smooth_sigma_time"],
-                    snr_thresh=ops["snr_thresh"],
-                    maxregshiftNR=ops["max_nonrigid_shift"],
-                    device=device,
-                    apply_shifts=False,
-                )
-                yoff, xoff, corrXY, yoff1, xoff1, corrXY1, zest, cmax_all = offsets_all
+                # Compute shifts without applying them, one sub-epoch (= one suite2p batch) per call.
+                # Only the offsets are kept per batch: the other returns include a mean image per call.
+                # Select the plane after splitting: selection is applied by get_series, not by the epochs.
+                plane_batches = select_planes(batched, [plane_id])
+                batch_offsets = []
+                for b in range(plane_batches.get_num_epochs()):
+                    _, _, _, offsets, blocks, _, _, _ = register_frames(
+                        plane_batches.get_series(epoch_index=b)[:, rows, cols, 0].astype(np.float32),
+                        refImg=refImgs[p],
+                        f_align_out=None,
+                        batch_size=batch_size,
+                        bidiphase=bidiphases[p],
+                        norm_frames=ops.get("norm_frames", True),
+                        smooth_sigma=ops["smooth_sigma"],
+                        spatial_taper=ops.get("spatial_taper", 3.45),
+                        block_size=ops["block_size"],
+                        nonrigid=ops["nonrigid"],
+                        maxregshift=ops["maxregshift"],
+                        smooth_sigma_time=ops["smooth_sigma_time"],
+                        snr_thresh=ops["snr_thresh"],
+                        maxregshiftNR=ops["max_nonrigid_shift"],
+                        device=device,
+                        apply_shifts=False,
+                    )
+                    batch_offsets.append(offsets)
+                # suite2p's eight offset arrays, concatenated across batches as register_frames does internally
+                yoff, xoff, corrXY, yoff1, xoff1, corrXY1, zest, cmax_all = [
+                    None if parts[0] is None else np.concatenate(parts, axis=0) for parts in zip(*batch_offsets)
+                ]
 
                 epoch_yoff.append(yoff)
                 epoch_xoff.append(xoff)

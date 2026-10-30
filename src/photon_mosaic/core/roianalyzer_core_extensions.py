@@ -12,8 +12,6 @@ from .roianalyzer import AnalyzerExtension, register_result_extension
 
 _FLUORESCENCE_METHODS = ("projection", "regression", "nnls")
 _NEUROPIL_SOURCES = ("neuropil", "background")
-
-
 _NEUROPIL_METHODS = ("surround",)
 
 
@@ -79,7 +77,7 @@ class FluorescenceExtension(AnalyzerExtension):
     def get_optional_dependencies(cls, use_neuropil=True, neuropil_source=None, **params):
         if not use_neuropil:
             return []
-        return list(_NEUROPIL_SOURCES) if neuropil_source is None else [neuropil_source]
+        return ["|".join(_NEUROPIL_SOURCES)] if neuropil_source is None else [neuropil_source]
 
     def _set_params(
         self, use_neuropil=True, neuropil_weight=0.7, method="projection", ridge=1e-6, neuropil_source=None
@@ -1350,7 +1348,7 @@ def _build_surround_neuropil_masks(
     except ImportError as e:
         raise ImportError(
             "NeuropilExtension(method='surround') requires suite2p. Install it with "
-            "'pip install \"photon-mosaic[suite2p-registration]\"'."
+            "'pip install \"photon-mosaic[suite2p]\"'."
         ) from e
 
     if masks.ndim == 3:

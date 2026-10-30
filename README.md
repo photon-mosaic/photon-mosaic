@@ -1,10 +1,11 @@
-# <img src="_static/logo.png" alt="photon-mosaic logo" width="36" style="vertical-align: middle; margin-right:8px"> photon-mosaic
+# <img src="https://raw.githubusercontent.com/photon-mosaic/photon-mosaic/dev/docs/source/_static/logo.png" alt="photon-mosaic logo" width="36" style="vertical-align: middle; margin-right:8px"> photon-mosaic
+<!-- title-end -->
 
 Modular, extensible Python API for flexible analysis of multi-photon imaging data, part of the broader [**PhotonMosaic** framework](https://photon-mosaic.org).
 
 <!-- note-start -->
 > [!NOTE]
-<!-- note-text-start -->
+> <!-- note-text-start -->
 > **`photon-mosaic` is experimental software in its early stages.**
 >
 > Things may change significantly.
@@ -12,10 +13,18 @@ Modular, extensible Python API for flexible analysis of multi-photon imaging dat
 > We welcome feedback from users: get in touch with the core developer team via [zulip chat](https://neuroinformatics.zulipchat.com/#narrow/channel/500681-photon-mosaic) or open a [GitHub issue](https://github.com/photon-mosaic/photon-mosaic/issues/new/choose). It would be great to hear from you!
 <!-- note-end -->
 
+## Installation
+
+```bash
+uv pip install "photon-mosaic[widgets,suite2p,deconvolution]"
+```
+
+See the [installation instructions](https://api.photon-mosaic.org/user-guide.html#installation) for setting up an environment and for what each extra installs.
+
 ## Usage
 
-Check out the [User Guide](todo-userguide) for instructions about using `photon-mosaic`.
+Check out the [User Guide](https://api.photon-mosaic.org/user-guide.html) for instructions about using `photon-mosaic`.
 
 ## Contributing
 
-Contributions to `photon-mosaic` are very welcome. Check out the [Contributing section](todo-devs) on the website.
+Contributions to `photon-mosaic` are very welcome. Check out the [Contributing section](https://api.photon-mosaic.org/contributing.html) on the website.
