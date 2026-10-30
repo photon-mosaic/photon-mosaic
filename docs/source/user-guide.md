@@ -21,10 +21,10 @@ Some features need extra packages. Install them through these extras:
 | `suite2p` | suite2p functionality (default for many steps) |
 | `deconvolution` | spike deconvolution with OASIS |
 
-Extras can be installed by adding the name of the extra in square brackets to installations command, e.g.
+Extras can be installed by adding the name of the extra in square brackets to the installation command, e.g.
 
 ```bash
-uv pip install photon-mosaic[suite2p]
+uv pip install "photon-mosaic[suite2p]"
 ```
 
 The example notebooks need `widgets`, `suite2p` and `deconvolution`, so you would run
