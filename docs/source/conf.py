@@ -180,6 +180,8 @@ html_logo = "_static/logo.png"
 sphinx_gallery_conf = {
     "examples_dirs": ["../../examples"],
     "filename_pattern": "/*.py",  # which files to execute before inclusion
+    # command-line scripts, not gallery examples: run as __main__ without arguments, argparse exits the build
+    "ignore_pattern": r"__init__\.py|run_caiman\.py|benchmark_dandi_000168\.py",
     "gallery_dirs": ["examples"],  # output directory
     "run_stale_examples": True,  # re-run examples on each build
     # Integration with Binder, see https://sphinx-gallery.github.io/stable/configuration.html#generate-binder-links-for-gallery-notebooks-experimental
