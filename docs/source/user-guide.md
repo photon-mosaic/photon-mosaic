@@ -15,11 +15,11 @@ pip install git+https://github.com/photon-mosaic/photon-mosaic@dev
 
 Some features need extra packages. Install them through these extras:
 
-| Extra | Installs | Needed for |
-|---|---|---|
-| `widgets` | matplotlib, ipywidgets, ipympl, ipykernel | the interactive widgets in `photon_mosaic.widgets` |
-| `suite2p` | suite2p | suite2p registration (`compute_motion`, whose default method is `"suite2p"`), suite2p segmentation (`detect_rois_suite2p`) and the surround neuropil mask (`compute("neuropil", method="surround")`, the default) |
-| `deconvolution` | oasis-deconv | spike deconvolution (`compute("deconvolution")`) |
+| Extra | Needed for |
+|---|---|
+| `widgets` | interactive widget functionality |
+| `suite2p` | suite2p functionality (default for many steps) |
+| `deconvolution` | spike deconvolution with OASIS |
 
 Extras can be installed by adding the name of the extra in square brackets to installations command, e.g.
 
