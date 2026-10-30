@@ -49,7 +49,7 @@ widgets = [
   "ipympl",
   "ipykernel"
 ]
-suite2p-registration = [
+suite2p = [
   "suite2p==1.1.0",
 ]
 deconvolution = [
