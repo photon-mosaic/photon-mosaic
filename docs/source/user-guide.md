@@ -33,6 +33,13 @@ The example notebooks need `widgets`, `suite2p` and `deconvolution`, so you woul
 uv pip install "photon-mosaic[widgets,suite2p,deconvolution]"
 ```
 
+## Some useful concepts
+
+`photon-mosaic` is built around two Python objects:  `Epoch` objects and  `Imaging` objects. Understanding these conceptually is important to use `photon-mosaic`:
+
+* `Epoch` objects contain spatio-temporally contiguous multiphoton data.
+* `Imaging` object group `Epoch` objects together, and keep track of metadata, including about the steps that have been applied to their `Epoch`s. They are used to represent data that is spatially in the same location, but may be acquired at different times or experimental conditions.
+
 ## Example notebooks
 
 `photon-mosaic` is a Python API, so it is meant to be called from other Python code, such as user scripts, notebooks or downstream Python packages. We provide introductory notebooks showing typical applications of multi-photon imaging analysis in our {doc}`examples gallery <examples/index>`.
