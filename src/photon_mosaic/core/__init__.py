@@ -3,6 +3,7 @@ from .baserois import BaseRois
 from .binaryimaging import BinaryImaging, read_binary
 from .binaryrois import BinaryFolderRois, BinaryRois
 from .generators import generate_fluorescence, generate_imaging_with_rois, generate_random_imaging, generate_rois
+from .geometry import geometry_table
 from .imaging_ops import (
     AppendImaging,
     ConcatenateImaging,
