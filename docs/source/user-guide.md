@@ -20,7 +20,6 @@ Some features need extra packages. Install them through these extras:
 | `widgets` | matplotlib, ipywidgets, ipympl, ipykernel | the interactive widgets in `photon_mosaic.widgets` |
 | `suite2p` | suite2p | suite2p registration (`compute_motion`, whose default method is `"suite2p"`), suite2p segmentation (`detect_rois_suite2p`) and the surround neuropil mask (`compute("neuropil", method="surround")`, the default) |
 | `deconvolution` | oasis-deconv | spike deconvolution (`compute("deconvolution")`) |
-| `dev` | test and lint tools, suite2p, oasis-deconv | [contributing](./contributing.md) |
 
 Extras can be installed by adding the name of the extra in square brackets to installations command, e.g.
 
