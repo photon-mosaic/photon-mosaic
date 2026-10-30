@@ -7,9 +7,9 @@ binned 2x2 in space and 4x in time, and run through photon-mosaic (several neuro
 (seeded with the same ROIs, run by ``run_caiman.py``). The score is the correlation between each method's inferred
 spikes for the patched cell and its true spikes, both Gaussian-smoothed.
 
-Which cells: by default the ones in ``CELLS``, chosen by one rule for every indicator: each animal's smallest file with
-a movie of at least ``MIN_SPIKES`` spikes, and the 4 animals whose chosen files are smallest
-(``--list --per-indicator 4`` prints the result). A file is one cell (its extra movies are further recordings of it):
+Which cells: by default the ones in ``CELLS``, chosen by one rule for every indicator in ``INDICATORS`` (the jGCaMPs;
+XCaMPgf is only in ``--all``): each animal's smallest file with a movie of at least ``MIN_SPIKES`` spikes, and the 4
+animals whose chosen files are smallest (``--list --per-indicator 4`` prints the result). A file is one cell (its extra movies are further recordings of it):
 its first movie with enough spikes is run.
 ``--per-indicator N`` applies the rule with N animals, ``--all`` runs every file in the dandiset.
 
@@ -534,6 +534,7 @@ def summary_table(results_dir, cells=None, sigma=MAIN_SIGMA):
     """Mean spike correlation per method, by indicator and by signal quality, as text, over the results in
     ``results_dir`` (only those of the DANDI paths ``cells``, if given)."""
     results = [json.load(open(f)) for f in sorted(Path(results_dir).glob("*.json"))]
+    results = [r for r in results if "cell" in r]  # not spike_counts.json, when results_dir is the data dir
     if cells is not None:
         stems = {Path(c).stem for c in cells}
         results = [r for r in results if r["cell"].split("_movie")[0] in stems]

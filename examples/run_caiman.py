@@ -118,6 +118,8 @@ def main():
         os.replace(tmp, a.out)
     finally:
         cm.stop_server(dview=dview)
+        if a.max_frames:
+            os.remove(npy)
 
 
 if __name__ == "__main__":
