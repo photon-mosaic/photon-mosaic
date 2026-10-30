@@ -1557,6 +1557,15 @@ def test_cnmf_roundtrips_through_disk(cnmf_truth, tmp_path, fmt):
         )
 
 
+def test_cnmf_select_extension_data_keeps_every_key(cnmf_extension, cnmf_analyzer):
+    keep = cnmf_analyzer.rois.roi_ids[:2]
+    selected = cnmf_extension._select_extension_data(keep)
+    # copy() assigns this dict straight over `data`, so a missing key is silently lost.
+    assert set(selected) == set(cnmf_extension.data)
+    # b belongs to the whole field of view, so it passes through unsliced.
+    np.testing.assert_array_equal(selected["background_spatial"], cnmf_extension.data["background_spatial"])
+
+
 # --- integration with FluorescenceExtension --------------------------------
 
 
@@ -1625,7 +1634,7 @@ def both_corrections_analyzer(cnmf_truth):
 @pytest.mark.parametrize(
     "params, expected",
     [
-        ({}, ["neuropil", "background"]),
+        ({}, ["neuropil|background"]),
         ({"neuropil_source": "background"}, ["background"]),
         ({"neuropil_source": "neuropil", "method": "regression"}, ["neuropil"]),
         ({"use_neuropil": False}, []),

@@ -50,7 +50,7 @@ widgets = [
   "ipykernel"
 ]
 suite2p-registration = [
-  "suite2p==1.0.0.1",
+  "suite2p==1.1.0",
 ]
 deconvolution = [
   "oasis-deconv>=0.3.2",
@@ -65,7 +65,7 @@ dev = [
   "ruff",
   "nbstripout",
   "setuptools-scm",
-  "suite2p==1.0.0.1",
+  "suite2p==1.1.0",
   "oasis-deconv>=0.3.2",
 ]
 
