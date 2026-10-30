@@ -22,7 +22,13 @@ Some features need extra packages. Install them through these extras:
 | `deconvolution` | oasis-deconv | spike deconvolution (`compute("deconvolution")`) |
 | `dev` | test and lint tools, suite2p, oasis-deconv | [contributing](./contributing.md) |
 
-The example notebooks need `widgets`, `suite2p` and `deconvolution`:
+Extras can be installed by adding the name of the extra in square brackets to installations command, e.g.
+
+```bash
+uv pip install photon-mosaic[suite2p]
+```
+
+The example notebooks need `widgets`, `suite2p` and `deconvolution`, so you would run
 
 ```bash
 pip install "photon-mosaic[widgets,suite2p,deconvolution] @ git+https://github.com/photon-mosaic/photon-mosaic@dev"
