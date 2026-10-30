@@ -1,4 +1,9 @@
-"""Run a minimal Suite2p analysis workflow."""
+"""
+Simple ``suite2p`` example
+==========================
+
+In this notebook, we showcase a very simple example of using ``photon-mosaic`` to run ``suite2p``, and plot results.
+"""
 
 # %%
 import matplotlib
@@ -11,9 +16,8 @@ from photon_mosaic.widgets.series import plot_imaging_series
 matplotlib.use("module://ipympl.backend_nbagg")
 
 # %% [markdown]
-# # Simple `suite2p` example
 #
-# In this notebook, we showcase a very simple example of using `photon-mosaic` to run `suite2p`, and plot results. We will run `suite2p` on its own single-plane example data (via a `photon_mosaic.sample_data` function that downloads and caches it from their Google drive), on just one file with 200 frames. Note that this is a toy example to showcase functionality: its result is intentionally far from perfect, illustrating how users must evaluate and optimise their settings in order to get good results form their data. This is expected.
+#  We will run `suite2p` on its own single-plane example data (via a `photon_mosaic.sample_data` function that downloads and caches it from their Google drive), on just one file with 200 frames. Note that this is a toy example to showcase functionality: its result is intentionally far from perfect, illustrating how users must evaluate and optimise their settings in order to get good results form their data. This is expected.
 
 # %% [markdown]
 # We start by importing the function that provides the sample data as an `Imaging` object. We then load the data, print some information about it, and plot it.
