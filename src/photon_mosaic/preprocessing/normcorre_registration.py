@@ -4,11 +4,17 @@ from __future__ import annotations
 
 from typing import Any, Literal, Sequence
 
+import cv2
 import numpy as np
 from numpy.typing import NDArray
 from pydantic import ConfigDict, Field
 
-from photon_mosaic.core import BaseImaging, BaseImagingEpoch, Motion, register_motion_class
+from photon_mosaic.core import (
+    BaseImaging,
+    BaseImagingEpoch,
+    Motion,
+    register_motion_class,
+)
 
 from .registration import RegisterImagingEpoch, RegistrationSettings
 
@@ -21,98 +27,441 @@ _MIN_MOV_FRAMES = 400
 
 
 class NormcorreRegistrationSettings(RegistrationSettings):
-    """CaImAn's ``motion`` parameters, with CaImAn's names and defaults.
+    """Settings of the NoRMCorre backend, with CaImAn's parameter names and defaults.
 
-    The shared ``nonrigid`` (CaImAn ``pw_rigid``), ``max_nonrigid_shift`` (CaImAn
-    ``max_deviation_rigid``) and ``bounds`` (CaImAn ``indices``) come from
-    :class:`~photon_mosaic.preprocessing.registration.RegistrationSettings`.
+    Pass any of them as keyword arguments to ``compute_motion(..., method="normcorre")``,
+    or set them as ``NORMCORRE_REGISTRATION_<NAME>`` environment variables. Three settings
+    are shared with the other backends and documented on
+    :class:`~photon_mosaic.preprocessing.registration.RegistrationSettings`:
+    ``nonrigid`` (CaImAn ``pw_rigid``), ``max_nonrigid_shift`` (CaImAn
+    ``max_deviation_rigid``) and ``bounds`` (CaImAn ``indices``).
     """
 
-    max_shifts: tuple[int, int] = Field(default=(6, 6), description="Maximum rigid shift in pixels, (y, x).")
-    niter_rig: int = Field(default=1, description="Rigid template-refinement iterations.")
+    max_shifts: tuple[int, int] = Field(
+        default=(6, 6),
+        description="Largest rigid shift searched for, in pixels, as (y, x). Raise it if the sample moves more.",
+    )
+    niter_rig: int = Field(
+        default=1,
+        description="How many times the rigid pass is repeated, each against the template the previous one made.",
+    )
     num_frames_split: int = Field(
         default=80,
-        description="Sets the number of temporal splits, max(T // max(num_frames_split, 10), 1), from the first "
-        "epoch's length (CaImAn params.py L935).",
+        description="Approximate frames per chunk. Each pass cuts an epoch into max(T // max(num_frames_split, "
+        "10), 1) chunks (T: frames in the first epoch), corrects each against the current template, and makes "
+        "the next template from the median of the chunk averages.",
     )
-    strides: tuple[int, int] = Field(default=(96, 96), description="Distance between patch starts, (y, x).")
+    strides: tuple[int, int] = Field(
+        default=(96, 96),
+        description="Non-rigid only: distance in pixels between the starts of neighbouring patches, (y, x).",
+    )
     overlaps: tuple[int, int] = Field(
-        default=(32, 32), description="Overlap between patches, (y, x); patch size is strides + overlaps."
+        default=(32, 32),
+        description="Non-rigid only: overlap in pixels between neighbouring patches, (y, x). Each patch is "
+        "strides + overlaps pixels wide.",
     )
     upsample_factor_grid: int = Field(
-        default=4, description="Patch-grid upsampling of the FFT piecewise path (shifts_opencv=False)."
+        default=4,
+        description="Non-rigid with shifts_opencv=False only: how much finer than the estimation grid the grid "
+        "of patches that are shifted and blended back together is.",
     )
     shifts_opencv: bool = Field(
         default=True,
-        description="Apply shifts by interpolation (cubic warp / remap); False applies them in the Fourier "
-        "domain, with piecewise patches upsampled and blended.",
+        description="True applies shifts by cubic interpolation (OpenCV warp/remap); False applies them in the "
+        "Fourier domain. Stored non-rigid shifts are always replayed by interpolation, as in CaImAn.",
     )
     shifts_interpolate: bool = Field(
         default=False,
-        description="Build the piecewise field by interpolating from the patch centres instead of resizing the "
-        "patch grid corner to corner.",
+        description="Non-rigid only: build the per-pixel shift field by interpolating between patch centres, "
+        "instead of stretching the patch grid over the whole frame.",
     )
     border_nan: BorderNan = Field(
         default="copy",
-        description="Fill for the strip a shift uncovers: 'copy' the edge, the frame 'min', True for NaN, "
-        "False for zero.",
+        description="What fills the strip a shift exposes at the frame edge: 'copy' repeats the edge pixels, "
+        "'min' uses the frame minimum, True leaves NaN. False fills nothing: the strip keeps what the shift "
+        "produced (reflected pixels for the rigid warp, wrapped-around ones in the Fourier domain, zero for "
+        "the non-rigid remap).",
     )
     gSig_filt: tuple[int, int] | None = Field(
         default=None,
-        description="Std of the zero-mean Gaussian high-pass applied to the frames used for estimation "
-        "(one-photon mode; CaImAn documents it as a size). Only the first value is used, for both axes. "
-        "None disables.",
+        description="For one-photon data: width (std, in pixels) of a high-pass filter applied to the frames "
+        "before shifts are estimated, to remove the diffuse background; the shifts are still applied to the "
+        "unfiltered data. Only the first value is used. None (default) disables it.",
     )
     min_mov: float | None = Field(
-        default=None, description="Movie minimum; None takes it from the first 400 frames of the first epoch."
+        default=None,
+        description="Offset that makes the movie non-negative during estimation; None takes the minimum of the "
+        "first 400 frames of the first epoch.",
     )
 
     model_config = ConfigDict(env_prefix="NORMCORRE_REGISTRATION_", case_sensitive=False, env_file=".env")
 
 
 # --------------------------------------------------------------------------- #
-# Leaf kernels -- stubs. Frames are float ``(T, H, W)``.
+# Kernels. Each runs every frame through CaImAn's per-image code with the same OpenCV
+# calls, so results, dtypes and rounding match CaImAn's.
 # --------------------------------------------------------------------------- #
 
 
 def _high_pass_filter_space(frames: NDArray, gSig_filt: tuple[int, int]) -> NDArray:
-    """Zero-mean Gaussian high-pass, frame by frame.
+    """Remove the slowly varying background of each frame (one-photon mode).
 
-    Kernel from ``g = gSig_filt[0]`` alone: a 2-D Gaussian of std ``g`` and size ``(3*g)//2*2+1``;
-    its values at or above the first column's maximum are made zero-mean, the rest set to
-    zero; convolved with
-    reflect padding. CaImAn ``high_pass_filter_space`` L1965 (``cv2.filter2D``);
-    jnormcorre ``onephotonmethods.high_pass_filter_cv`` L29; masknmf
-    ``spatial_filters.compute_highpass_filter_kernel`` L8.
+    Each frame is convolved with a Gaussian of std ``g = gSig_filt[0]`` (size
+    ``(3*g)//2*2+1``) that is cut to its central lobe and made zero-mean, which keeps
+    cell-sized structure and removes anything broader. Borders are reflected.
+
+    Parameters
+    ----------
+    frames : array, ``(T, H, W)``
+        Frames to filter.
+    gSig_filt : tuple of int
+        Only the first value is used, for both axes.
+
+    Returns
+    -------
+    array, ``(T, H, W)`` float32
+        The filtered frames.
+
+    Notes
+    -----
+    CaImAn ``high_pass_filter_space`` L1965; jnormcorre ``onephotonmethods.high_pass_filter_cv``
+    L29; masknmf ``spatial_filters.compute_highpass_filter_kernel`` L8.
     """
-    raise NotImplementedError
+    ksize = tuple((3 * i) // 2 * 2 + 1 for i in gSig_filt)
+    ker = cv2.getGaussianKernel(ksize[0], gSig_filt[0])
+    ker2D = ker.dot(ker.T)
+    nz = np.nonzero(ker2D >= ker2D[:, 0].max())
+    zz = np.nonzero(ker2D < ker2D[:, 0].max())
+    ker2D[nz] -= ker2D[nz].mean()
+    ker2D[zz] = 0
+    return np.stack(
+        [cv2.filter2D(np.array(img, dtype=np.float32), -1, ker2D, borderType=cv2.BORDER_REFLECT) for img in frames]
+    )
 
 
-def _bin_median(frames: NDArray, window: int = 10) -> NDArray:
-    """``(H, W)`` median of the means of ``window``-frame bins.
+def _bin_median(frames: NDArray, window: int = 10, clamp_window: bool = True) -> NDArray:
+    """A robust average image: the median of ``window`` bin averages.
 
-    The first ``window * (T // window)`` frames are reshaped to ``(window, T // window, H, W)``
-    and averaged over axis 0, so a bin holds frames ``T // window`` apart, not consecutive ones;
-    then the median over bins. ``window`` is clamped to ``T`` for short inputs, and both
-    reductions ignore NaNs (``nanmean``/``nanmedian``), as in CaImAn.
+    The first ``window * (T // window)`` frames are split into ``window`` bins of frames
+    spaced ``T // window`` apart (not consecutive ones), each bin is averaged, and the
+    median of those averages is returned. NaNs are ignored.
 
-    CaImAn ``bin_median`` L1008; jnormcorre ``bin_median`` L690.
+    Parameters
+    ----------
+    frames : array, ``(T, H, W)``
+        The movie.
+    window : int
+        Number of bins.
+    clamp_window : bool
+        Use ``min(window, T)`` bins, as CaImAn's module function does; False is CaImAn's
+        movie method, which does not clamp.
+
+    Returns
+    -------
+    array, ``(H, W)``
+        The median image.
+
+    Notes
+    -----
+    CaImAn ``bin_median`` L1008 and ``caiman/base/movies.py`` ``bin_median`` L175;
+    jnormcorre ``bin_median`` L690.
     """
-    raise NotImplementedError
+    T, d1, d2 = frames.shape
+    if clamp_window and T < window:
+        window = T
+    num_windows = int(T // window)
+    num_frames = num_windows * window
+    binned = np.reshape(frames[:num_frames], (window, num_windows, d1, d2))
+    return np.nanmedian(np.nanmean(binned, axis=0), axis=0)
+
+
+def _extract_shifts(frames: NDArray, max_shift_w: int, max_shift_h: int, template: NDArray) -> NDArray:
+    """Find each frame's rigid correction by template matching, for the template sample only.
+
+    The template, cropped by the maximum shift on every side, is slid over each frame
+    (normalised cross-correlation); the best position, refined to sub-pixel by a
+    log-parabola through its neighbours, gives the shift.
+
+    Parameters
+    ----------
+    frames : array, ``(T, H, W)``
+        Frames to register.
+    max_shift_w, max_shift_h : int
+        Largest shift searched for along x and y.
+    template : array, ``(H, W)``
+        The image to register to.
+
+    Returns
+    -------
+    array, ``(T, 2)``
+        Per frame, the ``(y, x)`` correction.
+
+    Notes
+    -----
+    CaImAn ``caiman/base/movies.py`` ``extract_shifts`` L216.
+    """
+    min_val = np.percentile(frames, 1)
+    if min_val < -0.1:
+        frames = frames - min_val
+    frames = np.asarray(frames, dtype=np.float32)
+    _, h_i, w_i = frames.shape
+    ms_w, ms_h = max_shift_w, max_shift_h
+    if np.percentile(template, 8) < -0.1:
+        template = template - np.percentile(template, 1)
+    template = template[ms_h : h_i - ms_h, ms_w : w_i - ms_w].astype(np.float32)
+
+    shifts = np.empty((len(frames), 2))
+    for i, frame in enumerate(frames):
+        res = cv2.matchTemplate(frame, template, cv2.TM_CCORR_NORMED)
+        top_left = cv2.minMaxLoc(res)[3]
+        sh_y, sh_x = top_left
+        if (0 < top_left[1] < 2 * ms_h - 1) & (0 < top_left[0] < 2 * ms_w - 1):
+            log_xm1_y = np.log(res[sh_x - 1, sh_y])
+            log_xp1_y = np.log(res[sh_x + 1, sh_y])
+            log_x_ym1 = np.log(res[sh_x, sh_y - 1])
+            log_x_yp1 = np.log(res[sh_x, sh_y + 1])
+            four_log_xy = 4 * np.log(res[sh_x, sh_y])
+            sh_x_n = -(sh_x - ms_h + ((log_xm1_y - log_xp1_y) / (2 * log_xm1_y - four_log_xy + 2 * log_xp1_y)))
+            sh_y_n = -(sh_y - ms_w + ((log_x_ym1 - log_x_yp1) / (2 * log_x_ym1 - four_log_xy + 2 * log_x_yp1)))
+        else:
+            sh_x_n = -(sh_x - ms_h)
+            sh_y_n = -(sh_y - ms_w)
+        shifts[i] = sh_x_n, sh_y_n
+    return shifts
+
+
+def _apply_shifts_cubic(frames: NDArray, shifts: NDArray) -> NDArray:
+    """Move each frame by its correction with cubic interpolation, for the template sample only.
+
+    Edges are reflected and each frame is clipped to its own original range.
+
+    Parameters
+    ----------
+    frames : array, ``(T, H, W)``
+        Frames to shift.
+    shifts : array, ``(T, 2)``
+        Per frame, the ``(y, x)`` correction.
+
+    Returns
+    -------
+    array, ``(T, H, W)`` float32
+        The shifted frames (a copy).
+
+    Notes
+    -----
+    CaImAn ``caiman/base/movies.py`` ``apply_shifts`` L308, ``interpolation='cubic'``.
+    """
+    out = np.array(frames, dtype=np.float32)
+    _, h, w = out.shape
+    for i, frame in enumerate(out):
+        sh_x_n, sh_y_n = shifts[i]
+        M = np.float32([[1, 0, sh_y_n], [0, 1, sh_x_n]])
+        min_, max_ = np.min(frame), np.max(frame)
+        warped = cv2.warpAffine(frame, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REFLECT)
+        out[i] = np.clip(warped, min_, max_)
+    return out
 
 
 def _register_sample(frames: NDArray, max_shifts: tuple[int, int]) -> NDArray:
-    """CaImAn's template-free registration of the template sample; returns the registered frames.
+    """Register a sample of frames without a template, to build the first template.
 
-    ``movie.motion_correct(max_shifts[1], max_shifts[0], template=None)``: take every
-    ``max(1, T / (1e8 / (H*W)))``-th frame, template = bin median; register by normalised
-    cross-correlation (``cv2.matchTemplate`` ``TM_CCORR_NORMED`` on the template cropped by
-    ``max_shifts``, sub-pixel by a log-parabola through the peak's neighbours); shift with
-    cubic interpolation; new template = bin median; register all frames to it, take the bin
-    median, register all frames to that and return them. CaImAn ``caiman/base/movies.py``
-    ``motion_correct`` L97, ``extract_shifts`` L216, ``apply_shifts`` L308.
+    Three rounds: register the sample to its own median image, take the median of the
+    result as a better template, register to that, take the median again, and register a
+    last time. Shifts come from template matching (:func:`_extract_shifts`) and are
+    applied with cubic interpolation (:func:`_apply_shifts_cubic`). The caller takes the
+    median of the returned frames as the initial template.
+
+    Parameters
+    ----------
+    frames : array, ``(T, H, W)``
+        The sample (every ``T // 50 + 1``-th frame of the first epoch).
+    max_shifts : tuple of int
+        Largest shift searched for, ``(y, x)``.
+
+    Returns
+    -------
+    array, ``(T, H, W)`` float32
+        The registered sample.
+
+    Notes
+    -----
+    CaImAn ``movie.motion_correct(max_shifts[1], max_shifts[0], template=None)``,
+    ``caiman/base/movies.py`` L97. Very large frames are subsampled further, to at most
+    ``1e8 / (H * W)`` frames, as there.
     """
-    raise NotImplementedError
+    max_shift_h, max_shift_w = max_shifts
+    T, H, W = frames.shape
+    frames_to_skip = int(np.maximum(1, T / (10e7 / (H * W))))
+    submov = frames[::frames_to_skip].copy()
+    template = _bin_median(submov, clamp_window=False)
+    submov = _apply_shifts_cubic(submov, _extract_shifts(submov, max_shift_w, max_shift_h, template))
+    template = _bin_median(submov, clamp_window=False)
+    registered = _apply_shifts_cubic(frames, _extract_shifts(frames, max_shift_w, max_shift_h, template))
+    template = _bin_median(registered, clamp_window=False)
+    return _apply_shifts_cubic(frames, _extract_shifts(frames, max_shift_w, max_shift_h, template))
+
+
+def _dft(img: NDArray, real_input: bool) -> NDArray:
+    """The scaled 2-D Fourier transform of an image, as CaImAn computes it with OpenCV.
+
+    Parameters
+    ----------
+    img : array, ``(H, W)``
+        The image.
+    real_input : bool
+        True transforms the real image directly (``register_translation``); False
+        transforms it as a two-channel complex image (``apply_shifts_dft`` with
+        ``is_freq=False``, L1704). The two agree to rounding; the choice keeps CaImAn's.
+
+    Returns
+    -------
+    array, ``(H, W)`` complex128
+        The spectrum, divided by ``H * W``.
+    """
+    flags = cv2.DFT_COMPLEX_OUTPUT + cv2.DFT_SCALE
+    freq = cv2.dft(img if real_input else np.dstack([np.real(img), np.imag(img)]), flags=flags)
+    return np.asarray(freq[:, :, 0] + 1j * freq[:, :, 1], dtype=np.complex128)
+
+
+def _upsampled_dft(data: NDArray, upsampled_region_size: Any, upsample_factor: Any, axis_offsets: Any) -> NDArray:
+    """The inverse DFT of ``data`` on a small, finely sampled region, by matrix multiplication.
+
+    Used to refine a cross-correlation peak to sub-pixel precision without zero-padding the
+    whole spectrum.
+
+    Parameters
+    ----------
+    data : array, ``(H, W)`` complex
+        The spectrum.
+    upsampled_region_size : int or sequence of int
+        Size of the output region, in upsampled pixels.
+    upsample_factor : float
+        How many output samples per original pixel.
+    axis_offsets : sequence of float or None
+        Where the region starts, in upsampled pixels.
+
+    Returns
+    -------
+    array, complex
+        The region, ``upsampled_region_size`` in each dimension.
+
+    Notes
+    -----
+    CaImAn ``_upsampled_dft`` L1168, from scikit-image.
+    """
+    if not hasattr(upsampled_region_size, "__iter__"):
+        upsampled_region_size = [upsampled_region_size] * data.ndim
+    if axis_offsets is None:
+        axis_offsets = [0] * data.ndim
+    col_kernel = np.exp(
+        (-1j * 2 * np.pi / (data.shape[1] * upsample_factor))
+        * (np.fft.ifftshift(np.arange(data.shape[1]))[:, None] - np.floor(data.shape[1] // 2)).dot(
+            np.arange(upsampled_region_size[1])[None, :] - axis_offsets[1]
+        )
+    )
+    row_kernel = np.exp(
+        (-1j * 2 * np.pi / (data.shape[0] * upsample_factor))
+        * (np.arange(upsampled_region_size[0])[:, None] - axis_offsets[0]).dot(
+            np.fft.ifftshift(np.arange(data.shape[0]))[None, :] - np.floor(data.shape[0] // 2)
+        )
+    )
+    output = np.tensordot(row_kernel, data, axes=[1, 0])
+    return np.tensordot(output, col_kernel, axes=[1, 0])
+
+
+def _register_translation_image(
+    src_image: NDArray,
+    target_image: NDArray,
+    upsample_factor: int,
+    max_shifts: tuple[int, int],
+    shifts_lb: NDArray | None,
+    shifts_ub: NDArray | None,
+) -> tuple[NDArray, float]:
+    """How far one image is translated relative to another, by phase correlation.
+
+    The integer peak of the cross-correlation is found within the allowed range, then
+    refined to ``1 / upsample_factor`` pixel with :func:`_upsampled_dft`.
+
+    Parameters
+    ----------
+    src_image : array, ``(H, W)``
+        The image to register (a frame or a patch of it).
+    target_image : array, ``(H, W)``
+        The template (or the same patch of it).
+    upsample_factor : int
+        Sub-pixel precision, in fractions of a pixel.
+    max_shifts : tuple of int
+        Largest shift searched for, ``(y, x)``, when no bounds are given.
+    shifts_lb, shifts_ub : array of int, ``(2,)``, or None
+        If given, the shift is searched for in ``[shifts_lb, shifts_ub]`` instead
+        (CaImAn L1586-1600); used to keep patch shifts near the rigid one.
+
+    Returns
+    -------
+    shift : array, ``(2,)``
+        The ``(y, x)`` translation of ``src_image``; the correction is its negative.
+    diffphase : float
+        The global phase difference at the peak, used by the Fourier-domain shift.
+
+    Notes
+    -----
+    CaImAn ``register_translation`` L1454; jnormcorre ``register_translation_jax_simple``
+    L903; masknmf ``estimate_rigid_shifts`` L99.
+    """
+    src_freq = _dft(src_image, real_input=True)
+    target_freq = _dft(target_image, real_input=True)
+
+    shape = src_freq.shape
+    image_product = src_freq * target_freq.conj()
+    image_product_cv = np.dstack([np.real(image_product), np.imag(image_product)])
+    cross_correlation = cv2.dft(image_product_cv, flags=cv2.DFT_INVERSE + cv2.DFT_SCALE)
+    cross_correlation = cross_correlation[:, :, 0] + 1j * cross_correlation[:, :, 1]
+
+    new_cross_corr = np.abs(cross_correlation)
+    if shifts_lb is not None and shifts_ub is not None:
+        if (shifts_lb[0] < 0) and (shifts_ub[0] >= 0):
+            new_cross_corr[shifts_ub[0] : shifts_lb[0], :] = 0
+        else:
+            new_cross_corr[: shifts_lb[0], :] = 0
+            new_cross_corr[shifts_ub[0] :, :] = 0
+        if (shifts_lb[1] < 0) and (shifts_ub[1] >= 0):
+            new_cross_corr[:, shifts_ub[1] : shifts_lb[1]] = 0
+        else:
+            new_cross_corr[:, : shifts_lb[1]] = 0
+            new_cross_corr[:, shifts_ub[1] :] = 0
+    else:
+        new_cross_corr[max_shifts[0] : -max_shifts[0], :] = 0
+        new_cross_corr[:, max_shifts[1] : -max_shifts[1]] = 0
+
+    maxima = np.unravel_index(np.argmax(new_cross_corr), cross_correlation.shape)
+    midpoints = np.array([np.trunc(axis_size // 2) for axis_size in shape])
+    shifts = np.array(maxima, dtype=np.float64)
+    shifts[shifts > midpoints] -= np.array(shape)[shifts > midpoints]
+
+    if upsample_factor == 1:
+        CCmax = cross_correlation.max()
+    else:
+        shifts = np.round(shifts * upsample_factor) / upsample_factor
+        upsampled_region_size = np.ceil(upsample_factor * 1.5)
+        dftshift = np.trunc(upsampled_region_size / 2.0)
+        factor = np.array(upsample_factor, dtype=np.float64)
+        normalization = src_freq.size * factor**2
+        sample_region_offset = dftshift - shifts * factor
+        cross_correlation = _upsampled_dft(
+            image_product.conj(), upsampled_region_size, factor, sample_region_offset
+        ).conj()
+        cross_correlation /= normalization
+        maxima = np.array(
+            np.unravel_index(np.argmax(np.abs(cross_correlation)), cross_correlation.shape), dtype=np.float64
+        )
+        maxima -= dftshift
+        shifts = shifts + (maxima / factor)
+        CCmax = cross_correlation.max()
+
+    for dim in range(src_freq.ndim):
+        if shape[dim] == 1:
+            shifts[dim] = 0
+    return shifts, float(np.arctan2(CCmax.imag, CCmax.real))
 
 
 def _register_translation(
@@ -123,16 +472,40 @@ def _register_translation(
     shifts_lb: NDArray | None = None,
     shifts_ub: NDArray | None = None,
 ) -> tuple[NDArray, NDArray]:
-    """Per frame, the ``(y, x)`` shift of ``frames`` relative to ``template`` and the global phase difference.
+    """The rigid translation of every frame relative to the template.
 
-    Cross-power spectrum, integer peak within ``max_shifts``, or within ``[shifts_lb, shifts_ub]``
-    instead when bounds are given (CaImAn L1586-1600),
-    upsampled-DFT refinement to ``1/upsample_factor`` px. Returns CaImAn's ``rigid_shts``
-    (the correction is its negative) ``(T, 2)`` and ``diffphase`` ``(T,)``.
-    CaImAn ``register_translation`` L1454; jnormcorre ``register_translation_jax_simple`` L903;
-    masknmf ``estimate_rigid_shifts`` L99.
+    Parameters
+    ----------
+    frames : array, ``(T, H, W)``
+        Frames to register.
+    template : array, ``(H, W)``
+        The template.
+    max_shifts : tuple of int
+        Largest shift searched for, ``(y, x)``.
+    upsample_factor : int
+        Sub-pixel precision, in fractions of a pixel.
+    shifts_lb, shifts_ub : array of int, ``(2,)``, optional
+        Search range replacing ``max_shifts``; see :func:`_register_translation_image`.
+
+    Returns
+    -------
+    shifts : array, ``(T, 2)``
+        Per frame, its ``(y, x)`` translation (CaImAn ``rigid_shts``); the correction is the
+        negative.
+    diffphase : array, ``(T,)``
+        Per frame, the phase difference at the correlation peak.
+
+    Notes
+    -----
+    CaImAn ``register_translation`` L1454, frame by frame.
     """
-    raise NotImplementedError
+    shifts = np.empty((len(frames), 2))
+    diffphase = np.empty(len(frames))
+    for t, img in enumerate(frames):
+        shifts[t], diffphase[t] = _register_translation_image(
+            img, template, upsample_factor, max_shifts, shifts_lb, shifts_ub
+        )
+    return shifts, diffphase
 
 
 def _register_patches(
@@ -494,16 +867,6 @@ class RegisterNormcorreImagingEpoch(RegisterImagingEpoch):
         return _apply_pw_shifts_remap(
             plane_video, patches[start_frame:end_frame], centers, settings.border_nan, interpolate
         )
-
-
-def compute_motion_metrics(
-    imaging: BaseImaging, motion: NormcorreMotion | None = None, template: NDArray | None = None
-) -> dict[str, Any]:
-    """Registration quality: per-frame correlation to the template, optical-flow residual, crispness.
-
-    CaImAn ``compute_metrics_motion_correction`` L2650.
-    """
-    raise NotImplementedError
 
 
 # ``register_registration_class("normcorre", RegisterNormcorreImagingEpoch)`` is added
