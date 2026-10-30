@@ -20,7 +20,7 @@ its first movie with enough spikes is run.
     python benchmark_dandi_000168.py --data-dir /scratch --cells <path> --results-dir /results   # one file, e.g. a task
 
 Needs the photon-mosaic environment (pynwb, h5py, requests, oasis, and suite2p for the surround neuropil: ``pip
-install "photon-mosaic[suite2p-registration]"``) and ``CAIMAN_PYTHON`` pointing at an environment with CaImAn. A cell
+install "photon-mosaic[suite2p]"``) and ``CAIMAN_PYTHON`` pointing at an environment with CaImAn. A cell
 takes a few minutes plus its download (the files are 1 to 23 GB; ``--delete-nwb`` removes each one once it is
 processed). Finished cells are skipped, so a run can be interrupted and resumed. A file that fails is logged to
 ``<results-dir>/<file>.failed`` and the run continues (failed files are retried next time); the exit status is 1 if
