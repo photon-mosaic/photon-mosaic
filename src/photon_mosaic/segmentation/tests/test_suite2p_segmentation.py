@@ -173,8 +173,17 @@ class TestRunSuite2pUnmocked:
             return scale, mode
 
         monkeypatch.setattr(sparsedetect, "find_best_scale", record_mode)
+        # Slow, frequent transients so sparsery's scale estimate does not depend on the seed:
+        # with the generator's GCaMP8s defaults (decay_time=0.5, event_rate=0.3) it falls back to forced.
         _, imaging, _ = generate_imaging_with_rois(
-            num_frames=300, height=64, width=64, num_rois=10, radius_range=(4, 6), seed=0
+            num_frames=300,
+            height=64,
+            width=64,
+            num_rois=10,
+            radius_range=(4, 6),
+            decay_time=2.0,
+            event_rate=1.0,
+            seed=0,
         )
 
         rois = run_segmentation(imaging, method="suite2p", folder=tmp_path / "seg")
