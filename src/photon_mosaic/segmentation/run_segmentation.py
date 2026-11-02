@@ -160,10 +160,7 @@ def run_segmentation(
     if run_kwargs["badframes"]:
         badframes_per_epoch: dict[str, Any] = {f"epoch{ep}": b for ep, b in zip(selected, bf_per_ep) if b is not None}
         np.savez(folder / "badframes.npz", **badframes_per_epoch)
-    if imaging.check_serializability("json"):
-        imaging.dump_to_json(folder / "imaging.json")
-    else:
-        logging.info("Imaging is not json-serializable; imaging.json not written to %s", folder)
+    _dump_imaging_provenance(imaging, folder)
 
     log: dict[str, Any] = {
         "method": method,
@@ -240,6 +237,24 @@ def read_segmentation_output(
             rois.register_imaging(imaging)
         results[ep_idx] = rois
     return EpochSegmentations(results)
+
+
+def _dump_imaging_provenance(imaging: BaseImaging, folder: Path) -> None:
+    """Write ``imaging.json``, else ``imaging.pickle``; provenance never fails the run.
+
+    ``check_serializability`` only inspects nested extractors, so a json dump
+    can still fail on some other kwarg; fall back to pickle in that case.
+    """
+    if imaging.check_serializability("json"):
+        try:
+            imaging.dump_to_json(folder / "imaging.json")
+            return
+        except (TypeError, ValueError) as exc:
+            logging.warning("Could not write imaging.json (%s); trying pickle instead.", exc)
+    if imaging.check_serializability("pickle"):
+        imaging.dump_to_pickle(folder / "imaging.pickle")
+    else:
+        logging.warning("Imaging is not serializable; no imaging provenance written to %s", folder)
 
 
 def _write_log(folder: Path, log: dict[str, Any]) -> None:

@@ -137,6 +137,49 @@ def get_registration_class(method: str) -> type:
     return _registered_registration_classes[method]
 
 
+def _encode_motion_value(value: Any) -> Any:
+    """Tag ndarrays, torch tensors and tuples so :func:`_decode_motion_value` restores them exactly.
+
+    JSON turns all three into plain lists, which would lose dtypes (an int16
+    reference image would come back as int64), shapes of empty arrays, and
+    tuple-ness (suite2p ``blocks``). Arrays are kept as arrays here:
+    ``SIJsonEncoder`` only converts them to lists when dumping to json, and
+    pickling keeps them as they are.
+    """
+
+    if isinstance(value, np.ndarray):
+        return {"__ndarray__": value, "dtype": value.dtype.name, "shape": list(value.shape)}
+    if type(value).__module__.split(".")[0] == "torch":
+        array = value.detach().cpu().numpy()
+        return {"__tensor__": array, "dtype": array.dtype.name, "shape": list(array.shape)}
+    if isinstance(value, tuple):
+        return {"__tuple__": [_encode_motion_value(v) for v in value]}
+    if isinstance(value, list):
+        return [_encode_motion_value(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _encode_motion_value(v) for k, v in value.items()}
+    return value
+
+
+def _decode_motion_value(value: Any) -> Any:
+    """Inverse of :func:`_encode_motion_value`, for dicts fresh from json or still holding arrays."""
+
+    if isinstance(value, dict):
+        if "__ndarray__" in value:
+            return np.asarray(value["__ndarray__"], dtype=value["dtype"]).reshape(value["shape"])
+        if "__tensor__" in value:
+            import torch  # noqa: PLC0415
+
+            array = np.asarray(value["__tensor__"], dtype=value["dtype"]).reshape(value["shape"])
+            return torch.from_numpy(array.copy())
+        if "__tuple__" in value:
+            return tuple(_decode_motion_value(v) for v in value["__tuple__"])
+        return {k: _decode_motion_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_decode_motion_value(v) for v in value]
+    return value
+
+
 class Motion:
     """Algorithm-agnostic container for motion correction artifacts.
 
@@ -273,6 +316,53 @@ class Motion:
         """Backend-specific estimation. Implemented by each subclass."""
 
         raise NotImplementedError(f"{cls.__name__} does not implement motion estimation.")
+
+    def _to_dict_kwargs(self) -> dict[str, Any]:
+        """Constructor kwargs, minus ``imaging``, that rebuild this motion.
+
+        Subclasses with extra constructor arguments extend this via ``super()``.
+        """
+
+        return dict(
+            displacements=self.displacements,
+            reference=self.reference,
+            yranges=self.yranges,
+            xranges=self.xranges,
+            corrected_badframes=self.corrected_badframes,
+            metadata=self.metadata,
+        )
+
+    @classmethod
+    def _from_dict_kwargs(cls, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Inverse of :meth:`_to_dict_kwargs`, for subclasses that store a compacted form."""
+
+        return kwargs
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a json-serializable description of this motion (with ``SIJsonEncoder``).
+
+        ``imaging`` is not included: the owner of the motion (e.g.
+        :class:`photon_mosaic.preprocessing.registration.RegisterImaging`)
+        serializes it already and passes it back to :meth:`from_dict`.
+        """
+
+        return {
+            "object": "Motion",
+            "method": self.method_name,
+            "kwargs": _encode_motion_value(self._to_dict_kwargs()),
+        }
+
+    @classmethod
+    def from_dict(cls, motion_dict: dict[str, Any], imaging: BaseImaging) -> "Motion":
+        """Rebuild a motion from :meth:`to_dict` output, as is or reloaded from json.
+
+        Called on :class:`Motion` itself, the subclass is resolved from the
+        stored ``method``; called on a subclass, that subclass is used.
+        """
+
+        method = motion_dict.get("method")
+        target = _get_motion_class(method) if cls is Motion and method is not None else cls
+        return target(imaging=imaging, **target._from_dict_kwargs(_decode_motion_value(motion_dict["kwargs"])))
 
     @property
     def num_epochs(self) -> int:

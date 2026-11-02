@@ -1,8 +1,11 @@
 """Test core Motion"""
 
+import json
+
 import numpy as np
 import pytest
 from pydantic_settings import BaseSettings
+from spikeinterface.core.core_tools import SIJsonEncoder
 
 from photon_mosaic.core import Motion, compute_motion, generate_random_imaging, register_motion_class
 from photon_mosaic.core.motion import (
@@ -190,3 +193,45 @@ class TestCoerceSettings:
     def test_wrong_type_raises(self):
         with pytest.raises(TypeError):
             _coerce_settings(3.14, DummySettings)
+
+
+class TestMotionDict:
+    @pytest.fixture()
+    def imaging(self):
+        return generate_random_imaging(num_frames=4, height=8, width=9, num_planes=2, sampling_frequency=30.0, seed=0)
+
+    @staticmethod
+    def _through_json(motion):
+        return json.loads(json.dumps(motion.to_dict(), cls=SIJsonEncoder))
+
+    def test_round_trip_keeps_dtypes_shapes_and_tuples(self, imaging):
+        motion = Motion(
+            imaging=imaging,
+            displacements=[np.arange(16, dtype=np.int64).reshape(4, 2, 2), np.zeros((0, 2, 2))],
+            reference=[np.ones((8, 9), dtype=np.int16)] * 2,
+            yranges=[[(1, 7), (0, 8)]] * 2,
+            xranges=[[(1, 8), (0, 9)]] * 2,
+            corrected_badframes=[np.array([False, True, False, False]), np.zeros(0, dtype=bool)],
+            metadata={"note": "hi"},
+        )
+
+        restored = Motion.from_dict(self._through_json(motion), imaging=imaging)
+
+        assert type(restored) is Motion
+        assert restored.imaging is imaging
+        assert restored.displacements[0].dtype == np.int64
+        np.testing.assert_array_equal(restored.displacements[0], motion.displacements[0])
+        assert restored.displacements[1].shape == (0, 2, 2)
+        assert restored.reference[0].dtype == np.int16
+        assert restored.yranges == motion.yranges
+        assert isinstance(restored.yranges[0][0], tuple)
+        assert restored.corrected_badframes[0].dtype == bool
+        np.testing.assert_array_equal(restored.corrected_badframes[0], motion.corrected_badframes[0])
+        assert restored.metadata == {"note": "hi"}
+
+    def test_from_dict_dispatches_on_method(self, imaging, registered_dummy):
+        motion = DummyMotion(imaging=imaging, displacements=[np.zeros((4, 2, 2))])
+
+        restored = Motion.from_dict(self._through_json(motion), imaging=imaging)
+
+        assert type(restored) is DummyMotion

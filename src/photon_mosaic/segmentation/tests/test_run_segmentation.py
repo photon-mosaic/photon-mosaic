@@ -117,6 +117,31 @@ def test_folder_contents_and_imaging_registered(imaging, tmp_path):
     assert log["run_time"] is not None
 
 
+def test_registered_imaging_provenance_is_json(imaging, tmp_path):
+    from photon_mosaic.preprocessing import RegisterImaging
+    from photon_mosaic.preprocessing.suite2p_registration import Suite2PMotion
+
+    motion = Suite2PMotion(imaging=imaging, displacements=[np.zeros((2, 1, 2)), np.zeros((3, 1, 2))], ops={})
+    registered = RegisterImaging(imaging, motion)
+
+    run_segmentation(registered, method="dummy", folder=tmp_path / "seg")
+
+    assert (tmp_path / "seg" / "imaging.json").is_file()
+
+
+def test_imaging_provenance_falls_back_to_pickle(imaging, tmp_path, monkeypatch):
+    def failing_dump_to_json(*args, **kwargs):
+        raise TypeError("Object of type Foo is not JSON serializable")
+
+    monkeypatch.setattr(imaging, "dump_to_json", failing_dump_to_json)
+
+    rois = run_segmentation(imaging, method="dummy", folder=tmp_path / "seg")
+
+    assert rois.get_num_rois() == 2
+    assert not (tmp_path / "seg" / "imaging.json").exists()
+    assert (tmp_path / "seg" / "imaging.pickle").is_file()
+
+
 def test_existing_folder(imaging, tmp_path):
     folder = tmp_path / "seg"
     folder.mkdir()

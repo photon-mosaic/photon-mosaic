@@ -69,11 +69,18 @@ class RegisterImaging(BasePreprocessor):
     def __init__(
         self,
         imaging: BaseImaging,
-        motion: Motion,
+        motion: Motion | dict[str, Any],
         method: KnownMotionMethod | str = "suite2p",
         **kwargs: Any,
     ) -> None:
-        """Build an imaging view that applies stored motion fields lazily."""
+        """Build an imaging view that applies stored motion fields lazily.
+
+        ``motion`` may also be a :meth:`Motion.to_dict` dict, which is what
+        this class receives when it is reloaded from json or pickle.
+        """
+        if isinstance(motion, dict):
+            motion = Motion.from_dict(motion, imaging=imaging)
+
         BasePreprocessor.__init__(self, imaging)
 
         if motion.num_epochs != len(imaging.epochs):
@@ -86,7 +93,8 @@ class RegisterImaging(BasePreprocessor):
         for epoch_idx, parent_epoch in enumerate(imaging.epochs):
             self.add_epoch(registration_class(parent_epoch, motion, epoch_idx, **kwargs))
 
-        self._kwargs = dict(imaging=imaging, motion=motion, method=method, **kwargs)
+        # store motion as a dict: SpikeInterface can only serialize extractors and plain data
+        self._kwargs = dict(imaging=imaging, motion=motion.to_dict(), method=method, **kwargs)
 
 
 class RegisterImagingEpoch(BasePreprocessorEpoch):
@@ -120,15 +128,14 @@ class RegisterImagingEpoch(BasePreprocessorEpoch):
         num_samples = self.parent_imaging_epoch.get_num_samples()
         if end_frame > num_samples:
             logging.warning(
-                "end_frame %d exceeds recording length %d; clamping. "
-                "This usually indicates a miscalculation upstream.",
+                "end_frame %d exceeds recording length %d; clamping. This usually indicates a miscalculation upstream.",
                 end_frame,
                 num_samples,
             )
             end_frame = num_samples
         if start_frame > end_frame:
             raise ValueError(
-                f"start_frame ({start_frame}) is past end_frame ({end_frame}); " f"recording length is {num_samples}."
+                f"start_frame ({start_frame}) is past end_frame ({end_frame}); recording length is {num_samples}."
             )
 
         video = self.parent_imaging_epoch.get_series(start_frame, end_frame)
