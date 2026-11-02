@@ -1,6 +1,8 @@
+import importlib.metadata
 import logging
 import time
-from typing import Any, Literal, Sequence
+from pathlib import Path
+from typing import Any, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -9,6 +11,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from photon_mosaic.core import BaseImaging
 from photon_mosaic.extractors.suite2prois import Suite2pRois
+
+from .basesegmentation import BaseSegmentation, register_segmentation_class
 
 
 class Suite2pSegmentationSettings(BaseSettings):
@@ -103,116 +107,6 @@ class Suite2pSegmentationSettings(BaseSettings):
             }
         )
         return base
-
-
-class Suite2pEpochSegmentations:
-    """Container of per-epoch :class:`Suite2pRois` results.
-
-    Returned by :func:`detect_rois_suite2p` when ``scope='per_epoch'`` so that
-    each epoch keeps its own ROI set, mirroring the per-epoch structure used by
-    motion correction.
-    """
-
-    def __init__(self, segmentations: dict[int, Suite2pRois]) -> None:
-        """Wrap an ``{epoch_index: rois}`` mapping.
-
-        Parameters
-        ----------
-        segmentations : dict[int, Suite2pRois]
-            One entry per processed epoch.
-        """
-        self._segmentations = dict(segmentations)
-        self.epoch_indices: list[int] = sorted(self._segmentations)
-
-    def __getitem__(self, epoch_index: int) -> Suite2pRois:
-        """Return the ROIs detected for ``epoch_index``."""
-        return self._segmentations[epoch_index]
-
-    def __iter__(self):
-        return iter(self.epoch_indices)
-
-    def __len__(self) -> int:
-        return len(self._segmentations)
-
-    def items(self):
-        """Iterate ``(epoch_index, rois)`` pairs in epoch order."""
-        return ((i, self._segmentations[i]) for i in self.epoch_indices)
-
-
-def _coerce_segmentation_settings(
-    settings: Suite2pSegmentationSettings | dict[str, Any] | None,
-) -> Suite2pSegmentationSettings:
-    """Normalize user-provided settings into a validated settings object."""
-    if settings is None:
-        return Suite2pSegmentationSettings()
-    if isinstance(settings, dict):
-        return Suite2pSegmentationSettings(**settings)
-    return settings
-
-
-def _resolve_ranges(
-    value: Sequence[int] | Sequence[Sequence[int]] | None,
-    n_epochs: int,
-    *,
-    default: Sequence[int],
-    label: str,
-) -> list[list[int]]:
-    """Expand a y/x range argument into one ``[lo, hi]`` per epoch.
-
-    Accepts ``None`` (use ``default`` for every epoch), a flat ``[lo, hi]``
-    pair (broadcast to every epoch), or a ``(n_epochs, 2)`` sequence with one
-    range per epoch.
-    """
-    if value is None:
-        return [list(default) for _ in range(n_epochs)]
-    arr = np.asarray(value)
-    if arr.ndim == 1:
-        if arr.shape[0] != 2:
-            raise ValueError(f"{label} must have length 2, got shape {arr.shape}")
-        return [arr.tolist() for _ in range(n_epochs)]
-    if arr.ndim == 2:
-        if arr.shape != (n_epochs, 2):
-            raise ValueError(f"{label} must have shape ({n_epochs}, 2), got {arr.shape}")
-        return [list(row) for row in arr.tolist()]
-    raise ValueError(f"{label} must be 1D or 2D, got ndim={arr.ndim}")
-
-
-def _resolve_badframes(
-    value: NDArray[np.bool_] | Sequence[NDArray[np.bool_] | None] | None,
-    n_epochs: int,
-    frame_counts: Sequence[int],
-) -> list[NDArray[np.bool_] | None]:
-    """Normalize a badframes argument into one boolean array (or None) per epoch.
-
-    Accepts ``None``, a single flat ``(total_frames,)`` boolean array (split
-    along ``frame_counts``), or a per-epoch sequence of per-epoch arrays.
-    """
-    if value is None:
-        return [None] * n_epochs
-
-    if isinstance(value, np.ndarray):
-        total = int(sum(frame_counts))
-        if value.shape[0] != total:
-            raise ValueError(f"badframes length {value.shape[0]} does not match total frame count {total}")
-        out: list[NDArray[np.bool_] | None] = []
-        offset = 0
-        for n in frame_counts:
-            out.append(np.asarray(value[offset : offset + n], dtype=bool))
-            offset += n
-        return out
-
-    if len(value) != n_epochs:
-        raise ValueError(f"badframes list length {len(value)} does not match number of epochs {n_epochs}")
-    out = []
-    for i, (b, n) in enumerate(zip(value, frame_counts)):
-        if b is None:
-            out.append(None)
-            continue
-        b_arr = np.asarray(b, dtype=bool)
-        if b_arr.shape[0] != n:
-            raise ValueError(f"badframes[{i}] length {b_arr.shape[0]} does not match epoch frame count {n}")
-        out.append(b_arr)
-    return out
 
 
 def _read_plane_range(
@@ -412,161 +306,103 @@ def _detect_rois_from_mov(
     )
 
 
-def _detect_segmentation(
-    imaging: BaseImaging,
-    epoch_indices: Sequence[int],
-    yrange: Sequence[int],
-    xrange: Sequence[int],
-    badframes: NDArray[np.bool_] | None,
-    cfg: Suite2pSegmentationSettings,
-) -> Suite2pRois:
-    """Bin and detect ROIs over a single contiguous span of epochs."""
-    H, W, n_planes = imaging.shape
+@register_segmentation_class
+class Suite2pSegmentation(BaseSegmentation):
+    """Suite2p ROI detection, streamed from the imaging object.
 
-    n_frames = int(sum(imaging.get_num_samples(segment_index=i) for i in epoch_indices))
-    bin_size = int(max(1, n_frames // cfg.nbins, np.round(cfg.tau * cfg.fs)))
-
-    all_stats: list[dict[str, Any]] = []
-    plane_assignments: list[int] = []
-
-    for plane_index in range(n_planes):
-        logging.info(
-            "Suite2p detection — plane %d/%d (epochs %s)",
-            plane_index + 1,
-            n_planes,
-            list(epoch_indices),
-        )
-        t0 = time.time()
-
-        mov = _stream_bin_movie(
-            imaging,
-            plane_index=plane_index,
-            epoch_indices=epoch_indices,
-            bin_size=bin_size,
-            yrange=yrange,
-            xrange=xrange,
-            badframes=badframes,
-            nbins=cfg.nbins,
-        )
-
-        stat = _detect_rois_from_mov(
-            mov,
-            cfg=cfg,
-            Ly=H,
-            Lx=W,
-            yrange=yrange,
-            xrange=xrange,
-        )
-
-        logging.info("  found %d ROIs in %.1fs", len(stat), time.time() - t0)
-        all_stats.extend(stat)
-        plane_assignments.extend([plane_index] * len(stat))
-
-    rois = Suite2pRois.from_stat(
-        stats=all_stats,
-        shape=(H, W, n_planes),
-        sampling_frequency=imaging.sampling_frequency,
-        plane_assignments=np.array(plane_assignments, dtype=int),
-    )
-    rois.register_imaging(imaging)
-    return rois
-
-
-def detect_rois_suite2p(
-    imaging: BaseImaging,
-    yrange: Sequence[int] | Sequence[Sequence[int]] | None = None,
-    xrange: Sequence[int] | Sequence[Sequence[int]] | None = None,
-    badframes: NDArray[np.bool_] | Sequence[NDArray[np.bool_] | None] | None = None,
-    *,
-    scope: Literal["all_epochs", "per_epoch"] = "all_epochs",
-    epoch_indices: Sequence[int] | None = None,
-    settings: Suite2pSegmentationSettings | dict[str, Any] | None = None,
-) -> Suite2pRois | Suite2pEpochSegmentations:
-    """Detect ROIs using suite2p detection on a registered imaging object.
-
-    Honours the imaging Epoch model: ``scope='per_epoch'`` runs detection
-    independently per epoch and returns a :class:`Suite2pEpochSegmentations`,
-    while ``scope='all_epochs'`` (default) concatenates the selected epochs and
-    returns a single :class:`Suite2pRois`. Frames are pulled lazily via
-    :func:`BaseImagingEpoch.get_series` and stream-binned in place, so the full
-    raw movie is never materialised.
-
-    Parameters
-    ----------
-    imaging : BaseImaging
-        Motion-corrected imaging object.
-    yrange, xrange : sequence of int | sequence of sequence of int | None, optional
-        Valid pixel range ``[lo, hi]``. May be a single 1D pair (broadcast to
-        every epoch) or a 2D ``(n_epochs, 2)`` sequence with one pair per
-        epoch. ``None`` defaults to the full image extent. With
-        ``scope='all_epochs'`` per-epoch ranges must be uniform.
-    badframes : NDArray[bool] | sequence of NDArray[bool] | None, optional
-        Frames to exclude. May be a single flat ``(total_frames,)`` boolean
-        array or a per-epoch sequence (each shaped ``(n_frames_in_epoch,)``).
-    scope : {"all_epochs", "per_epoch"}, optional
-        ``"all_epochs"`` concatenates the selected epochs and returns one
-        :class:`Suite2pRois`. ``"per_epoch"`` runs detection per epoch and
-        returns a :class:`Suite2pEpochSegmentations`.
-    epoch_indices : sequence of int | None, optional
-        Epochs to include (in order). Defaults to all epochs of ``imaging``.
-    settings : Suite2pSegmentationSettings | dict | None, optional
-        Detection settings. Dicts are coerced into ``Suite2pSegmentationSettings``.
-
-    Returns
-    -------
-    Suite2pRois | Suite2pEpochSegmentations
-        Single ROI set when ``scope='all_epochs'``; one ROI set per epoch
-        otherwise.
+    Frames are pulled lazily via :func:`BaseImagingEpoch.get_series` and
+    stream-binned in place, so the full raw movie is never materialised.
+    Output is written in suite2p's layout, one ``plane{i}`` folder holding
+    ``stat.npy`` and ``ops.npy`` per plane, so each plane folder can also be
+    opened directly with :class:`Suite2pRois`.
     """
-    cfg = _coerce_segmentation_settings(settings)
-    H, W, _ = imaging.shape
 
-    selected = list(range(imaging.get_num_epochs())) if epoch_indices is None else list(epoch_indices)
-    n_eps = len(selected)
-    frame_counts = [int(imaging.get_num_samples(segment_index=i)) for i in selected]
+    method_name = "suite2p"
+    settings_class = Suite2pSegmentationSettings
 
-    yranges = _resolve_ranges(yrange, n_eps, default=[0, H], label="yrange")
-    xranges = _resolve_ranges(xrange, n_eps, default=[0, W], label="xrange")
-    bf_per_ep = _resolve_badframes(badframes, n_eps, frame_counts)
+    @classmethod
+    def is_installed(cls) -> bool:
+        try:
+            import suite2p  # noqa: F401, PLC0415
+        except ImportError:
+            return False
+        return True
 
-    if scope == "all_epochs":
-        if not all(yr == yranges[0] for yr in yranges):
-            raise ValueError(
-                "yrange differs across selected epochs; use scope='per_epoch' or pass a single uniform range."
+    @classmethod
+    def get_method_version(cls) -> str:
+        return importlib.metadata.version("suite2p")
+
+    @classmethod
+    def run_from_folder(
+        cls,
+        output_folder: Path,
+        imaging: BaseImaging,
+        epoch_indices: Sequence[int],
+        yrange: Sequence[int],
+        xrange: Sequence[int],
+        badframes: NDArray[np.bool_] | None,
+        settings: Suite2pSegmentationSettings,
+    ) -> None:
+        H, W, n_planes = imaging.shape
+
+        n_frames = int(sum(imaging.get_num_samples(segment_index=i) for i in epoch_indices))
+        bin_size = int(max(1, n_frames // settings.nbins, np.round(settings.tau * settings.fs)))
+
+        for plane_index in range(n_planes):
+            logging.info(
+                "Suite2p detection — plane %d/%d (epochs %s)",
+                plane_index + 1,
+                n_planes,
+                list(epoch_indices),
             )
-        if not all(xr == xranges[0] for xr in xranges):
-            raise ValueError(
-                "xrange differs across selected epochs; use scope='per_epoch' or pass a single uniform range."
-            )
+            t0 = time.time()
 
-        if any(b is not None for b in bf_per_ep):
-            merged_bf: NDArray[np.bool_] | None = np.concatenate(
-                [b if b is not None else np.zeros(n, dtype=bool) for b, n in zip(bf_per_ep, frame_counts)],
-                axis=0,
-            )
-        else:
-            merged_bf = None
-
-        return _detect_segmentation(
-            imaging,
-            epoch_indices=selected,
-            yrange=yranges[0],
-            xrange=xranges[0],
-            badframes=merged_bf,
-            cfg=cfg,
-        )
-
-    if scope == "per_epoch":
-        results: dict[int, Suite2pRois] = {}
-        for i, ep_idx in enumerate(selected):
-            results[ep_idx] = _detect_segmentation(
+            mov = _stream_bin_movie(
                 imaging,
-                epoch_indices=[ep_idx],
-                yrange=yranges[i],
-                xrange=xranges[i],
-                badframes=bf_per_ep[i],
-                cfg=cfg,
+                plane_index=plane_index,
+                epoch_indices=epoch_indices,
+                bin_size=bin_size,
+                yrange=yrange,
+                xrange=xrange,
+                badframes=badframes,
+                nbins=settings.nbins,
             )
-        return Suite2pEpochSegmentations(results)
 
-    raise ValueError(f"scope must be 'all_epochs' or 'per_epoch', got {scope!r}")
+            stat = _detect_rois_from_mov(
+                mov,
+                cfg=settings,
+                Ly=H,
+                Lx=W,
+                yrange=yrange,
+                xrange=xrange,
+            )
+
+            logging.info("  found %d ROIs in %.1fs", len(stat), time.time() - t0)
+
+            plane_folder = output_folder / f"plane{plane_index}"
+            plane_folder.mkdir()
+            # ops carries only what Suite2pRois needs to rebuild masks (full-frame Ly/Lx) and timing
+            ops = {"Ly": H, "Lx": W, "fs": imaging.sampling_frequency, "nplanes": n_planes}
+            np.save(plane_folder / "ops.npy", np.array(ops, dtype=object))
+            stat_array = np.empty(len(stat), dtype=object)
+            stat_array[:] = stat
+            np.save(plane_folder / "stat.npy", stat_array)
+
+    @classmethod
+    def read_rois_from_folder(cls, output_folder: Path) -> Suite2pRois:
+        ops = np.load(output_folder / "plane0" / "ops.npy", allow_pickle=True).item()
+        n_planes = int(ops["nplanes"])
+
+        all_stats: list[dict[str, Any]] = []
+        plane_assignments: list[int] = []
+        for plane_index in range(n_planes):
+            stat = list(np.load(output_folder / f"plane{plane_index}" / "stat.npy", allow_pickle=True))
+            all_stats.extend(stat)
+            plane_assignments.extend([plane_index] * len(stat))
+
+        return Suite2pRois.from_stat(
+            stats=all_stats,
+            shape=(int(ops["Ly"]), int(ops["Lx"]), n_planes),
+            sampling_frequency=float(ops["fs"]),
+            plane_assignments=np.array(plane_assignments, dtype=int),
+        )

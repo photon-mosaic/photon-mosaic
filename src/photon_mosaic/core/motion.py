@@ -7,6 +7,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from photon_mosaic.core import BaseImaging
+from photon_mosaic.core.core_tools import _coerce_settings
 
 # Editor autocomplete/typo-checking for the built-in methods. Not exhaustive:
 # any string registered via ``register_motion_class``/``register_registration_class``
@@ -134,24 +135,6 @@ def get_registration_class(method: str) -> type:
             "so its motion cannot be applied."
         )
     return _registered_registration_classes[method]
-
-
-def _coerce_settings(settings: Any, settings_class: type | None) -> Any:
-    """Turn ``None`` / a dict / a settings instance into ``settings_class``.
-
-    Returns ``settings`` unchanged when ``settings_class`` is ``None`` (a
-    backend without a settings model).
-    """
-
-    if settings_class is None:
-        return settings
-    if settings is None:
-        return settings_class()
-    if isinstance(settings, settings_class):
-        return settings
-    if isinstance(settings, dict):
-        return settings_class(**settings)
-    raise TypeError(f"'settings' must be None, a dict or a {settings_class.__name__}, got {type(settings).__name__}.")
 
 
 class Motion:
