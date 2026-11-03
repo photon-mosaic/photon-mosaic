@@ -145,8 +145,9 @@ class TestDetectRoisSuite2p:
 class TestDetectRoisSuite2pUnmocked:
     """Run suite2p's own detection end-to-end (no mocks)."""
 
-    def test_sparsery_runs_unmocked(self):
-        # The only test that runs _detect_rois_from_mov against real suite2p; the others mock it.
+    def test_sparsery_with_defaults(self):
+        # The only test where suite2p's detection runs: the others mock _detect_rois_from_mov,
+        # and the cellpose test below fails earlier, at settings validation.
         _, imaging, _ = generate_imaging_with_rois(
             num_frames=300, height=64, width=64, num_rois=10, radius_range=(4, 6), seed=0
         )
