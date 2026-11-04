@@ -86,6 +86,11 @@ def split_epochs(imaging: BaseImaging, epoch_indices: int | list[int]) -> Select
     return SelectEpochImaging(imaging=imaging, epoch_indices=epoch_indices)
 
 
+def split_imaging_by_epochs(imaging: BaseImaging) -> list[SelectEpochImaging]:
+    """Return a list of proxy imaging objects, each containing a single epoch."""
+    return [SelectEpochImaging(imaging=imaging, epoch_indices=i) for i in range(imaging.get_num_epochs())]
+
+
 class _FrameRangeEpoch(BaseImagingEpoch):
     """Lazy view over a contiguous frame range of a parent epoch."""
 

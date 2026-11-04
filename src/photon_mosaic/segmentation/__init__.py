@@ -1,6 +1,5 @@
 from .basesegmentation import (
     BaseSegmentation,
-    EpochSegmentations,
     get_available_segmentation_methods,
     get_segmentation_class,
     register_segmentation_class,
@@ -10,7 +9,6 @@ from .suite2p_segmentation import Suite2pSegmentation, Suite2pSegmentationSettin
 
 __all__ = [
     "BaseSegmentation",
-    "EpochSegmentations",
     "get_available_segmentation_methods",
     "get_segmentation_class",
     "read_segmentation_output",

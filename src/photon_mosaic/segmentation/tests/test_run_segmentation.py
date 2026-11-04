@@ -5,11 +5,10 @@ import pytest
 from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings
 
-from photon_mosaic.core import NumpyImaging
+from photon_mosaic.core import NumpyImaging, split_epochs, split_imaging_by_epochs
 from photon_mosaic.extractors import Suite2pRois
 from photon_mosaic.segmentation import (
     BaseSegmentation,
-    EpochSegmentations,
     basesegmentation,
     read_segmentation_output,
     register_segmentation_class,
@@ -25,7 +24,7 @@ class DummySettings(BaseSettings):
 class DummySegmentation(BaseSegmentation):
     """Backend emitting single-pixel ROIs, without any optional dependency.
 
-    A span starting at epoch ``i`` gets ``num_rois + i`` ROIs, so per-epoch results can be told apart.
+    Each ROI records the frame count it saw as the ``num_frames`` property, so per-imaging results can be told apart.
     """
 
     method_name = "dummy"
@@ -40,13 +39,16 @@ class DummySegmentation(BaseSegmentation):
         return "0.0.0"
 
     @classmethod
-    def run(cls, imaging, epoch_indices, yrange, xrange, badframes, settings):
+    def run(cls, imaging, yrange, xrange, badframes, settings):
         if settings.fail:
             raise RuntimeError("dummy failure")
         H, W, _ = imaging.shape
-        num_rois = settings.num_rois + epoch_indices[0]
-        stats = [{"ypix": np.array([i]), "xpix": np.array([0]), "lam": np.array([1.0])} for i in range(num_rois)]
-        return Suite2pRois.from_stat(stats, shape=(H, W, 1), sampling_frequency=imaging.sampling_frequency)
+        stats = [
+            {"ypix": np.array([i]), "xpix": np.array([0]), "lam": np.array([1.0])} for i in range(settings.num_rois)
+        ]
+        rois = Suite2pRois.from_stat(stats, shape=(H, W, 1), sampling_frequency=imaging.sampling_frequency)
+        rois.set_property("num_frames", [imaging.get_total_frames()] * settings.num_rois)
+        return rois
 
 
 @pytest.fixture(autouse=True)
@@ -101,6 +103,7 @@ def test_folder_contents_and_imaging_registered(imaging, tmp_path):
     assert (folder / "segmentation_params.json").is_file()
     assert (folder / "badframes.npz").is_file()
     assert (folder / "segmentation_output" / "metadata.json").is_file()
+    assert not (folder / "segmentation_inputs.json").exists()
     log = json.loads((folder / "segmentation_log.json").read_text())
     assert log["method_version"] == "0.0.0"
     assert log["error"] is False
@@ -156,42 +159,62 @@ def test_error_is_logged(imaging, tmp_path):
     assert result is None
 
 
-@pytest.mark.parametrize("scope", ["all_epochs", "per_epoch"])
-def test_read_segmentation_output_round_trip(imaging, tmp_path, scope):
+def _split(imaging, as_type):
+    epochs = split_imaging_by_epochs(imaging)
+    return epochs if as_type == "list" else {f"epoch{i}": im for i, im in enumerate(epochs)}
+
+
+@pytest.mark.parametrize("as_type", ["single", "list", "dict"])
+def test_read_segmentation_output_round_trip(imaging, tmp_path, as_type):
     folder = tmp_path / "seg"
-    result = run_segmentation(imaging, method="dummy", folder=folder, scope=scope)
-    reloaded = read_segmentation_output(folder, imaging=imaging)
+    inputs = imaging if as_type == "single" else _split(imaging, as_type)
+    result = run_segmentation(inputs, method="dummy", folder=folder)
+    reloaded = read_segmentation_output(folder, imaging=inputs)
 
-    if scope == "all_epochs":
-        pairs = [(result, reloaded)]
+    if as_type == "single":
+        assert not (folder / "segmentation_inputs.json").exists()
+        pairs = [(result, reloaded, 5)]
     else:
-        assert isinstance(result, EpochSegmentations)
-        assert isinstance(reloaded, EpochSegmentations)
-        assert reloaded.epoch_indices == result.epoch_indices == [0, 1]
-        assert [result[i].get_num_rois() for i in (0, 1)] == [2, 3]
-        pairs = [(result[i], reloaded[i]) for i in (0, 1)]
+        assert (folder / "segmentation_inputs.json").is_file()
+        assert type(result) is type(reloaded) is (list if as_type == "list" else dict)
+        if as_type == "list":
+            pairs = [(result[i], reloaded[i], n) for i, n in enumerate([2, 3])]
+        else:
+            assert list(result) == list(reloaded) == ["epoch0", "epoch1"]
+            pairs = [(result[k], reloaded[k], n) for k, n in zip(result, [2, 3])]
 
-    for original, loaded in pairs:
+    for original, loaded, num_frames in pairs:
         assert isinstance(original, Suite2pRois)
-        assert loaded.imaging is imaging
+        assert loaded.imaging is original.imaging
+        np.testing.assert_array_equal(loaded.get_property("num_frames"), [num_frames] * 2)
         np.testing.assert_array_equal(
             np.asarray(loaded.get_roi_image_masks().todense()), np.asarray(original.get_roi_image_masks().todense())
         )
 
 
-@pytest.mark.parametrize("save", [True, False])
-def test_segmentation_info_is_attached_and_saved(imaging, tmp_path, save):
-    folder = tmp_path / "seg" if save else None
-    rois = run_segmentation(imaging, method="dummy", folder=folder, num_rois=3)
+def test_dict_keys_must_be_str_or_int_to_save(imaging, tmp_path):
+    inputs = {(0, 1): imaging}
+    with pytest.raises(ValueError, match="dict keys must be distinct str or int"):
+        run_segmentation(inputs, method="dummy", folder=tmp_path / "seg")
 
-    info = rois.segmentation_info
-    assert info["params"] == {"num_rois": 3, "fail": False}
-    assert info["log"]["method"] == "dummy"
-    assert info["log"]["error"] is False
-    assert info["imaging"]["class"].endswith("NumpyImaging")
+    assert set(run_segmentation(inputs, method="dummy", folder=None)) == {(0, 1)}
 
-    if save:
-        assert read_segmentation_output(folder).segmentation_info == info
+
+def test_list_without_folder_writes_nothing(imaging, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    rois = run_segmentation(_split(imaging, "list"), method="dummy", folder=None)
+
+    assert [r.get_num_rois() for r in rois] == [2, 2]
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_failed_imaging_in_list_is_none(imaging, tmp_path):
+    folder = tmp_path / "seg"
+    rois = run_segmentation(_split(imaging, "list"), method="dummy", folder=folder, fail=True, raise_error=False)
+
+    assert rois == [None, None]
+    assert read_segmentation_output(folder) == [None, None]
 
 
 def test_no_folder_returns_rois_and_writes_nothing(imaging, tmp_path, monkeypatch):
@@ -218,14 +241,35 @@ def test_registered_imaging_defaults_to_motion_ranges_and_badframes_of_selected_
     registered = RegisterImaging(imaging, motion)
     folder = tmp_path / "seg"
 
-    run_segmentation(registered, method="dummy", folder=folder, scope="per_epoch", epoch_indices=[1])
+    # split_epochs wraps the registered imaging; its epoch 0 is motion epoch 1
+    run_segmentation(split_epochs(registered, 1), method="dummy", folder=folder)
 
     params = json.loads((folder / "segmentation_params.json").read_text())
     assert params["run_kwargs"]["yrange"] == [[1, 3]]
     assert params["run_kwargs"]["xrange"] == [[2, 4]]
     saved = np.load(folder / "badframes.npz")
-    assert list(saved) == ["epoch1"]
-    np.testing.assert_array_equal(saved["epoch1"], [False, True, False])
+    assert list(saved) == ["epoch0"]
+    np.testing.assert_array_equal(saved["epoch0"], [False, True, False])
+
+
+def test_motion_defaults_do_not_leak_between_imagings(imaging, tmp_path):
+    from photon_mosaic.core import Motion
+    from photon_mosaic.preprocessing import RegisterImaging
+
+    motion = Motion(
+        imaging=imaging,
+        displacements=[np.zeros((2, 1, 2)), np.zeros((3, 1, 2))],
+        yranges=[[(0, 4)], [(1, 3)]],
+        xranges=[[(0, 5)], [(2, 4)]],
+    )
+    registered = RegisterImaging(imaging, motion)
+    folder = tmp_path / "seg"
+
+    run_segmentation([split_epochs(registered, 0), split_epochs(registered, 1)], method="dummy", folder=folder)
+
+    ranges = [json.loads((folder / str(i) / "segmentation_params.json").read_text())["run_kwargs"] for i in (0, 1)]
+    assert [r["yrange"] for r in ranges] == [[[0, 4]], [[1, 3]]]
+    assert [r["xrange"] for r in ranges] == [[[0, 5]], [[2, 4]]]
 
 
 def test_registered_imaging_without_motion_ranges_falls_back_to_full_frame(imaging, tmp_path):
