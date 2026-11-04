@@ -341,6 +341,8 @@ class Suite2pSegmentation(BaseSegmentation):
         badframes: NDArray[np.bool_] | None,
         settings: Suite2pSegmentationSettings,
     ) -> Suite2pRois:
+        from suite2p.classification import classify  # noqa: PLC0415
+
         H, W, n_planes = imaging.shape
 
         n_frames = int(imaging.get_total_frames())
@@ -375,6 +377,7 @@ class Suite2pSegmentation(BaseSegmentation):
                 yrange=yrange,
                 xrange=xrange,
             )
+            iscell = classify(stat=stat, classfile=classifier_path)
 
             logging.info("  found %d ROIs in %.1fs", len(stat), time.time() - t0)
             all_stats.extend(stat)
