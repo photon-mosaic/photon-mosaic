@@ -14,6 +14,7 @@ from photon_mosaic.core.imaging_ops import (
     frame_slice,
     split_epoch_at_frames,
     split_epochs,
+    split_imaging_by_epochs,
     stack_planes,
 )
 from photon_mosaic.core.numpyimaging import NumpyImaging
@@ -48,6 +49,20 @@ def test_split_epoch_with_multiple_indices_preserves_order():
     np.testing.assert_allclose(split_imaging.get_series(epoch_index=1), imaging.get_series(epoch_index=0))
     assert split_imaging.epochs[0] is imaging.epochs[2]
     assert split_imaging.epochs[1] is imaging.epochs[0]
+
+
+def test_split_imaging_by_epochs_returns_one_single_epoch_proxy_per_epoch():
+    imaging = generate_random_imaging(num_frames=(3, 5, 7), height=4, width=6, sampling_frequency=15.0, seed=1)
+
+    split_imagings = split_imaging_by_epochs(imaging)
+
+    assert isinstance(split_imagings, list)
+    assert len(split_imagings) == 3
+    for epoch_index, split_imaging in enumerate(split_imagings):
+        assert isinstance(split_imaging, SelectEpochImaging)
+        assert split_imaging.get_num_epochs() == 1
+        assert split_imaging.epochs[0] is imaging.epochs[epoch_index]
+        np.testing.assert_allclose(split_imaging.get_series(), imaging.get_series(epoch_index=epoch_index))
 
 
 def test_split_repeatly():

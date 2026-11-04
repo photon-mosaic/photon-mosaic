@@ -115,7 +115,6 @@ class Suite2pSegmentationSettings(BaseSettings):
 def _read_plane_range(
     imaging: BaseImaging,
     plane_index: int,
-    epoch_indices: Sequence[int],
     epoch_offsets: NDArray[np.int64],
     start: int,
     stop: int,
@@ -127,14 +126,14 @@ def _read_plane_range(
     the underlying epochs produce (no upcast).
     """
     chunks: list[NDArray] = []
-    for i, epoch_idx in enumerate(epoch_indices):
+    for i in range(imaging.get_num_epochs()):
         ep_lo = int(epoch_offsets[i])
         ep_hi = int(epoch_offsets[i + 1])
         if ep_hi <= start or ep_lo >= stop:
             continue
         local_start = max(0, start - ep_lo)
         local_end = min(ep_hi - ep_lo, stop - ep_lo)
-        frames = imaging.epochs[epoch_idx].get_series(local_start, local_end)
+        frames = imaging.epochs[i].get_series(local_start, local_end)
         plane = frames[:, :, :, plane_index] if frames.ndim == 4 else frames
         chunks.append(plane)
     if len(chunks) == 1:
@@ -145,7 +144,6 @@ def _read_plane_range(
 def _stream_bin_movie(
     imaging: BaseImaging,
     plane_index: int,
-    epoch_indices: Sequence[int],
     *,
     bin_size: int,
     yrange: Sequence[int],
@@ -153,13 +151,14 @@ def _stream_bin_movie(
     badframes: NDArray[np.bool_] | None,
     nbins: int,
 ) -> NDArray[np.float32]:
-    """Stream-bin one plane across the selected epochs.
+    """Stream-bin one plane across all epochs of ``imaging``.
 
     Mirrors :func:`suite2p.detection.detect.bin_movie` but pulls each batch
     via :func:`BaseImagingEpoch.get_series` instead of holding the full
     movie in memory. The only large array kept is the binned ``mov``.
     """
-    sizes = [int(imaging.get_num_samples(segment_index=i)) for i in epoch_indices]
+    n_epochs = imaging.get_num_epochs()
+    sizes = [int(imaging.get_num_frames(epoch_index=i)) for i in range(n_epochs)]
     epoch_offsets = np.cumsum([0, *sizes]).astype(np.int64)
     n_frames = int(epoch_offsets[-1])
 
@@ -186,7 +185,7 @@ def _stream_bin_movie(
     for raw_tstart in tstarts:
         tstart = int(raw_tstart)
         tend = min(tstart + batch_size, n_frames)
-        data = _read_plane_range(imaging, plane_index, epoch_indices, epoch_offsets, tstart, tend)
+        data = _read_plane_range(imaging, plane_index, epoch_offsets, tstart, tend)
 
         good = good_frames[tstart:tend]
         if good.mean() > 0.5:
@@ -337,7 +336,6 @@ class Suite2pSegmentation(BaseSegmentation):
     def run(
         cls,
         imaging: BaseImaging,
-        epoch_indices: Sequence[int],
         yrange: Sequence[int],
         xrange: Sequence[int],
         badframes: NDArray[np.bool_] | None,
@@ -345,24 +343,23 @@ class Suite2pSegmentation(BaseSegmentation):
     ) -> Suite2pRois:
         H, W, n_planes = imaging.shape
 
-        n_frames = int(sum(imaging.get_num_samples(segment_index=i) for i in epoch_indices))
+        n_frames = int(imaging.get_total_frames())
         bin_size = int(max(1, n_frames // settings.nbins, np.round(settings.tau * settings.fs)))
 
         all_stats: list[dict[str, Any]] = []
         plane_assignments: list[int] = []
         for plane_index in range(n_planes):
             logging.info(
-                "Suite2p detection — plane %d/%d (epochs %s)",
+                "Suite2p detection — plane %d/%d (%d epochs)",
                 plane_index + 1,
                 n_planes,
-                list(epoch_indices),
+                imaging.get_num_epochs(),
             )
             t0 = time.time()
 
             mov = _stream_bin_movie(
                 imaging,
                 plane_index=plane_index,
-                epoch_indices=epoch_indices,
                 bin_size=bin_size,
                 yrange=yrange,
                 xrange=xrange,
