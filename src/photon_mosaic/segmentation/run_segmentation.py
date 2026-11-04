@@ -15,19 +15,15 @@ from spikeinterface.core.core_tools import SIJsonEncoder
 
 from photon_mosaic.core import BaseImaging, Motion, SelectEpochImaging
 from photon_mosaic.core.baserois import BaseRois
-from photon_mosaic.core.binaryrois import BinaryFolderRois
 from photon_mosaic.core.core_tools import _coerce_settings
 from photon_mosaic.preprocessing.registration import RegisterImaging
 
 from .basesegmentation import (
-    BaseSegmentation,
     KnownSegmentationMethod,
     _resolve_badframes,
     _resolve_ranges,
     get_segmentation_class,
 )
-
-_output_subfolder = "segmentation_output"
 
 
 def _intersect_plane_ranges(plane_ranges: Sequence[Sequence[int]]) -> list[int]:
@@ -36,7 +32,7 @@ def _intersect_plane_ranges(plane_ranges: Sequence[Sequence[int]]) -> list[int]:
 
 
 def run_segmentation(
-    imaging_or_list_or_dict: BaseImaging | list[BaseImaging] | dict[Any, BaseImaging],
+    imaging: BaseImaging,
     method: KnownSegmentationMethod | str = "suite2p",
     folder: str | Path | None = "segmentation_folder",
     *,
@@ -47,28 +43,27 @@ def run_segmentation(
     remove_existing_folder: bool = False,
     raise_error: bool = True,
     **params: Any,
-) -> BaseRois | list[BaseRois | None] | dict[Any, BaseRois | None] | None:
-    """Detect ROIs on one imaging, or on each of a list or dict of imagings.
+) -> BaseRois | None:
+    """Detect ROIs on ``imaging`` with the requested segmentation ``method``.
 
-    Each imaging is segmented once over all of its epochs, concatenated. To
-    get one ROI set per epoch, split the imaging first with
-    :func:`photon_mosaic.core.split_imaging_by_epochs`.
+    The imaging is segmented once over all of its epochs, concatenated. To get
+    one ROI set per epoch, split it first with
+    :func:`photon_mosaic.core.split_imaging_by_epochs` and run each part. A
+    method that does not support multi-plane imaging needs a single plane,
+    e.g. from :func:`photon_mosaic.core.select_planes`.
 
     Mirrors SpikeInterface's ``run_sorter``: the backend returns the ROIs and
     the input imaging is registered to them. If ``folder`` is given, it
     receives ``segmentation_params.json`` (validated settings and run
     arguments), ``segmentation_log.json`` (versions, run time, error), the
     imaging provenance (``imaging.json``, else ``imaging.pickle``) and the ROIs
-    saved as binary under ``segmentation_output/``, which
-    :func:`read_segmentation_output` loads back. For a list or dict, each
-    imaging gets that layout in its own ``folder/<key>`` subfolder, and
-    ``segmentation_inputs.json`` records the input type and keys.
+    saved as binary under ``rois/``, which ``photon_mosaic.core.load(folder / "rois")``
+    loads back.
 
     Parameters
     ----------
-    imaging_or_list_or_dict : BaseImaging | list[BaseImaging] | dict[Any, BaseImaging]
-        Motion-corrected imaging object, list of imaging objects, or dict of
-        imaging objects. With a ``folder``, dict keys must be distinct str or int.
+    imaging : BaseImaging
+        Motion-corrected imaging object.
     method : str, default: "suite2p"
         Segmentation backend; see
         :func:`photon_mosaic.segmentation.get_available_segmentation_methods`.
@@ -79,13 +74,13 @@ def run_segmentation(
         Backend settings. Dicts and ``None`` are coerced into the backend's
         ``settings_class``.
     yrange, xrange : sequence of int | sequence of sequence of int | None, optional
-        Valid pixel range ``[lo, hi]``, applied to every imaging. May be a
+        Valid pixel range ``[lo, hi]``. May be a
         single 1D pair (broadcast to every epoch) or a 2D ``(n_epochs, 2)``
         sequence with one pair per epoch, which must then be uniform. ``None``
         uses the registration's ranges for a registered imaging, else the full
         image extent.
     badframes : NDArray[bool] | sequence of NDArray[bool] | None, optional
-        Frames to exclude, applied to every imaging. May be a single flat
+        Frames to exclude. May be a single flat
         ``(total_frames,)`` boolean array or a per-epoch sequence (each shaped
         ``(n_frames_in_epoch,)``). ``None`` uses the registration's bad frames
         for a registered imaging.
@@ -94,20 +89,26 @@ def run_segmentation(
     raise_error : bool, default: True
         Re-raise a backend error. If False, the error is only logged (and
         recorded in ``segmentation_log.json`` when ``folder`` is given) and
-        ``None`` is returned for that imaging.
+        ``None`` is returned.
     **params : Any
         Backend settings, overriding ``settings``.
 
     Returns
     -------
-    BaseRois | list[BaseRois | None] | dict[Any, BaseRois | None] | None
-        One ROI set per imaging, in the same form as the input.
+    BaseRois | None
+        The detected ROIs, with ``imaging`` registered; ``None`` if the method
+        failed and ``raise_error=False``.
     """
     segmentation_class = get_segmentation_class(method)
     if not segmentation_class.is_installed():
         raise ImportError(f"Segmentation method '{method}' is not installed.")
 
     settings_class = segmentation_class.settings_class
+    if imaging.get_num_planes() > 1 and not segmentation_class.support_multi_plane:
+        raise ValueError(
+            f"Segmentation method '{method}' does not support multi-plane imaging. "
+            "Use `select_planes` to choose a single plane for segmentation."
+        )
     settings = _coerce_settings(settings, settings_class)
     if params:
         if settings_class is None:
@@ -121,67 +122,9 @@ def run_segmentation(
             )
         settings = settings_class(**{**settings.model_dump(), **params})
 
-    keys: list[Any]
-    if isinstance(imaging_or_list_or_dict, BaseImaging):
-        input_type, keys, imagings = "single", [None], [imaging_or_list_or_dict]
-    elif isinstance(imaging_or_list_or_dict, list):
-        input_type, keys, imagings = "list", list(range(len(imaging_or_list_or_dict))), list(imaging_or_list_or_dict)
-    elif isinstance(imaging_or_list_or_dict, dict):
-        input_type, keys = "dict", list(imaging_or_list_or_dict)
-        imagings = list(imaging_or_list_or_dict.values())
-    else:
-        raise TypeError("imaging_or_list_or_dict must be a BaseImaging, list of BaseImaging, or dict of BaseImaging.")
-
     if folder is not None:
-        if input_type == "dict":
-            # keys name the subfolders and are stored in json, so they must survive both
-            if not all(isinstance(k, (str, int)) for k in keys) or len({str(k) for k in keys}) != len(keys):
-                raise ValueError(f"dict keys must be distinct str or int to be saved to a folder, got {keys}")
         folder = segmentation_class.initialize_folder(folder, remove_existing_folder=remove_existing_folder)
-        if input_type != "single":
-            inputs = {"type": input_type, "keys": keys}
-            (folder / "segmentation_inputs.json").write_text(json.dumps(inputs, indent=4))
 
-    rois_results: list[BaseRois | None] = []
-    for key, imaging in zip(keys, imagings):
-        output_folder = None
-        if folder is not None:
-            output_folder = folder if input_type == "single" else folder / str(key)
-            output_folder.mkdir(exist_ok=True)
-        rois_results.append(
-            _segment_one(
-                segmentation_class,
-                method,
-                imaging,
-                settings,
-                yrange=yrange,
-                xrange=xrange,
-                badframes=badframes,
-                output_folder=output_folder,
-                raise_error=raise_error,
-            )
-        )
-
-    if input_type == "single":
-        return rois_results[0]
-    if input_type == "list":
-        return rois_results
-    return dict(zip(keys, rois_results))
-
-
-def _segment_one(
-    segmentation_class: type[BaseSegmentation],
-    method: str,
-    imaging: BaseImaging,
-    settings: Any,
-    *,
-    yrange: Sequence[int] | Sequence[Sequence[int]] | None,
-    xrange: Sequence[int] | Sequence[Sequence[int]] | None,
-    badframes: NDArray[np.bool_] | Sequence[NDArray[np.bool_] | None] | None,
-    output_folder: Path | None,
-    raise_error: bool,
-) -> BaseRois | None:
-    """Run the backend once over all epochs of ``imaging``; write to ``output_folder`` if given."""
     H, W, _ = imaging.shape
     n_eps = imaging.get_num_epochs()
     frame_counts = [int(imaging.get_num_frames(epoch_index=i)) for i in range(n_eps)]
@@ -214,13 +157,13 @@ def _segment_one(
     else:
         merged_bf = None
 
-    if output_folder is not None:
+    if folder is not None:
         run_kwargs = {"yrange": yranges, "xrange": xranges, "badframes": merged_bf is not None}
-        segmentation_class.set_params_to_folder(output_folder, settings, run_kwargs)
+        segmentation_class.set_params_to_folder(folder, settings, run_kwargs)
         if merged_bf is not None:
             badframes_per_epoch: dict[str, Any] = {f"epoch{ep}": b for ep, b in enumerate(bf_per_ep) if b is not None}
-            np.savez(output_folder / "badframes.npz", **badframes_per_epoch)
-        _dump_imaging_provenance(imaging, output_folder)
+            np.savez(folder / "badframes.npz", **badframes_per_epoch)
+        _dump_imaging_provenance(imaging, folder)
 
     log: dict[str, Any] = {
         "method": method,
@@ -239,8 +182,8 @@ def _segment_one(
     except Exception:
         log["error"] = True
         log["error_trace"] = traceback.format_exc()
-        if output_folder is not None:
-            _write_log(output_folder, log)
+        if folder is not None:
+            _write_log(folder, log)
         if raise_error:
             raise
         logging.warning("Segmentation method '%s' failed:\n%s", method, log["error_trace"])
@@ -252,9 +195,9 @@ def _segment_one(
     params_dict = settings.model_dump(mode="json") if settings is not None else None
     rois.register_imaging(imaging)
     rois.set_segmentation_info(imaging_dict, params_dict=params_dict, log_dict=log)
-    if output_folder is not None:
-        rois.save(format="binary", folder=output_folder / _output_subfolder)
-        _write_log(output_folder, log)
+    if folder is not None:
+        rois.save(format="binary", folder=folder / "rois")
+        _write_log(folder, log)
     return rois
 
 
@@ -270,56 +213,6 @@ def _registered_motion(imaging: BaseImaging) -> tuple[Motion, list[int]] | None:
         selected = imaging._selected_epoch_indices
         return imaging._parent.motion, [selected[i] for i in range(imaging.get_num_epochs())]
     return None
-
-
-def read_segmentation_output(
-    folder: str | Path,
-    imaging: BaseImaging | list[BaseImaging] | dict[Any, BaseImaging] | None = None,
-) -> BaseRois | list[BaseRois | None] | dict[Any, BaseRois | None]:
-    """Load the result of a :func:`run_segmentation` call from its ``folder``.
-
-    Parameters
-    ----------
-    folder : str | Path
-        Folder previously passed to :func:`run_segmentation`.
-    imaging : BaseImaging | list[BaseImaging] | dict[Any, BaseImaging] | None, optional
-        Imaging to register to the loaded ROIs, in the same form (single, list
-        or dict) that was passed to :func:`run_segmentation`.
-
-    Returns
-    -------
-    BaseRois | list[BaseRois | None] | dict[Any, BaseRois | None]
-        Same form as :func:`run_segmentation` returned; ``None`` for an
-        imaging whose segmentation failed.
-    """
-    folder = Path(folder)
-    inputs_file = folder / "segmentation_inputs.json"
-    if not inputs_file.is_file():
-        rois = BinaryFolderRois(folder / _output_subfolder)
-        if isinstance(imaging, BaseImaging):
-            rois.register_imaging(imaging)
-        return rois
-
-    inputs = json.loads(inputs_file.read_text())
-    keys = inputs["keys"]
-    if imaging is None:
-        imagings: list[BaseImaging | None] = [None] * len(keys)
-    elif isinstance(imaging, dict):
-        imagings = [imaging[k] for k in keys]
-    else:
-        imagings = list(imaging)
-
-    rois_results: list[BaseRois | None] = []
-    for key, im in zip(keys, imagings):
-        rois_folder = folder / str(key) / _output_subfolder
-        loaded = BinaryFolderRois(rois_folder) if rois_folder.is_dir() else None
-        if loaded is not None and im is not None:
-            loaded.register_imaging(im)
-        rois_results.append(loaded)
-
-    if inputs["type"] == "list":
-        return rois_results
-    return dict(zip(keys, rois_results))
 
 
 def _dump_imaging_provenance(imaging: BaseImaging, folder: Path) -> None:

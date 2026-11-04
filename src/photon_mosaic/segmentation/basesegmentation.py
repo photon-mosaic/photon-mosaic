@@ -108,6 +108,7 @@ class BaseSegmentation:
 
     method_name: str | None = None
     settings_class: type[BaseSettings] | None = None
+    support_multi_plane = False
 
     @classmethod
     def is_installed(cls) -> bool:
