@@ -247,3 +247,16 @@ def test_register_imaging_multiplane_checks_plane_count(make_rois_for_tests_mult
     bad_imaging = MockImaging(roi_kwargs["sampling_frequency"], num_planes=roi_kwargs["num_planes"] - 1)
     with pytest.raises(AssertionError, match="different number of planes"):
         rois.register_imaging(bad_imaging)
+
+
+def test_segmentation_info(make_rois_for_tests):
+    rois, _ = make_rois_for_tests
+    assert rois.segmentation_info is None
+
+    rois.set_segmentation_info({"class": "Dummy"}, params_dict={"a": 1}, log_dict={"error": False})
+
+    assert rois.segmentation_info == {
+        "imaging": {"class": "Dummy"},
+        "params": {"a": 1},
+        "log": {"error": False},
+    }

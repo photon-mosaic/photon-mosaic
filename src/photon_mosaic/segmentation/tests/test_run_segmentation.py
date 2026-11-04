@@ -179,6 +179,21 @@ def test_read_segmentation_output_round_trip(imaging, tmp_path, scope):
         )
 
 
+@pytest.mark.parametrize("save", [True, False])
+def test_segmentation_info_is_attached_and_saved(imaging, tmp_path, save):
+    folder = tmp_path / "seg" if save else None
+    rois = run_segmentation(imaging, method="dummy", folder=folder, num_rois=3)
+
+    info = rois.segmentation_info
+    assert info["params"] == {"num_rois": 3, "fail": False}
+    assert info["log"]["method"] == "dummy"
+    assert info["log"]["error"] is False
+    assert info["imaging"]["class"].endswith("NumpyImaging")
+
+    if save:
+        assert read_segmentation_output(folder).segmentation_info == info
+
+
 def test_no_folder_returns_rois_and_writes_nothing(imaging, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 

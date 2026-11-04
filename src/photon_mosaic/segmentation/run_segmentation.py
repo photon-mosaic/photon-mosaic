@@ -11,6 +11,7 @@ from typing import Any, Literal, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
+from spikeinterface.core.core_tools import SIJsonEncoder
 
 from photon_mosaic.core import BaseImaging
 from photon_mosaic.core.baserois import BaseRois
@@ -217,8 +218,12 @@ def run_segmentation(
         return None
 
     log["run_time"] = time.perf_counter() - t0
+    # annotations are saved with plain json.dumps, so store only json-native values
+    imaging_dict = json.loads(json.dumps(imaging.to_dict(recursive=True), cls=SIJsonEncoder))
+    params_dict = settings.model_dump(mode="json") if settings is not None else None
     for rois in span_rois:
         rois.register_imaging(imaging)
+        rois.set_segmentation_info(imaging_dict, params_dict=params_dict, log_dict=log)
     if folder is not None:
         for subfolder, rois in zip(_rois_subfolders(scope, selected), span_rois):
             rois.save(format="binary", folder=folder / subfolder)
