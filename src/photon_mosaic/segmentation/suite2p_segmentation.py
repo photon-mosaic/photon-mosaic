@@ -114,7 +114,6 @@ class Suite2pSegmentationSettings(BaseSettings):
 
 def _read_plane_range(
     imaging: BaseImaging,
-    plane_index: int,
     epoch_offsets: NDArray[np.int64],
     start: int,
     stop: int,
@@ -133,9 +132,8 @@ def _read_plane_range(
             continue
         local_start = max(0, start - ep_lo)
         local_end = min(ep_hi - ep_lo, stop - ep_lo)
-        frames = imaging.epochs[i].get_series(local_start, local_end)
-        plane = frames[:, :, :, plane_index] if frames.ndim == 4 else frames
-        chunks.append(plane)
+        frames = imaging.get_series(start_frame=local_start, end_frame=local_end, epoch_index=i)
+        chunks.append(frames[:, :, :, 0])
     if len(chunks) == 1:
         return chunks[0]
     return np.concatenate(chunks, axis=0)
@@ -143,7 +141,6 @@ def _read_plane_range(
 
 def _stream_bin_movie(
     imaging: BaseImaging,
-    plane_index: int,
     *,
     bin_size: int,
     yrange: Sequence[int],
@@ -185,7 +182,7 @@ def _stream_bin_movie(
     for raw_tstart in tstarts:
         tstart = int(raw_tstart)
         tend = min(tstart + batch_size, n_frames)
-        data = _read_plane_range(imaging, plane_index, epoch_offsets, tstart, tend)
+        data = _read_plane_range(imaging, epoch_offsets, tstart, tend)
 
         good = good_frames[tstart:tend]
         if good.mean() > 0.5:
@@ -341,51 +338,45 @@ class Suite2pSegmentation(BaseSegmentation):
         badframes: NDArray[np.bool_] | None,
         settings: Suite2pSegmentationSettings,
     ) -> Suite2pRois:
-        from suite2p.classification import classify  # noqa: PLC0415
+        from suite2p.classification import builtin_classfile, classify  # noqa: PLC0415
 
         H, W, n_planes = imaging.shape
 
+        n_epochs = imaging.get_num_epochs()
         n_frames = int(imaging.get_total_frames())
         bin_size = int(max(1, n_frames // settings.nbins, np.round(settings.tau * settings.fs)))
 
-        all_stats: list[dict[str, Any]] = []
-        plane_assignments: list[int] = []
-        for plane_index in range(n_planes):
-            logging.info(
-                "Suite2p detection — plane %d/%d (%d epochs)",
-                plane_index + 1,
-                n_planes,
-                imaging.get_num_epochs(),
-            )
-            t0 = time.time()
+        logging.info("Suite2p detection — %d epochs", n_epochs)
+        t0 = time.time()
 
-            mov = _stream_bin_movie(
-                imaging,
-                plane_index=plane_index,
-                bin_size=bin_size,
-                yrange=yrange,
-                xrange=xrange,
-                badframes=badframes,
-                nbins=settings.nbins,
-            )
+        mov = _stream_bin_movie(
+            imaging,
+            bin_size=bin_size,
+            yrange=yrange,
+            xrange=xrange,
+            badframes=badframes,
+            nbins=settings.nbins,
+        )
 
-            stat = _detect_rois_from_mov(
-                mov,
-                cfg=settings,
-                Ly=H,
-                Lx=W,
-                yrange=yrange,
-                xrange=xrange,
-            )
-            iscell = classify(stat=stat, classfile=classifier_path)
+        stat = _detect_rois_from_mov(
+            mov,
+            cfg=settings,
+            Ly=H,
+            Lx=W,
+            yrange=yrange,
+            xrange=xrange,
+        )
+        logging.info("  found %d ROIs in %.1fs", len(stat), time.time() - t0)
 
-            logging.info("  found %d ROIs in %.1fs", len(stat), time.time() - t0)
-            all_stats.extend(stat)
-            plane_assignments.extend([plane_index] * len(stat))
-
-        return Suite2pRois.from_stat(
-            stats=all_stats,
+        rois = Suite2pRois.from_stat(
+            stats=stat,
             shape=(H, W, n_planes),
             sampling_frequency=imaging.sampling_frequency,
-            plane_assignments=np.array(plane_assignments, dtype=int),
         )
+        if stat:  # classify reads stat[0]
+            iscell = classify(stat=np.array(stat, dtype=object), classfile=builtin_classfile)
+            # same properties Suite2pRois sets when loading iscell.npy from a suite2p folder
+            rois.set_property("iscell", iscell[:, 0] == 1)
+            rois.set_property("iscell_probability", iscell[:, 1])
+
+        return rois
