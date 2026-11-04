@@ -2,7 +2,7 @@ import importlib.metadata
 import logging
 import time
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Annotated, Any, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -18,9 +18,13 @@ from .basesegmentation import BaseSegmentation, register_segmentation_class
 class Suite2pSegmentationSettings(BaseSettings):
     """Settings for Suite2P ROI detection."""
 
-    diameter: list[float] = Field(
+    diameter: list[Annotated[float, Field(ge=1)]] = Field(
         default=[12.0, 12.0],
-        description="Expected cell diameter in pixels [y, x]. 0 lets CellPose estimate it.",
+        description=(
+            "Expected cell diameter in pixels [y, x], each at least 1. Cellpose rescales the image by "
+            "30 / diameter, so [30, 30] runs Cellpose-SAM at its native scale, as when no diameter is "
+            "given; use the same value for y and x. Sourcery uses it to set its smoothing and neuropil scales."
+        ),
     )
     tau: float = Field(
         default=1.0,

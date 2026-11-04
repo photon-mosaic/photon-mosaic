@@ -1,5 +1,6 @@
 import numpy as np
 import pytest
+from pydantic import ValidationError
 
 from photon_mosaic.core import NumpyImaging
 from photon_mosaic.core.generators import generate_imaging_with_rois
@@ -161,20 +162,9 @@ class TestRunSuite2p:
 class TestRunSuite2pUnmocked:
     """Run suite2p's own detection end-to-end (no mocks)."""
 
-    def test_sparsery_with_estimated_spatial_scale(self, monkeypatch, tmp_path):
-        from suite2p.detection import sparsedetect
-
-        find_best_scale = sparsedetect.find_best_scale
-        modes = []
-
-        def record_mode(**kwargs):
-            scale, mode = find_best_scale(**kwargs)
-            modes.append(mode)
-            return scale, mode
-
-        monkeypatch.setattr(sparsedetect, "find_best_scale", record_mode)
-        # Slow, frequent transients so sparsery's scale estimate does not depend on the seed:
-        # with the generator's GCaMP8s defaults (decay_time=0.5, event_rate=0.3) it falls back to forced.
+    def test_sparsery_with_defaults(self, tmp_path):
+        # The only test where suite2p's detection runs: the others mock _detect_rois_from_mov,
+        # and the cellpose test below fails earlier, at settings validation.
         _, imaging, _ = generate_imaging_with_rois(
             num_frames=300,
             height=64,
@@ -188,9 +178,16 @@ class TestRunSuite2pUnmocked:
 
         rois = run_segmentation(imaging, method="suite2p", folder=tmp_path / "seg")
 
-        # The scale must come from the data: a failed estimate falls back to a forced scalar.
-        assert modes == [sparsedetect.EstimateMode.Estimated]
         assert rois.get_num_rois() > 0
+
+    def test_cellpose_rejects_zero_diameter(self):
+        # suite2p 1.x has no diameter=0 auto-estimate; it crashes inside roi_detect.
+        _, imaging, _ = generate_imaging_with_rois(
+            num_frames=300, height=64, width=64, num_rois=10, radius_range=(4, 6), seed=0
+        )
+
+        with pytest.raises(ValidationError, match="diameter"):
+            run_segmentation(imaging, method="suite2p", settings={"algorithm": "cellpose", "diameter": [0, 0]})
 
 
 # ---------------------------------------------------------------------------
@@ -254,3 +251,13 @@ class TestMergedDefaults:
         assert "sparsery_settings" in merged
         assert "sourcery_settings" in merged
         assert "cellpose_settings" in merged
+
+
+class TestDiameter:
+    def test_accepts_diameter_of_at_least_one(self):
+        assert seg.Suite2pSegmentationSettings(diameter=[1, 12]).diameter == [1.0, 12.0]
+
+    @pytest.mark.parametrize("diameter", [[0, 0], [0, 12], [12, -1]])
+    def test_rejects_diameter_below_one(self, diameter):
+        with pytest.raises(ValidationError, match="greater than or equal to 1"):
+            seg.Suite2pSegmentationSettings(diameter=diameter)
