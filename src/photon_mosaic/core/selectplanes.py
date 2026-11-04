@@ -3,7 +3,30 @@ from collections.abc import Sequence
 import numpy as np
 from numpy.typing import ArrayLike
 
-from .baseimaging import BaseImaging
+from .baseimaging import BaseImaging, BaseImagingEpoch
+
+
+class _SelectPlanesEpoch(BaseImagingEpoch):
+    """Lazy view over the selected planes of a parent epoch."""
+
+    def __init__(self, parent_epoch: BaseImagingEpoch, plane_indices: np.ndarray):
+        BaseImagingEpoch.__init__(  # type: ignore[call-arg]
+            self,
+            sampling_frequency=parent_epoch._sampling_frequency,
+            t_start=getattr(parent_epoch, "_t_start", None),
+        )
+        self._parent_epoch = parent_epoch
+        self._plane_indices = np.asarray(plane_indices, dtype=int)
+
+    def get_num_samples(self) -> int:
+        return self._parent_epoch.get_num_samples()
+
+    def get_series(self, start_frame, end_frame, plane_indices=None):
+        selected_indices = np.arange(len(self._plane_indices))
+        if plane_indices is not None:
+            selected_indices = selected_indices[plane_indices]
+        parent_indices = self._plane_indices[selected_indices]
+        return self._parent_epoch.get_series(start_frame, end_frame, parent_indices)
 
 
 class SelectPlanesImaging(BaseImaging):
@@ -33,8 +56,10 @@ class SelectPlanesImaging(BaseImaging):
         )
         imaging.copy_metadata(self)
 
+        parent_plane_ids = list(imaging.plane_ids)
+        selected_plane_indices = np.asarray([parent_plane_ids.index(plane_id) for plane_id in plane_ids], dtype=int)
         for epoch in imaging.epochs:
-            self.add_epoch(epoch)
+            self.add_epoch(_SelectPlanesEpoch(epoch, selected_plane_indices))
 
         self._selected_plane_ids = plane_ids
         self._parent = imaging

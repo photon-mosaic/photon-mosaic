@@ -31,9 +31,13 @@ def test_select_planes_returns_lazy_subset_per_epoch():
         imaging.get_series(epoch_index=1, plane_ids=[3, 1]),
     )
 
-    # Selection is lazy: epochs are shared with the source imaging.
-    assert selected.epochs[0] is imaging.epochs[0]
-    assert selected.epochs[1] is imaging.epochs[1]
+    # Selection is lazy, but the exposed epochs must honor the selected planes.
+    for epoch_index in range(2):
+        assert selected.epochs[epoch_index] is not imaging.epochs[epoch_index]
+        np.testing.assert_allclose(
+            selected.epochs[epoch_index].get_series(0, selected.epochs[epoch_index].get_num_samples()),
+            imaging.get_series(epoch_index=epoch_index, plane_ids=[3, 1]),
+        )
 
 
 def test_select_planes_allows_subselection_within_selected_proxy():
@@ -55,6 +59,22 @@ def test_select_planes_allows_subselection_within_selected_proxy():
 
     with pytest.raises(ValueError):
         _ = selected.get_series(plane_ids=[1])
+
+
+def test_nested_select_planes_uses_exposed_parent_plane_ids_in_epochs():
+    imaging = generate_random_imaging(
+        num_frames=4,
+        height=3,
+        width=3,
+        num_planes=4,
+        sampling_frequency=10.0,
+        seed=13,
+    )
+    selected = select_planes(select_planes(imaging, [2, 0]), [0])
+
+    expected = imaging.get_series(plane_ids=[0])
+    np.testing.assert_array_equal(selected.get_series(), expected)
+    np.testing.assert_array_equal(selected.epochs[0].get_series(0, 4), expected)
 
 
 def test_select_planes_raises_for_invalid_plane_ids():
