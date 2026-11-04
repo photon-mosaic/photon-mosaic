@@ -134,11 +134,11 @@ class TestRunSuite2p:
         folder = tmp_path / "seg"
         rois = run_segmentation(imaging, method="suite2p", folder=folder)
 
-        plane_folder = folder / "segmentation_output" / "plane0"
-        assert Suite2pRois(plane_folder).get_num_rois() == rois.get_num_rois()
+        assert isinstance(rois, Suite2pRois)
         reloaded = read_segmentation_output(folder)
-        assert isinstance(reloaded, Suite2pRois)
         np.testing.assert_array_equal(reloaded.get_roi_image_masks().todense(), rois.get_roi_image_masks().todense())
+        # suite2p's scalar stat fields are saved as ROI properties
+        np.testing.assert_array_equal(reloaded.get_property("npix"), rois.get_property("npix"))
 
     def test_all_epochs_rejects_mismatched_epoch_ranges(self, imaging, fake_inner, tmp_path):
         with pytest.raises(ValueError, match="yrange differs across selected epochs"):

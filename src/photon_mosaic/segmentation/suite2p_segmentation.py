@@ -1,7 +1,6 @@
 import importlib.metadata
 import logging
 import time
-from pathlib import Path
 from typing import Annotated, Any, Sequence
 
 import numpy as np
@@ -316,9 +315,7 @@ class Suite2pSegmentation(BaseSegmentation):
 
     Frames are pulled lazily via :func:`BaseImagingEpoch.get_series` and
     stream-binned in place, so the full raw movie is never materialised.
-    Output is written in suite2p's layout, one ``plane{i}`` folder holding
-    ``stat.npy`` and ``ops.npy`` per plane, so each plane folder can also be
-    opened directly with :class:`Suite2pRois`.
+    Returns a :class:`Suite2pRois` holding every plane's suite2p ``stat``.
     """
 
     method_name = "suite2p"
@@ -337,21 +334,22 @@ class Suite2pSegmentation(BaseSegmentation):
         return importlib.metadata.version("suite2p")
 
     @classmethod
-    def run_from_folder(
+    def run(
         cls,
-        output_folder: Path,
         imaging: BaseImaging,
         epoch_indices: Sequence[int],
         yrange: Sequence[int],
         xrange: Sequence[int],
         badframes: NDArray[np.bool_] | None,
         settings: Suite2pSegmentationSettings,
-    ) -> None:
+    ) -> Suite2pRois:
         H, W, n_planes = imaging.shape
 
         n_frames = int(sum(imaging.get_num_samples(segment_index=i) for i in epoch_indices))
         bin_size = int(max(1, n_frames // settings.nbins, np.round(settings.tau * settings.fs)))
 
+        all_stats: list[dict[str, Any]] = []
+        plane_assignments: list[int] = []
         for plane_index in range(n_planes):
             logging.info(
                 "Suite2p detection — plane %d/%d (epochs %s)",
@@ -382,31 +380,12 @@ class Suite2pSegmentation(BaseSegmentation):
             )
 
             logging.info("  found %d ROIs in %.1fs", len(stat), time.time() - t0)
-
-            plane_folder = output_folder / f"plane{plane_index}"
-            plane_folder.mkdir()
-            # ops carries only what Suite2pRois needs to rebuild masks (full-frame Ly/Lx) and timing
-            ops = {"Ly": H, "Lx": W, "fs": imaging.sampling_frequency, "nplanes": n_planes}
-            np.save(plane_folder / "ops.npy", np.array(ops, dtype=object))
-            stat_array = np.empty(len(stat), dtype=object)
-            stat_array[:] = stat
-            np.save(plane_folder / "stat.npy", stat_array)
-
-    @classmethod
-    def read_rois_from_folder(cls, output_folder: Path) -> Suite2pRois:
-        ops = np.load(output_folder / "plane0" / "ops.npy", allow_pickle=True).item()
-        n_planes = int(ops["nplanes"])
-
-        all_stats: list[dict[str, Any]] = []
-        plane_assignments: list[int] = []
-        for plane_index in range(n_planes):
-            stat = list(np.load(output_folder / f"plane{plane_index}" / "stat.npy", allow_pickle=True))
             all_stats.extend(stat)
             plane_assignments.extend([plane_index] * len(stat))
 
         return Suite2pRois.from_stat(
             stats=all_stats,
-            shape=(int(ops["Ly"]), int(ops["Lx"]), n_planes),
-            sampling_frequency=float(ops["fs"]),
+            shape=(H, W, n_planes),
+            sampling_frequency=imaging.sampling_frequency,
             plane_assignments=np.array(plane_assignments, dtype=int),
         )

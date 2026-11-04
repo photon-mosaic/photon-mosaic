@@ -83,7 +83,9 @@ def _load_folder(folder, **kwargs):
         return load_roi_analyzer(folder, **kwargs)
 
     # BinaryFolderRois — identified by binary.json + roi_image_masks.npy
-    if (folder / "roi_image_masks.npy").is_file() and (folder / "metadata.json").is_file():
+    # sparse masks are saved as .npz, dense ones as .npy
+    has_masks = (folder / "roi_image_masks.npy").is_file() or (folder / "roi_image_masks.npz").is_file()
+    if has_masks and (folder / "metadata.json").is_file():
         from .binaryrois import BinaryFolderRois
 
         return BinaryFolderRois(folder_path=folder)

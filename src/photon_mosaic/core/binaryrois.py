@@ -179,7 +179,7 @@ class BinaryFolderRois(BinaryRois):
         binary_rois.dump(folder_path / "binary.json", relative_to=folder_path)
 
         save_provenance_to_folder(folder_path, rois, relative_to=folder_path)
-        save_properties_to_folder(folder_path, rois)
+        save_properties_to_folder(folder_path / "properties", rois)
         save_annotations_to_folder(folder_path, rois)
 
         cached = BinaryFolderRois(folder_path=folder_path)

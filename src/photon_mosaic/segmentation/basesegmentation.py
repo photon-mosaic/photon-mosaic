@@ -98,9 +98,8 @@ class BaseSegmentation:
     :func:`photon_mosaic.segmentation.run_segmentation` calls in order:
 
     1. :meth:`initialize_folder` / :meth:`set_params_to_folder` (provided here)
-    2. :meth:`run_from_folder` -- detect ROIs on one contiguous span of epochs
-       and write the backend's native output to a folder
-    3. :meth:`read_rois_from_folder` -- load that output back as a :class:`BaseRois`
+    2. :meth:`run` -- detect ROIs on one contiguous span of epochs and return
+       them as a :class:`BaseRois`
 
     Subclasses declare ``method_name`` (the string users pass as ``method``)
     and ``settings_class`` (their pydantic settings model), and register
@@ -157,22 +156,19 @@ class BaseSegmentation:
             json.dump(params, f, indent=4)
 
     @classmethod
-    def run_from_folder(
+    def run(
         cls,
-        output_folder: Path,
         imaging: BaseImaging,
         epoch_indices: Sequence[int],
         yrange: Sequence[int],
         xrange: Sequence[int],
         badframes: NDArray[np.bool_] | None,
         settings: Any,
-    ) -> None:
-        """Detect ROIs on the concatenation of ``epoch_indices`` and write them to ``output_folder``.
+    ) -> BaseRois:
+        """Detect ROIs on the concatenation of ``epoch_indices`` and return the detected ROIs.
 
         Parameters
         ----------
-        output_folder : Path
-            Existing, empty folder for the backend's native output.
         imaging : BaseImaging
             Motion-corrected imaging object.
         epoch_indices : sequence of int
@@ -183,15 +179,16 @@ class BaseSegmentation:
             Frames to exclude, shaped ``(total_frames_in_epochs,)``.
         settings : BaseSettings
             Validated ``settings_class`` instance.
+
+        Returns
+        -------
+        rois : BaseRois
+            Detected ROIs for the concatenated epochs.
         """
         raise NotImplementedError
 
-    @classmethod
-    def read_rois_from_folder(cls, output_folder: Path) -> BaseRois:
-        """Load the ROIs written by :meth:`run_from_folder` from ``output_folder``."""
-        raise NotImplementedError
 
-
+# TODO: remove in favor of ROIEpoch
 class EpochSegmentations:
     """Container of per-epoch :class:`BaseRois` results.
 

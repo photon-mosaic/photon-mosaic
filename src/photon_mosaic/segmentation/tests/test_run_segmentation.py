@@ -19,11 +19,14 @@ from photon_mosaic.segmentation import (
 
 class DummySettings(BaseSettings):
     num_rois: int = Field(default=2, description="Number of single-pixel ROIs to emit.")
-    fail: bool = Field(default=False, description="Raise inside run_from_folder.")
+    fail: bool = Field(default=False, description="Raise inside run.")
 
 
 class DummySegmentation(BaseSegmentation):
-    """Backend emitting ``num_rois`` single-pixel ROIs, without any optional dependency."""
+    """Backend emitting single-pixel ROIs, without any optional dependency.
+
+    A span starting at epoch ``i`` gets ``num_rois + i`` ROIs, so per-epoch results can be told apart.
+    """
 
     method_name = "dummy"
     settings_class = DummySettings
@@ -37,26 +40,13 @@ class DummySegmentation(BaseSegmentation):
         return "0.0.0"
 
     @classmethod
-    def run_from_folder(cls, output_folder, imaging, epoch_indices, yrange, xrange, badframes, settings):
+    def run(cls, imaging, epoch_indices, yrange, xrange, badframes, settings):
         if settings.fail:
             raise RuntimeError("dummy failure")
         H, W, _ = imaging.shape
-        result = {
-            "num_rois": settings.num_rois,
-            "shape": [H, W],
-            "fs": imaging.sampling_frequency,
-            "epoch_indices": list(epoch_indices),
-        }
-        (output_folder / "result.json").write_text(json.dumps(result))
-
-    @classmethod
-    def read_rois_from_folder(cls, output_folder):
-        result = json.loads((output_folder / "result.json").read_text())
-        stats = [
-            {"ypix": np.array([i]), "xpix": np.array([0]), "lam": np.array([1.0])} for i in range(result["num_rois"])
-        ]
-        H, W = result["shape"]
-        return Suite2pRois.from_stat(stats, shape=(H, W, 1), sampling_frequency=result["fs"])
+        num_rois = settings.num_rois + epoch_indices[0]
+        stats = [{"ypix": np.array([i]), "xpix": np.array([0]), "lam": np.array([1.0])} for i in range(num_rois)]
+        return Suite2pRois.from_stat(stats, shape=(H, W, 1), sampling_frequency=imaging.sampling_frequency)
 
 
 @pytest.fixture(autouse=True)
@@ -110,7 +100,7 @@ def test_folder_contents_and_imaging_registered(imaging, tmp_path):
     assert rois.imaging is imaging
     assert (folder / "segmentation_params.json").is_file()
     assert (folder / "badframes.npz").is_file()
-    assert (folder / "segmentation_output" / "result.json").is_file()
+    assert (folder / "segmentation_output" / "metadata.json").is_file()
     log = json.loads((folder / "segmentation_log.json").read_text())
     assert log["method_version"] == "0.0.0"
     assert log["error"] is False
@@ -170,18 +160,33 @@ def test_error_is_logged(imaging, tmp_path):
 def test_read_segmentation_output_round_trip(imaging, tmp_path, scope):
     folder = tmp_path / "seg"
     result = run_segmentation(imaging, method="dummy", folder=folder, scope=scope)
-    reloaded = read_segmentation_output(folder)
+    reloaded = read_segmentation_output(folder, imaging=imaging)
 
     if scope == "all_epochs":
-        assert reloaded.get_num_rois() == result.get_num_rois()
-        return
+        pairs = [(result, reloaded)]
+    else:
+        assert isinstance(result, EpochSegmentations)
+        assert isinstance(reloaded, EpochSegmentations)
+        assert reloaded.epoch_indices == result.epoch_indices == [0, 1]
+        assert [result[i].get_num_rois() for i in (0, 1)] == [2, 3]
+        pairs = [(result[i], reloaded[i]) for i in (0, 1)]
 
-    assert isinstance(result, EpochSegmentations)
-    assert isinstance(reloaded, EpochSegmentations)
-    assert reloaded.epoch_indices == result.epoch_indices == [0, 1]
-    for ep_idx in (0, 1):
-        sub = json.loads((folder / "segmentation_output" / f"epoch{ep_idx}" / "result.json").read_text())
-        assert sub["epoch_indices"] == [ep_idx]
+    for original, loaded in pairs:
+        assert isinstance(original, Suite2pRois)
+        assert loaded.imaging is imaging
+        np.testing.assert_array_equal(
+            np.asarray(loaded.get_roi_image_masks().todense()), np.asarray(original.get_roi_image_masks().todense())
+        )
+
+
+def test_no_folder_returns_rois_and_writes_nothing(imaging, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    rois = run_segmentation(imaging, method="dummy", folder=None)
+
+    assert isinstance(rois, Suite2pRois)
+    assert rois.imaging is imaging
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_registered_imaging_defaults_to_motion_ranges_and_badframes_of_selected_epochs(imaging, tmp_path):
