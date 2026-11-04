@@ -93,6 +93,8 @@ class RegisterImaging(BasePreprocessor):
         for epoch_idx, parent_epoch in enumerate(imaging.epochs):
             self.add_epoch(registration_class(parent_epoch, motion, epoch_idx, **kwargs))
 
+        self.motion = motion
+
         # store motion as a dict: SpikeInterface can only serialize extractors and plain data
         self._kwargs = dict(imaging=imaging, motion=motion.to_dict(), method=method, **kwargs)
 

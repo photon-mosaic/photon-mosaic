@@ -182,3 +182,36 @@ def test_read_segmentation_output_round_trip(imaging, tmp_path, scope):
     for ep_idx in (0, 1):
         sub = json.loads((folder / "segmentation_output" / f"epoch{ep_idx}" / "result.json").read_text())
         assert sub["epoch_indices"] == [ep_idx]
+
+
+def test_registered_imaging_defaults_to_motion_ranges_and_badframes_of_selected_epochs(imaging, tmp_path):
+    from photon_mosaic.core import Motion
+    from photon_mosaic.preprocessing import RegisterImaging
+
+    motion = Motion(
+        imaging=imaging,
+        displacements=[np.zeros((2, 1, 2)), np.zeros((3, 1, 2))],
+        yranges=[[(0, 4)], [(1, 3)]],
+        xranges=[[(0, 5)], [(2, 4)]],
+        corrected_badframes=[np.array([True, False]), np.array([False, True, False])],
+    )
+    registered = RegisterImaging(imaging, motion)
+    folder = tmp_path / "seg"
+
+    run_segmentation(registered, method="dummy", folder=folder, scope="per_epoch", epoch_indices=[1])
+
+    params = json.loads((folder / "segmentation_params.json").read_text())
+    assert params["run_kwargs"]["yrange"] == [[1, 3]]
+    assert params["run_kwargs"]["xrange"] == [[2, 4]]
+    saved = np.load(folder / "badframes.npz")
+    assert list(saved) == ["epoch1"]
+    np.testing.assert_array_equal(saved["epoch1"], [False, True, False])
+
+
+def test_registered_imaging_without_motion_ranges_falls_back_to_full_frame(imaging, tmp_path):
+    from photon_mosaic.core import Motion
+    from photon_mosaic.preprocessing import RegisterImaging
+
+    motion = Motion(imaging=imaging, displacements=[np.zeros((2, 1, 2)), np.zeros((3, 1, 2))])
+    run_segmentation(RegisterImaging(imaging, motion), method="dummy", folder=tmp_path / "seg")
+    assert not (tmp_path / "seg" / "badframes.npz").exists()

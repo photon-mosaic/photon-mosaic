@@ -15,6 +15,7 @@ from numpy.typing import NDArray
 from photon_mosaic.core import BaseImaging
 from photon_mosaic.core.baserois import BaseRois
 from photon_mosaic.core.core_tools import _coerce_settings
+from photon_mosaic.preprocessing.registration import RegisterImaging
 
 from .basesegmentation import (
     EpochSegmentations,
@@ -25,6 +26,11 @@ from .basesegmentation import (
 )
 
 _output_subfolder = "segmentation_output"
+
+
+def _intersect_plane_ranges(plane_ranges: Sequence[Sequence[int]]) -> list[int]:
+    """Collapse per-plane ``(lo, hi)`` ranges into the one range valid on every plane."""
+    return [max(int(r[0]) for r in plane_ranges), min(int(r[1]) for r in plane_ranges)]
 
 
 def run_segmentation(
@@ -118,6 +124,17 @@ def run_segmentation(
     selected = list(range(imaging.get_num_epochs())) if epoch_indices is None else list(epoch_indices)
     n_eps = len(selected)
     frame_counts = [int(imaging.get_num_samples(segment_index=i)) for i in selected]
+
+    # Explicit arguments win; otherwise fall back to what registration computed for the selected epochs.
+    if isinstance(imaging, RegisterImaging):
+        motion_y, motion_x = imaging.motion.yranges, imaging.motion.xranges
+        motion_bf = imaging.motion.corrected_badframes
+        if yrange is None and motion_y is not None:
+            yrange = [_intersect_plane_ranges(motion_y[i]) for i in selected]
+        if xrange is None and motion_x is not None:
+            xrange = [_intersect_plane_ranges(motion_x[i]) for i in selected]
+        if badframes is None and motion_bf is not None:
+            badframes = [motion_bf[i] for i in selected]
 
     yranges = _resolve_ranges(yrange, n_eps, default=[0, H], label="yrange")
     xranges = _resolve_ranges(xrange, n_eps, default=[0, W], label="xrange")
