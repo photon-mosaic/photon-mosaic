@@ -40,6 +40,24 @@ def test_select_planes_returns_lazy_subset_per_epoch():
         )
 
 
+def test_select_planes_normalizes_plane_id_type():
+    imaging = generate_random_imaging(
+        num_frames=4,
+        height=3,
+        width=3,
+        num_planes=3,
+        sampling_frequency=10.0,
+        seed=14,
+    )
+
+    from_list = select_planes(imaging, [2, 0])
+    from_array = select_planes(imaging, np.array([2, 0]))
+
+    assert isinstance(from_list.plane_ids, np.ndarray)
+    assert isinstance(from_array.plane_ids, np.ndarray)
+    np.testing.assert_array_equal(from_list.plane_ids, from_array.plane_ids)
+
+
 def test_select_planes_allows_subselection_within_selected_proxy():
     imaging = generate_random_imaging(
         num_frames=5,

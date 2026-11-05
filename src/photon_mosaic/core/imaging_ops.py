@@ -15,7 +15,7 @@ from .baseimaging import BaseImaging, BaseImagingEpoch
 
 
 def _copy_plane_ids(source: BaseImaging, target: BaseImaging) -> None:
-    target._main_ids = np.asarray(source.plane_ids).copy()
+    target._main_ids = source.plane_ids.copy()
 
 
 def _normalize_epoch_indices(epoch_indices: int | list[int], num_epochs: int) -> list[int]:

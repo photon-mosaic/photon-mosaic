@@ -40,6 +40,7 @@ class SelectPlanesImaging(BaseImaging):
                 raise ValueError(f"Plane ID {plane_id} {error_suffix}")
 
     def __init__(self, imaging: BaseImaging, plane_ids: Sequence):
+        plane_ids = np.asarray(plane_ids)
         if len(plane_ids) == 0:
             raise ValueError("plane_ids cannot be empty.")
 
