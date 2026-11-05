@@ -1,4 +1,5 @@
 import logging
+import math
 import time
 from typing import Any, Sequence
 
@@ -254,12 +255,13 @@ class Suite2PMotion(Motion):
         yranges: Sequence[Sequence[tuple[int, int]]] | None = None,
         xranges: Sequence[Sequence[tuple[int, int]]] | None = None,
         corrected_badframes: Sequence[NDArray[np.bool_]] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Store Suite2P registration outputs.
 
         Parameters
         ----------
-        imaging, displacements, reference, yranges, xranges
+        imaging, displacements, reference, yranges, xranges, metadata
             See :class:`photon_mosaic.core.motion.Motion`.
         corrected_badframes : Sequence | None, optional
             Per-epoch bad-frame mask (see :class:`photon_mosaic.core.motion.Motion`).
@@ -282,10 +284,28 @@ class Suite2PMotion(Motion):
             yranges=yranges,
             xranges=xranges,
             corrected_badframes=corrected_badframes,
+            metadata=metadata,
         )
         self.ops = ops
         self.nonrigid_offsets = nonrigid_offsets
         self.blocks = blocks
+
+    def _to_dict_kwargs(self) -> dict[str, Any]:
+        """Add the Suite2P-specific fields to :meth:`Motion._to_dict_kwargs`."""
+
+        kwargs = super()._to_dict_kwargs()
+        blocks = None if self.blocks is None else [_compact_blocks(b) for b in self.blocks]
+        kwargs.update(ops=self.ops, nonrigid_offsets=self.nonrigid_offsets, blocks=blocks)
+        return kwargs
+
+    @classmethod
+    def _from_dict_kwargs(cls, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Rebuild the upsampling matrix dropped by :meth:`_to_dict_kwargs`."""
+
+        kwargs = super()._from_dict_kwargs(kwargs)
+        if kwargs.get("blocks") is not None:
+            kwargs["blocks"] = [_expand_blocks(b) for b in kwargs["blocks"]]
+        return kwargs
 
     @classmethod
     def _compute(
@@ -475,6 +495,34 @@ class Suite2PMotion(Motion):
             xranges=all_xranges,
             corrected_badframes=all_corrected_badframes,
         )
+
+
+# suite2p's make_blocks returns (yblock, xblock, nblocks, block_size, NRsm, Kmat, nup). Kmat is a
+# ((2*lpad+1)**2, nup**2) float32 tensor -- ~0.7 MB, ~11 MB as json, per plane -- but it is fully
+# determined by lpad and subpixel, so serialize those two ints instead and recompute it on load.
+_KMAT_INDEX = 5
+
+
+def _compact_blocks(blocks: Any) -> Any:
+    """Replace the ``Kmat`` of one plane's ``blocks`` by the ``mat_upsample`` arguments that produce it."""
+
+    if not isinstance(blocks, tuple) or len(blocks) != 7:
+        return blocks  # rigid registration stores no blocks for the plane
+    kmat, nup = blocks[_KMAT_INDEX], blocks[6]
+    lpad = (math.isqrt(kmat.shape[0]) - 1) // 2
+    subpixel = (nup - 1) // (2 * lpad)
+    return blocks[:_KMAT_INDEX] + ({"lpad": lpad, "subpixel": subpixel},) + blocks[_KMAT_INDEX + 1 :]
+
+
+def _expand_blocks(blocks: Any) -> Any:
+    """Inverse of :func:`_compact_blocks`."""
+
+    if not isinstance(blocks, tuple) or len(blocks) != 7 or not isinstance(blocks[_KMAT_INDEX], dict):
+        return blocks
+    from suite2p.registration.utils import mat_upsample  # noqa: PLC0415
+
+    kmat, _ = mat_upsample(**blocks[_KMAT_INDEX])
+    return blocks[:_KMAT_INDEX] + (kmat,) + blocks[_KMAT_INDEX + 1 :]
 
 
 class RegisterSuite2PImaging(RegisterImaging):

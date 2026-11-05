@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 from pydantic import ValidationError
+from spikeinterface.core.base import BaseExtractor
 
 from photon_mosaic.core import Motion, NumpyImaging, compute_motion, generate_random_imaging, get_registration_class
 from photon_mosaic.preprocessing.registration import RegisterImaging
@@ -237,6 +238,33 @@ class TestRegisterSuite2PImaging:
     def test_inherits_shape(self, imaging, motion):
         reg = RegisterSuite2PImaging(imaging, motion)
         assert reg.shape == imaging.shape
+
+
+class TestRegisterImagingSerialization:
+    @pytest.mark.parametrize("nonrigid", [False, True])
+    @pytest.mark.parametrize("dump", ["json", "pickle"])
+    def test_reloaded_imaging_registers_identically(self, tmp_path, nonrigid, dump):
+        shifts = [[(0, 0), (1, 0), (0, 1), (1, 1), (0, 0), (2, 1)]]
+        # file-backed parent: an in-memory NumpyImaging does not reload from json by itself
+        imaging = _make_shifted_imaging(num_frames=6, height=32, width=32, shifts=shifts).save(folder=tmp_path / "raw")
+        motion = compute_motion(
+            imaging,
+            method="suite2p",
+            settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=nonrigid, block_size=[16, 16]),
+        )
+        registered = RegisterImaging(imaging, motion)
+
+        file_path = tmp_path / f"registered.{dump}"
+        assert registered.check_serializability(dump)
+        if dump == "json":
+            registered.dump_to_json(file_path)
+        else:
+            registered.dump_to_pickle(file_path)
+        reloaded = BaseExtractor.load(file_path)
+
+        assert isinstance(reloaded, RegisterImaging)
+        assert type(reloaded.epochs[0].motion) is Suite2PMotion
+        np.testing.assert_array_equal(reloaded.get_series(0, 6), registered.get_series(0, 6))
 
 
 class TestRegisterSuite2PImagingEpoch:

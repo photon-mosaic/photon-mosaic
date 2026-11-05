@@ -9,7 +9,7 @@ In this notebook, we showcase a very simple example of using ``photon-mosaic`` t
 import matplotlib
 from photon_mosaic.preprocessing import compute_motion, register_motion
 from photon_mosaic.sample_data import download_suite2p_google_drive
-from photon_mosaic.segmentation.suite2p_segmentation import Suite2pSegmentationSettings, detect_rois_suite2p
+from photon_mosaic.segmentation import run_segmentation
 from photon_mosaic.widgets.rois import plot_rois
 from photon_mosaic.widgets.series import plot_imaging_series
 
@@ -43,12 +43,15 @@ plot_imaging_series(
 # Next, we use `suite2p` with its default settings to detect regions of interest (ROIs) in the registered image.
 
 # %%
-detected_rois = detect_rois_suite2p(
+detected_rois = run_segmentation(
     registered_imaging,
-    settings=Suite2pSegmentationSettings(algorithm="sourcery"),
+    method="suite2p",
+    folder="segmentation_suite2p",
+    remove_existing_folder=True,
+    algorithm="sourcery",
 )
 
-print(detect_rois_suite2p)
+print(detected_rois)
 plot_rois(detected_rois)  # type: ignore[arg-type]
 
 

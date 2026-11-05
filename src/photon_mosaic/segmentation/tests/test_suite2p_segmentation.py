@@ -6,8 +6,9 @@ from photon_mosaic.core import NumpyImaging
 from photon_mosaic.core.generators import generate_imaging_with_rois
 from photon_mosaic.extractors import Suite2pRois
 from photon_mosaic.segmentation import (
-    Suite2pEpochSegmentations,
-    detect_rois_suite2p,
+    EpochSegmentations,
+    read_segmentation_output,
+    run_segmentation,
 )
 from photon_mosaic.segmentation import suite2p_segmentation as seg
 
@@ -80,11 +81,11 @@ def _make_test_imaging():
 
 
 # ---------------------------------------------------------------------------
-# detect_rois_suite2p
+# run_segmentation(method="suite2p")
 # ---------------------------------------------------------------------------
 
 
-class TestDetectRoisSuite2p:
+class TestRunSuite2p:
     @pytest.fixture()
     def imaging(self):
         return _make_test_imaging()
@@ -93,9 +94,9 @@ class TestDetectRoisSuite2p:
     def fake_inner(self, monkeypatch):
         return _install_fake_inner(monkeypatch)
 
-    def test_all_epochs_concatenates_selected_epochs(self, imaging, fake_inner):
+    def test_all_epochs_concatenates_selected_epochs(self, imaging, fake_inner, tmp_path):
         bin_calls, detect_calls = fake_inner
-        rois = detect_rois_suite2p(imaging, scope="all_epochs")
+        rois = run_segmentation(imaging, method="suite2p", folder=tmp_path / "seg", scope="all_epochs")
 
         assert isinstance(rois, Suite2pRois)
         assert len(bin_calls) == 1
@@ -107,15 +108,17 @@ class TestDetectRoisSuite2p:
         assert detect_calls[0]["mov_shape"] == (5, 4, 5)
         assert rois.get_num_rois() == 1
 
-    def test_per_epoch_returns_container(self, imaging, fake_inner):
+    def test_per_epoch_returns_container(self, imaging, fake_inner, tmp_path):
         bin_calls, detect_calls = fake_inner
-        rois_by_epoch = detect_rois_suite2p(
+        rois_by_epoch = run_segmentation(
             imaging,
+            method="suite2p",
+            folder=tmp_path / "seg",
             scope="per_epoch",
             badframes=[np.array([False, True]), np.array([True, False, False])],
         )
 
-        assert isinstance(rois_by_epoch, Suite2pEpochSegmentations)
+        assert isinstance(rois_by_epoch, EpochSegmentations)
         assert rois_by_epoch.epoch_indices == [0, 1]
         assert isinstance(rois_by_epoch[0], Suite2pRois)
         assert isinstance(rois_by_epoch[1], Suite2pRois)
@@ -127,14 +130,28 @@ class TestDetectRoisSuite2p:
         assert detect_calls[0]["mov_shape"] == (2, 4, 5)
         assert detect_calls[1]["mov_shape"] == (3, 4, 5)
 
-    def test_all_epochs_rejects_mismatched_epoch_ranges(self, imaging, fake_inner):
-        with pytest.raises(ValueError, match="yrange differs across selected epochs"):
-            detect_rois_suite2p(imaging, scope="all_epochs", yrange=[[0, 4], [1, 4]])
+    def test_output_folder_round_trip(self, imaging, fake_inner, tmp_path):
+        folder = tmp_path / "seg"
+        rois = run_segmentation(imaging, method="suite2p", folder=folder)
 
-    def test_all_epochs_accepts_per_epoch_badframes(self, imaging, fake_inner):
+        assert isinstance(rois, Suite2pRois)
+        reloaded = read_segmentation_output(folder)
+        np.testing.assert_array_equal(reloaded.get_roi_image_masks().todense(), rois.get_roi_image_masks().todense())
+        # suite2p's scalar stat fields are saved as ROI properties
+        np.testing.assert_array_equal(reloaded.get_property("npix"), rois.get_property("npix"))
+
+    def test_all_epochs_rejects_mismatched_epoch_ranges(self, imaging, fake_inner, tmp_path):
+        with pytest.raises(ValueError, match="yrange differs across selected epochs"):
+            run_segmentation(
+                imaging, method="suite2p", folder=tmp_path / "seg", scope="all_epochs", yrange=[[0, 4], [1, 4]]
+            )
+
+    def test_all_epochs_accepts_per_epoch_badframes(self, imaging, fake_inner, tmp_path):
         bin_calls, _ = fake_inner
-        detect_rois_suite2p(
+        run_segmentation(
             imaging,
+            method="suite2p",
+            folder=tmp_path / "seg",
             scope="all_epochs",
             badframes=[np.array([False, True]), np.array([True, False, False])],
         )
@@ -142,17 +159,24 @@ class TestDetectRoisSuite2p:
         np.testing.assert_array_equal(bin_calls[0]["badframes"], np.array([False, True, True, False, False]))
 
 
-class TestDetectRoisSuite2pUnmocked:
+class TestRunSuite2pUnmocked:
     """Run suite2p's own detection end-to-end (no mocks)."""
 
-    def test_sparsery_with_defaults(self):
+    def test_sparsery_with_defaults(self, tmp_path):
         # The only test where suite2p's detection runs: the others mock _detect_rois_from_mov,
         # and the cellpose test below fails earlier, at settings validation.
         _, imaging, _ = generate_imaging_with_rois(
-            num_frames=300, height=64, width=64, num_rois=10, radius_range=(4, 6), seed=0
+            num_frames=300,
+            height=64,
+            width=64,
+            num_rois=10,
+            radius_range=(4, 6),
+            decay_time=2.0,
+            event_rate=1.0,
+            seed=0,
         )
 
-        rois = detect_rois_suite2p(imaging)
+        rois = run_segmentation(imaging, method="suite2p", folder=tmp_path / "seg")
 
         assert rois.get_num_rois() > 0
 
@@ -163,7 +187,7 @@ class TestDetectRoisSuite2pUnmocked:
         )
 
         with pytest.raises(ValidationError, match="diameter"):
-            detect_rois_suite2p(imaging, settings={"algorithm": "cellpose", "diameter": [0, 0]})
+            run_segmentation(imaging, method="suite2p", settings={"algorithm": "cellpose", "diameter": [0, 0]})
 
 
 # ---------------------------------------------------------------------------

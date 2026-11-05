@@ -64,6 +64,17 @@ class BaseRois(BaseExtractor):
         """
         return self._imaging
 
+    @property
+    def segmentation_info(self):
+        if "__segmentation_info__" in self.get_annotation_keys():
+            return self.get_annotation("__segmentation_info__")
+        else:
+            return None
+
+    def set_segmentation_info(self, imaging_dict, params_dict, log_dict):
+        segmentation_info = dict(imaging=imaging_dict, params=params_dict, log=log_dict)
+        self.annotate(__segmentation_info__=segmentation_info)
+
     def has_imaging(self) -> bool:
         """Check if an imaging is registered.
 
