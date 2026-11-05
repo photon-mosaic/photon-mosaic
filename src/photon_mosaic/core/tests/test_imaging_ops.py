@@ -20,6 +20,13 @@ from photon_mosaic.core.numpyimaging import NumpyImaging
 from photon_mosaic.core.selectplanes import select_planes
 
 
+@pytest.fixture
+def imaging_with_plane_index_values():
+    """Return a three-plane imaging where each plane is filled with its index."""
+    data = np.broadcast_to(np.arange(3, dtype=np.float32), (20, 4, 5, 3)).copy()
+    return NumpyImaging(data, sampling_frequency=10.0)
+
+
 def test_split_epoch_with_single_index_returns_single_epoch_proxy():
     imaging = generate_random_imaging(num_frames=(4, 6, 8), height=5, width=7, sampling_frequency=20.0, seed=0)
 
@@ -113,9 +120,8 @@ def test_split_epoch_at_frames_validates_boundaries():
         _ = split_epoch_at_frames(imaging, 0, [5, 3])
 
 
-def test_split_epoch_at_frames_uses_selected_plane_data():
-    data = np.broadcast_to(np.arange(3, dtype=np.float32), (20, 16, 16, 3)).copy()
-    selected = select_planes(NumpyImaging(data, sampling_frequency=10.0), [2])
+def test_split_epoch_at_frames_uses_selected_plane_data(imaging_with_plane_index_values):
+    selected = select_planes(imaging_with_plane_index_values, [2])
 
     split = split_epoch_at_frames(selected, 0, [10])
 
@@ -180,9 +186,8 @@ def test_frame_slice_preserves_planes():
     np.testing.assert_array_equal(stub.get_series(plane_ids=[2]), full[3:7, ..., [2]])
 
 
-def test_frame_slice_of_selected_planes_keeps_data_and_plane_ids():
-    data = np.broadcast_to(np.arange(3, dtype=np.float32), (20, 16, 16, 3)).copy()
-    selected = select_planes(NumpyImaging(data, sampling_frequency=10.0), [2])
+def test_frame_slice_of_selected_planes_keeps_data_and_plane_ids(imaging_with_plane_index_values):
+    selected = select_planes(imaging_with_plane_index_values, [2])
 
     stub = frame_slice(selected, 0, 10)
 
@@ -243,8 +248,8 @@ def test_concatenate_epochs_joins_all_epochs_into_one():
     np.testing.assert_array_equal(concatenated.get_series(start_frame=5, end_frame=8), full[5:8])
 
 
-def test_concatenate_epochs_uses_selected_plane_data_and_ids():
-    first = np.broadcast_to(np.arange(3, dtype=np.float32), (10, 4, 5, 3)).copy()
+def test_concatenate_epochs_uses_selected_plane_data_and_ids(imaging_with_plane_index_values):
+    first = imaging_with_plane_index_values.get_series()[:10]
     second = first + 3
     selected = select_planes(NumpyImaging([first, second], sampling_frequency=10.0), [2])
 
@@ -254,9 +259,8 @@ def test_concatenate_epochs_uses_selected_plane_data_and_ids():
     np.testing.assert_array_equal(concatenated.plane_ids, [2])
 
 
-def test_append_imaging_uses_selected_plane_data():
-    data = np.broadcast_to(np.arange(3, dtype=np.float32), (10, 4, 5, 3)).copy()
-    selected = select_planes(NumpyImaging(data, sampling_frequency=10.0), [2])
+def test_append_imaging_uses_selected_plane_data(imaging_with_plane_index_values):
+    selected = select_planes(imaging_with_plane_index_values, [2])
 
     appended = append_imaging([selected, selected])
 
@@ -389,14 +393,13 @@ def test_stack_multi_plane_objects_and_plane_selection():
     np.testing.assert_array_equal(sel[..., 1], b.get_series()[..., 1])
 
 
-def test_stack_planes_uses_selected_plane_data():
-    data = np.broadcast_to(np.arange(3, dtype=np.float32), (10, 4, 5, 3)).copy()
-    selected = select_planes(NumpyImaging(data, sampling_frequency=10.0), [2])
+def test_stack_planes_uses_selected_plane_data(imaging_with_plane_index_values):
+    selected = select_planes(imaging_with_plane_index_values, [2])
 
     stacked = stack_planes(selected, selected)
 
     result = stacked.get_series()
-    assert result.shape == (10, 4, 5, 2)
+    assert result.shape == (20, 4, 5, 2)
     np.testing.assert_array_equal(np.unique(result), [2.0])
 
 
