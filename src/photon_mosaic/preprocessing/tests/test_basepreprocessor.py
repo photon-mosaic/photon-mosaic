@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 from photon_mosaic.core import generate_random_imaging
+from photon_mosaic.core.selectplanes import select_planes
 from photon_mosaic.preprocessing.basepreprocessor import (
     BasePreprocessor,
     BasePreprocessorEpoch,
@@ -54,6 +55,20 @@ class TestBasePreprocessor:
     def test_init_rejects_dict(self):
         with pytest.raises(AssertionError):
             BasePreprocessor({"data": [1, 2, 3]})
+
+    def test_init_preserves_parent_plane_ids(self):
+        imaging = generate_random_imaging(
+            num_frames=10,
+            height=8,
+            width=9,
+            num_planes=3,
+            sampling_frequency=30.0,
+            seed=3,
+        )
+        selected = select_planes(imaging, [2, 0])
+
+        reg = BasePreprocessor(selected)
+        np.testing.assert_array_equal(reg.plane_ids, [2, 0])
 
 
 # ---------------------------------------------------------------------------
