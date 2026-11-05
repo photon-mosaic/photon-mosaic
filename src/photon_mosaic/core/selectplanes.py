@@ -53,7 +53,11 @@ class SelectPlanesImaging(BaseImaging):
 
         shape = (imaging.shape[0], imaging.shape[1], len(plane_ids))
         BaseImaging.__init__(
-            self, sampling_frequency=imaging.sampling_frequency, shape=shape, dtype=imaging.get_dtype()
+            self,
+            sampling_frequency=imaging.sampling_frequency,
+            shape=shape,
+            dtype=imaging.get_dtype(),
+            plane_ids=plane_ids,
         )
         imaging.copy_metadata(self)
 

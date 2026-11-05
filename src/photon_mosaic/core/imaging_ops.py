@@ -14,10 +14,6 @@ from numpy.typing import DTypeLike
 from .baseimaging import BaseImaging, BaseImagingEpoch
 
 
-def _copy_plane_ids(source: BaseImaging, target: BaseImaging) -> None:
-    target._main_ids = source.plane_ids.copy()
-
-
 def _normalize_epoch_indices(epoch_indices: int | list[int], num_epochs: int) -> list[int]:
     """Normalize and validate epoch indices requested by the user."""
     if isinstance(epoch_indices, int):
@@ -47,10 +43,13 @@ class SelectEpochImaging(BaseImaging):
         normalized_epoch_indices = _normalize_epoch_indices(epoch_indices, imaging.get_num_epochs())
 
         BaseImaging.__init__(
-            self, sampling_frequency=imaging.sampling_frequency, shape=imaging.shape, dtype=imaging.get_dtype()
+            self,
+            sampling_frequency=imaging.sampling_frequency,
+            shape=imaging.shape,
+            dtype=imaging.get_dtype(),
+            plane_ids=imaging.plane_ids.copy(),
         )
         imaging.copy_metadata(self)
-        _copy_plane_ids(imaging, self)
 
         self._selected_epoch_indices = {}
         for i, epoch_index in enumerate(normalized_epoch_indices):
@@ -143,10 +142,13 @@ class SplitEpochAtFramesImaging(BaseImaging):
             raise ValueError(f"frame_boundaries must be strictly increasing; got {boundaries}")
 
         BaseImaging.__init__(
-            self, sampling_frequency=imaging.sampling_frequency, shape=imaging.shape, dtype=imaging.get_dtype()
+            self,
+            sampling_frequency=imaging.sampling_frequency,
+            shape=imaging.shape,
+            dtype=imaging.get_dtype(),
+            plane_ids=imaging.plane_ids.copy(),
         )
         imaging.copy_metadata(self)
-        _copy_plane_ids(imaging, self)
 
         edges = [0, *boundaries, n_samples]
         for lo, hi in zip(edges[:-1], edges[1:]):
@@ -238,9 +240,9 @@ class FrameSliceImaging(BaseImaging):
             sampling_frequency=parent_imaging.sampling_frequency,
             shape=parent_imaging.shape,
             dtype=parent_imaging.get_dtype(),
+            plane_ids=parent_imaging.plane_ids.copy(),
         )
         parent_imaging.copy_metadata(self)
-        _copy_plane_ids(parent_imaging, self)
         self.add_epoch(_FrameRangeEpoch(parent_epoch, start_frame, end_frame))
 
         self._parent = parent_imaging
@@ -354,9 +356,9 @@ class ConcatenateImaging(BaseImaging):
             sampling_frequency=reference.sampling_frequency,
             shape=shape,
             dtype=dtype,
+            plane_ids=reference.plane_ids.copy(),
         )
         reference.copy_metadata(self)
-        _copy_plane_ids(reference, self)
         parent_epochs = [epoch for imaging in imagings for epoch in imaging.epochs]
         self.add_epoch(_ConcatenatedEpoch(parent_epochs, shape=shape, dtype=dtype))
 
@@ -405,9 +407,9 @@ class AppendImaging(BaseImaging):
             sampling_frequency=reference.sampling_frequency,
             shape=reference.shape,
             dtype=reference.get_dtype(),
+            plane_ids=reference.plane_ids.copy(),
         )
         reference.copy_metadata(self)
-        _copy_plane_ids(reference, self)
         for imaging in imagings:
             for epoch in imaging.epochs:
                 self.add_epoch(epoch)
