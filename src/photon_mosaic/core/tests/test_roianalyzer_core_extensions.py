@@ -982,6 +982,21 @@ def test_neuropil_extension_run_and_get_data(suite2p_rois, neuropil_imaging):
         assert dense[i].sum() == pytest.approx(1.0)
 
 
+def test_recomputing_neuropil_deletes_fluorescence_and_its_children(suite2p_rois, neuropil_imaging):
+    # fluorescence depends on neuropil only optionally (#182)
+    analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
+    analyzer.compute("neuropil", min_neuropil_pixels=30)
+    analyzer.compute(["fluorescence", "df_over_f"])
+    analyzer.compute("neuropil", min_neuropil_pixels=20)
+    assert not analyzer.has_extension("fluorescence")
+    assert not analyzer.has_extension("df_over_f")
+
+    # without neuropil, fluorescence no longer depends on it and is kept
+    analyzer.compute("fluorescence", use_neuropil=False)
+    analyzer.compute("neuropil", min_neuropil_pixels=30)
+    assert analyzer.has_extension("fluorescence")
+
+
 def test_neuropil_extension_select_extension_data(suite2p_rois, neuropil_imaging):
     analyzer = create_roi_analyzer(suite2p_rois, neuropil_imaging, format="memory")
     analyzer.compute("neuropil", min_neuropil_pixels=30)
