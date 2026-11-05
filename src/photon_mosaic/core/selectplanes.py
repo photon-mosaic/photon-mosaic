@@ -44,7 +44,7 @@ class SelectPlanesImaging(BaseImaging):
         if len(plane_ids) == 0:
             raise ValueError("plane_ids cannot be empty.")
 
-        parent_plane_ids = imaging.plane_ids
+        parent_plane_ids = list(imaging.plane_ids)
         self._validate_plane_ids(
             plane_ids=plane_ids,
             available_plane_ids=parent_plane_ids,
@@ -61,7 +61,6 @@ class SelectPlanesImaging(BaseImaging):
         )
         imaging.copy_metadata(self)
 
-        parent_plane_ids = list(imaging.plane_ids)
         selected_plane_indices = np.asarray([parent_plane_ids.index(plane_id) for plane_id in plane_ids], dtype=int)
         for epoch in imaging.epochs:
             self.add_epoch(_SelectPlanesEpoch(epoch, selected_plane_indices))
