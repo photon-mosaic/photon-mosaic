@@ -345,3 +345,15 @@ class TestCopy:
         assert copied.format == "memory"
         assert copied.get_num_rois() == 10
         assert copied.has_extension("dummy")
+
+
+def test_children_dependencies_resolve_alternatives_to_computed_one():
+    from photon_mosaic.core.roianalyzer import _get_children_dependencies
+
+    # fluorescence declares "neuropil|background"; only the computed alternative is its parent
+    extensions = {"neuropil": {}, "fluorescence": {}, "df_over_f": {}}
+    assert _get_children_dependencies("neuropil", extensions) == ["fluorescence", "df_over_f"]
+    assert _get_children_dependencies("background", extensions) == []
+    extensions = {"background": {}, "fluorescence": {}}
+    assert _get_children_dependencies("background", extensions) == ["fluorescence"]
+    assert _get_children_dependencies("neuropil", extensions) == []
