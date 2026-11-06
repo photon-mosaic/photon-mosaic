@@ -4,9 +4,17 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from pydantic import ValidationError
 
 from photon_mosaic.core import Motion, generate_random_imaging, register_motion_class, register_registration_class
-from photon_mosaic.preprocessing import RegisterImaging, RegisterImagingEpoch, RegistrationSettings, register_motion
+from photon_mosaic.preprocessing import (
+    NormcorreRegistrationSettings,
+    RegisterImaging,
+    RegisterImagingEpoch,
+    RegistrationSettings,
+    Suite2pRegistrationSettings,
+    register_motion,
+)
 
 
 class DoublingEpoch(RegisterImagingEpoch):
@@ -34,7 +42,7 @@ class TestRegistrationSettings:
         settings = RegistrationSettings()
         assert settings.debug is False
         assert settings.tmp_dir == Path("/scratch")
-        assert settings.batch_size == 500
+        assert settings.batch_size == 100
         assert settings.device == "cpu"
 
     def test_values_can_be_overridden(self):
@@ -46,7 +54,7 @@ class TestRegistrationSettings:
         monkeypatch.setenv("DEVICE", "cuda")
         monkeypatch.setenv("BATCH_SIZE", "7")
         assert RegistrationSettings().device == "cpu"
-        assert RegistrationSettings().batch_size == 500
+        assert RegistrationSettings().batch_size == 100
 
     def test_prefixed_env_vars_are_read(self, monkeypatch):
         monkeypatch.setenv("REGISTRATION_DEVICE", "mps")
@@ -153,3 +161,18 @@ class TestRegisterImagingEpoch:
 
 def test_register_motion_is_alias():
     assert register_motion is RegisterImaging
+
+
+@pytest.mark.parametrize(
+    "settings_class", [RegistrationSettings, Suite2pRegistrationSettings, NormcorreRegistrationSettings]
+)
+def test_dotenv_file_reads_only_its_own_prefix(settings_class, tmp_path, monkeypatch):
+    lines = ["UNRELATED_KEY=1", "REGISTRATION_BATCH_SIZE=7", "SUITE2P_REGISTRATION_BATCH_SIZE=8"]
+    (tmp_path / ".env").write_text("\n".join(lines + ["NORMCORRE_REGISTRATION_BATCH_SIZE=9"]))
+    monkeypatch.chdir(tmp_path)
+    expected = {RegistrationSettings: 7, Suite2pRegistrationSettings: 8, NormcorreRegistrationSettings: 9}
+    assert settings_class().batch_size == expected[settings_class]
+    with (tmp_path / ".env").open("a") as f:
+        f.write("\nREGISTRATION_BATCH_SIZ=1\nSUITE2P_REGISTRATION_BATCH_SIZ=1\nNORMCORRE_REGISTRATION_BATCH_SIZ=1\n")
+    with pytest.raises(ValidationError):  # a typo with the class's own prefix
+        settings_class()
