@@ -151,14 +151,24 @@ class TestRunSuite2p:
 
         np.testing.assert_array_equal(bin_calls[0]["badframes"], np.array([False, True, True, False, False]))
 
+    def test_bin_size_setting_is_used(self, imaging, fake_inner):
+        bin_calls, _ = fake_inner
+        run_segmentation(imaging, method="suite2p", folder=None, bin_size=2)
+        assert bin_calls[0]["bin_size"] == 2
+
+    def test_unsupported_setting_raises(self, imaging, fake_inner):
+        with pytest.raises(ValueError, match="Not supported"):
+            run_segmentation(imaging, method="suite2p", folder=None, chan2_threshold=0.5)
+
 
 class TestRunSuite2pUnmocked:
     """Run suite2p's own detection end-to-end (no mocks)."""
 
-    def test_sparsery_with_defaults(self, tmp_path):
-        # The only test where suite2p's detection runs: the others mock _detect_rois_from_mov,
-        # and the cellpose test below fails earlier, at settings validation.
-        _, imaging, _ = generate_imaging_with_rois(
+    @pytest.fixture(scope="class")
+    @classmethod
+    def imaging(cls):
+        # 10 ROIs; the other run tests mock _detect_rois_from_mov
+        return generate_imaging_with_rois(
             num_frames=300,
             height=64,
             width=64,
@@ -167,11 +177,17 @@ class TestRunSuite2pUnmocked:
             decay_time=2.0,
             event_rate=1.0,
             seed=0,
-        )
+        )[1]
 
-        rois = run_segmentation(imaging, method="suite2p", folder=tmp_path / "seg")
+    def test_sparsery_with_defaults(self, imaging, tmp_path):
+        assert run_segmentation(imaging, method="suite2p", folder=tmp_path / "seg").get_num_rois() > 0
 
-        assert rois.get_num_rois() > 0
+    def test_max_rois_reaches_sparsery(self, imaging):
+        assert 0 < run_segmentation(imaging, method="suite2p", folder=None, max_ROIs=3).get_num_rois() <= 3
+
+    def test_npix_norm_max_reaches_roi_stats(self, imaging):
+        rois = run_segmentation(imaging, method="suite2p", folder=None, npix_norm_max=1.0)
+        assert (rois.get_property("npix_norm") <= 1.0).all()
 
     def test_cellpose_rejects_zero_diameter(self):
         # suite2p 1.x has no diameter=0 auto-estimate; it crashes inside roi_detect.
@@ -230,16 +246,20 @@ class TestStreamBinMovie:
 # ---------------------------------------------------------------------------
 
 
-class TestMergedDefaults:
-    def test_overlays_overrides_on_suite2p_defaults(self):
-        cfg = seg.Suite2pSegmentationSettings(algorithm="sourcery", threshold_scaling=2.5)
-        merged = cfg.merged_with_suite2p_defaults()
-        assert merged["algorithm"] == "sourcery"
-        assert merged["threshold_scaling"] == 2.5
-        # Suite2p-only sub-dicts come through untouched
-        assert "sparsery_settings" in merged
-        assert "sourcery_settings" in merged
-        assert "cellpose_settings" in merged
+class TestSettings:
+    def test_env_and_dotenv_reach_settings(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("SUITE2P_SEGMENTATION_SPATIAL_SCALE", "1")
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".env").write_text("UNRELATED_KEY=1\nSUITE2P_SEGMENTATION_MAX_ROIS=7\n")  # a shared .env
+        settings = seg.Suite2pSegmentationSettings()
+        assert (settings.spatial_scale, settings.max_ROIs) == (1, 7)
+        (tmp_path / ".env").write_text("SUITE2P_SEGMENTATION_MAX_ROI=7\n")  # misspelt
+        with pytest.raises(ValidationError):
+            seg.Suite2pSegmentationSettings()
+
+    def test_unknown_name_raises(self):
+        with pytest.raises(ValidationError):
+            seg.Suite2pSegmentationSettings(sparsery_settings={"spatial_scale": 1})
 
 
 class TestDiameter:
