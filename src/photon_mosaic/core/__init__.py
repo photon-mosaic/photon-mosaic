@@ -15,6 +15,7 @@ from .imaging_ops import (
     frame_slice,
     split_epoch_at_frames,
     split_epochs,
+    split_imaging_by_epochs,
     stack_planes,
 )
 from .loading import load

@@ -5,13 +5,11 @@ import pytest
 from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings
 
-from photon_mosaic.core import NumpyImaging
+from photon_mosaic.core import NumpyImaging, load, split_epochs
 from photon_mosaic.extractors import Suite2pRois
 from photon_mosaic.segmentation import (
     BaseSegmentation,
-    EpochSegmentations,
     basesegmentation,
-    read_segmentation_output,
     register_segmentation_class,
     run_segmentation,
 )
@@ -25,7 +23,7 @@ class DummySettings(BaseSettings):
 class DummySegmentation(BaseSegmentation):
     """Backend emitting single-pixel ROIs, without any optional dependency.
 
-    A span starting at epoch ``i`` gets ``num_rois + i`` ROIs, so per-epoch results can be told apart.
+    Each ROI records the frame count it saw as the ``num_frames`` property, so tests can check which imaging it ran on.
     """
 
     method_name = "dummy"
@@ -40,13 +38,16 @@ class DummySegmentation(BaseSegmentation):
         return "0.0.0"
 
     @classmethod
-    def run(cls, imaging, epoch_indices, yrange, xrange, badframes, settings):
+    def run(cls, imaging, yrange, xrange, badframes, settings):
         if settings.fail:
             raise RuntimeError("dummy failure")
-        H, W, _ = imaging.shape
-        num_rois = settings.num_rois + epoch_indices[0]
-        stats = [{"ypix": np.array([i]), "xpix": np.array([0]), "lam": np.array([1.0])} for i in range(num_rois)]
-        return Suite2pRois.from_stat(stats, shape=(H, W, 1), sampling_frequency=imaging.sampling_frequency)
+        H, W, n_planes = imaging.shape
+        stats = [
+            {"ypix": np.array([i]), "xpix": np.array([0]), "lam": np.array([1.0])} for i in range(settings.num_rois)
+        ]
+        rois = Suite2pRois.from_stat(stats, shape=(H, W, n_planes), sampling_frequency=imaging.sampling_frequency)
+        rois.set_property("num_frames", [imaging.get_total_frames()] * settings.num_rois)
+        return rois
 
 
 @pytest.fixture(autouse=True)
@@ -100,7 +101,7 @@ def test_folder_contents_and_imaging_registered(imaging, tmp_path):
     assert rois.imaging is imaging
     assert (folder / "segmentation_params.json").is_file()
     assert (folder / "badframes.npz").is_file()
-    assert (folder / "segmentation_output" / "metadata.json").is_file()
+    assert (folder / "rois" / "metadata.json").is_file()
     log = json.loads((folder / "segmentation_log.json").read_text())
     assert log["method_version"] == "0.0.0"
     assert log["error"] is False
@@ -156,42 +157,26 @@ def test_error_is_logged(imaging, tmp_path):
     assert result is None
 
 
-@pytest.mark.parametrize("scope", ["all_epochs", "per_epoch"])
-def test_read_segmentation_output_round_trip(imaging, tmp_path, scope):
+def test_saved_rois_reload_with_load(imaging, tmp_path):
     folder = tmp_path / "seg"
-    result = run_segmentation(imaging, method="dummy", folder=folder, scope=scope)
-    reloaded = read_segmentation_output(folder, imaging=imaging)
+    rois = run_segmentation(imaging, method="dummy", folder=folder)
 
-    if scope == "all_epochs":
-        pairs = [(result, reloaded)]
-    else:
-        assert isinstance(result, EpochSegmentations)
-        assert isinstance(reloaded, EpochSegmentations)
-        assert reloaded.epoch_indices == result.epoch_indices == [0, 1]
-        assert [result[i].get_num_rois() for i in (0, 1)] == [2, 3]
-        pairs = [(result[i], reloaded[i]) for i in (0, 1)]
+    reloaded = load(folder / "rois")
 
-    for original, loaded in pairs:
-        assert isinstance(original, Suite2pRois)
-        assert loaded.imaging is imaging
-        np.testing.assert_array_equal(
-            np.asarray(loaded.get_roi_image_masks().todense()), np.asarray(original.get_roi_image_masks().todense())
-        )
+    np.testing.assert_array_equal(reloaded.get_property("num_frames"), [5, 5])
+    np.testing.assert_array_equal(
+        np.asarray(reloaded.get_roi_image_masks().todense()), np.asarray(rois.get_roi_image_masks().todense())
+    )
 
 
-@pytest.mark.parametrize("save", [True, False])
-def test_segmentation_info_is_attached_and_saved(imaging, tmp_path, save):
-    folder = tmp_path / "seg" if save else None
-    rois = run_segmentation(imaging, method="dummy", folder=folder, num_rois=3)
+def test_multi_plane_imaging_needs_a_method_that_supports_it(tmp_path, monkeypatch):
+    two_planes = NumpyImaging([np.ones((3, 4, 5, 2), dtype=np.float32)], sampling_frequency=7.0)
 
-    info = rois.segmentation_info
-    assert info["params"] == {"num_rois": 3, "fail": False}
-    assert info["log"]["method"] == "dummy"
-    assert info["log"]["error"] is False
-    assert info["imaging"]["class"].endswith("NumpyImaging")
+    with pytest.raises(ValueError, match="does not support multi-plane imaging"):
+        run_segmentation(two_planes, method="dummy", folder=None)
 
-    if save:
-        assert read_segmentation_output(folder).segmentation_info == info
+    monkeypatch.setattr(DummySegmentation, "support_multi_plane", True)
+    assert run_segmentation(two_planes, method="dummy", folder=None) is not None
 
 
 def test_no_folder_returns_rois_and_writes_nothing(imaging, tmp_path, monkeypatch):
@@ -218,14 +203,15 @@ def test_registered_imaging_defaults_to_motion_ranges_and_badframes_of_selected_
     registered = RegisterImaging(imaging, motion)
     folder = tmp_path / "seg"
 
-    run_segmentation(registered, method="dummy", folder=folder, scope="per_epoch", epoch_indices=[1])
+    # split_epochs wraps the registered imaging; its epoch 0 is motion epoch 1
+    run_segmentation(split_epochs(registered, 1), method="dummy", folder=folder)
 
     params = json.loads((folder / "segmentation_params.json").read_text())
     assert params["run_kwargs"]["yrange"] == [[1, 3]]
     assert params["run_kwargs"]["xrange"] == [[2, 4]]
     saved = np.load(folder / "badframes.npz")
-    assert list(saved) == ["epoch1"]
-    np.testing.assert_array_equal(saved["epoch1"], [False, True, False])
+    assert list(saved) == ["epoch0"]
+    np.testing.assert_array_equal(saved["epoch0"], [False, True, False])
 
 
 def test_registered_imaging_without_motion_ranges_falls_back_to_full_frame(imaging, tmp_path):

@@ -2,12 +2,10 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from photon_mosaic.core import NumpyImaging
+from photon_mosaic.core import NumpyImaging, load, split_imaging_by_epochs
 from photon_mosaic.core.generators import generate_imaging_with_rois
 from photon_mosaic.extractors import Suite2pRois
 from photon_mosaic.segmentation import (
-    EpochSegmentations,
-    read_segmentation_output,
     run_segmentation,
 )
 from photon_mosaic.segmentation import suite2p_segmentation as seg
@@ -16,7 +14,7 @@ from photon_mosaic.segmentation import suite2p_segmentation as seg
 def _install_fake_inner(monkeypatch):
     """Mock the streaming binner and the algorithm dispatcher.
 
-    Returns ``(bin_calls, detect_calls)`` so tests can assert which epochs,
+    Returns ``(bin_calls, detect_calls)`` so tests can assert which frames,
     ranges, and badframes the public API forwarded to each layer.
     """
     bin_calls: list[dict] = []
@@ -24,8 +22,6 @@ def _install_fake_inner(monkeypatch):
 
     def fake_stream_bin_movie(
         imaging,
-        plane_index,
-        epoch_indices,
         *,
         bin_size,
         yrange,
@@ -35,8 +31,7 @@ def _install_fake_inner(monkeypatch):
     ):
         bin_calls.append(
             {
-                "plane_index": plane_index,
-                "epoch_indices": list(epoch_indices),
+                "num_frames": imaging.get_total_frames(),
                 "yrange": list(yrange),
                 "xrange": list(xrange),
                 "badframes": None if badframes is None else np.array(badframes, copy=True),
@@ -44,7 +39,7 @@ def _install_fake_inner(monkeypatch):
                 "nbins": nbins,
             }
         )
-        n = sum(imaging.get_num_samples(segment_index=i) for i in epoch_indices)
+        n = imaging.get_total_frames()
         Lyc = yrange[1] - yrange[0]
         Lxc = xrange[1] - xrange[0]
         return np.zeros((n, Lyc, Lxc), dtype=np.float32)
@@ -66,6 +61,9 @@ def _install_fake_inner(monkeypatch):
                 "xpix": np.array([1]),
                 "lam": np.array([1.0]),
                 "npix": 1,
+                # fields suite2p's roi_stats computes and its cell classifier reads
+                "npix_norm": 1.0,
+                "compact": 1.0,
             }
         ]
 
@@ -94,13 +92,13 @@ class TestRunSuite2p:
     def fake_inner(self, monkeypatch):
         return _install_fake_inner(monkeypatch)
 
-    def test_all_epochs_concatenates_selected_epochs(self, imaging, fake_inner, tmp_path):
+    def test_concatenates_all_epochs(self, imaging, fake_inner, tmp_path):
         bin_calls, detect_calls = fake_inner
-        rois = run_segmentation(imaging, method="suite2p", folder=tmp_path / "seg", scope="all_epochs")
+        rois = run_segmentation(imaging, method="suite2p", folder=tmp_path / "seg")
 
         assert isinstance(rois, Suite2pRois)
         assert len(bin_calls) == 1
-        assert bin_calls[0]["epoch_indices"] == [0, 1]
+        assert bin_calls[0]["num_frames"] == 5
         assert bin_calls[0]["yrange"] == [0, 4]
         assert bin_calls[0]["xrange"] == [0, 5]
         assert bin_calls[0]["badframes"] is None
@@ -108,25 +106,14 @@ class TestRunSuite2p:
         assert detect_calls[0]["mov_shape"] == (5, 4, 5)
         assert rois.get_num_rois() == 1
 
-    def test_per_epoch_returns_container(self, imaging, fake_inner, tmp_path):
+    def test_split_epochs_returns_one_rois_per_epoch(self, imaging, fake_inner, tmp_path):
         bin_calls, detect_calls = fake_inner
-        rois_by_epoch = run_segmentation(
-            imaging,
-            method="suite2p",
-            folder=tmp_path / "seg",
-            scope="per_epoch",
-            badframes=[np.array([False, True]), np.array([True, False, False])],
-        )
+        rois_by_epoch = [
+            run_segmentation(epoch, method="suite2p", folder=None) for epoch in split_imaging_by_epochs(imaging)
+        ]
 
-        assert isinstance(rois_by_epoch, EpochSegmentations)
-        assert rois_by_epoch.epoch_indices == [0, 1]
-        assert isinstance(rois_by_epoch[0], Suite2pRois)
-        assert isinstance(rois_by_epoch[1], Suite2pRois)
-        assert len(bin_calls) == 2
-        assert bin_calls[0]["epoch_indices"] == [0]
-        assert bin_calls[1]["epoch_indices"] == [1]
-        np.testing.assert_array_equal(bin_calls[0]["badframes"], np.array([False, True]))
-        np.testing.assert_array_equal(bin_calls[1]["badframes"], np.array([True, False, False]))
+        assert all(isinstance(rois, Suite2pRois) for rois in rois_by_epoch)
+        assert [call["num_frames"] for call in bin_calls] == [2, 3]
         assert detect_calls[0]["mov_shape"] == (2, 4, 5)
         assert detect_calls[1]["mov_shape"] == (3, 4, 5)
 
@@ -135,16 +122,23 @@ class TestRunSuite2p:
         rois = run_segmentation(imaging, method="suite2p", folder=folder)
 
         assert isinstance(rois, Suite2pRois)
-        reloaded = read_segmentation_output(folder)
+        reloaded = load(folder / "rois")
         np.testing.assert_array_equal(reloaded.get_roi_image_masks().todense(), rois.get_roi_image_masks().todense())
         # suite2p's scalar stat fields are saved as ROI properties
         np.testing.assert_array_equal(reloaded.get_property("npix"), rois.get_property("npix"))
+        # cell classifier output, under the names Suite2pRois uses when loading iscell.npy
+        assert rois.get_property("iscell").dtype == bool
+        for key in ("iscell", "iscell_probability"):
+            np.testing.assert_array_equal(reloaded.get_property(key), rois.get_property(key))
+
+    def test_rejects_multi_plane_imaging(self, fake_inner):
+        two_planes = NumpyImaging([np.ones((3, 4, 5, 2), dtype=np.float32)], sampling_frequency=7.0)
+        with pytest.raises(ValueError, match="does not support multi-plane imaging"):
+            run_segmentation(two_planes, method="suite2p", folder=None)
 
     def test_all_epochs_rejects_mismatched_epoch_ranges(self, imaging, fake_inner, tmp_path):
-        with pytest.raises(ValueError, match="yrange differs across selected epochs"):
-            run_segmentation(
-                imaging, method="suite2p", folder=tmp_path / "seg", scope="all_epochs", yrange=[[0, 4], [1, 4]]
-            )
+        with pytest.raises(ValueError, match="yrange differs across epochs"):
+            run_segmentation(imaging, method="suite2p", folder=tmp_path / "seg", yrange=[[0, 4], [1, 4]])
 
     def test_all_epochs_accepts_per_epoch_badframes(self, imaging, fake_inner, tmp_path):
         bin_calls, _ = fake_inner
@@ -152,7 +146,6 @@ class TestRunSuite2p:
             imaging,
             method="suite2p",
             folder=tmp_path / "seg",
-            scope="all_epochs",
             badframes=[np.array([False, True]), np.array([True, False, False])],
         )
 
@@ -205,8 +198,6 @@ class TestStreamBinMovie:
 
         mov = seg._stream_bin_movie(
             imaging,
-            plane_index=0,
-            epoch_indices=[0, 1],
             bin_size=1,
             yrange=[0, 4],
             xrange=[0, 5],
@@ -223,8 +214,6 @@ class TestStreamBinMovie:
 
         mov = seg._stream_bin_movie(
             imaging,
-            plane_index=0,
-            epoch_indices=[0],
             bin_size=1,
             yrange=[1, 3],
             xrange=[2, 4],

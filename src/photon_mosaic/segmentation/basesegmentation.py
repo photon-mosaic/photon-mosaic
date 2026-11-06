@@ -108,6 +108,7 @@ class BaseSegmentation:
 
     method_name: str | None = None
     settings_class: type[BaseSettings] | None = None
+    support_multi_plane = False
 
     @classmethod
     def is_installed(cls) -> bool:
@@ -159,20 +160,17 @@ class BaseSegmentation:
     def run(
         cls,
         imaging: BaseImaging,
-        epoch_indices: Sequence[int],
         yrange: Sequence[int],
         xrange: Sequence[int],
         badframes: NDArray[np.bool_] | None,
         settings: Any,
     ) -> BaseRois:
-        """Detect ROIs on the concatenation of ``epoch_indices`` and return the detected ROIs.
+        """Detect ROIs on the concatenation of all epochs of ``imaging`` and return them.
 
         Parameters
         ----------
         imaging : BaseImaging
             Motion-corrected imaging object.
-        epoch_indices : sequence of int
-            Epochs to concatenate, in order.
         yrange, xrange : sequence of int
             Valid pixel range ``[lo, hi]``.
         badframes : NDArray[bool] | None
@@ -186,41 +184,6 @@ class BaseSegmentation:
             Detected ROIs for the concatenated epochs.
         """
         raise NotImplementedError
-
-
-# TODO: remove in favor of ROIEpoch
-class EpochSegmentations:
-    """Container of per-epoch :class:`BaseRois` results.
-
-    Returned by :func:`photon_mosaic.segmentation.run_segmentation` when
-    ``scope='per_epoch'`` so that each epoch keeps its own ROI set, mirroring
-    the per-epoch structure used by motion correction.
-    """
-
-    def __init__(self, segmentations: dict[int, BaseRois]) -> None:
-        """Wrap an ``{epoch_index: rois}`` mapping.
-
-        Parameters
-        ----------
-        segmentations : dict[int, BaseRois]
-            One entry per processed epoch.
-        """
-        self._segmentations = dict(segmentations)
-        self.epoch_indices: list[int] = sorted(self._segmentations)
-
-    def __getitem__(self, epoch_index: int) -> BaseRois:
-        """Return the ROIs detected for ``epoch_index``."""
-        return self._segmentations[epoch_index]
-
-    def __iter__(self):
-        return iter(self.epoch_indices)
-
-    def __len__(self) -> int:
-        return len(self._segmentations)
-
-    def items(self):
-        """Iterate ``(epoch_index, rois)`` pairs in epoch order."""
-        return ((i, self._segmentations[i]) for i in self.epoch_indices)
 
 
 def _resolve_ranges(
