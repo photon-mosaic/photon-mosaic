@@ -186,12 +186,15 @@ class TestEndToEnd:
     def test_motion_round_trips_through_json(self, imaging):
         from spikeinterface.core.core_tools import SIJsonEncoder
 
-        motion = compute_motion(imaging, method="normcorre", nonrigid=False)
+        motion = compute_motion(imaging, method="normcorre", nonrigid=True, strides=(32, 32), overlaps=(16, 16))
         as_json = json.loads(json.dumps(motion.to_dict(), cls=SIJsonEncoder))
         restored = Motion.from_dict(as_json, imaging=imaging)
         assert type(restored) is NormcorreMotion
         np.testing.assert_array_equal(restored.displacements[0], motion.displacements[0])
         np.testing.assert_array_equal(restored.reference[0], motion.reference[0])
+        np.testing.assert_array_equal(restored.patch_shifts[0][0], motion.patch_shifts[0][0])
+        for restored_centre, centre in zip(restored.patch_centers[0], motion.patch_centers[0], strict=True):
+            np.testing.assert_array_equal(restored_centre, centre)
         # json turns the ``str | Path`` tmp_dir into a string; compare the settings as json
         as_settings = nc.NormcorreRegistrationSettings.model_validate
         assert as_settings(restored.settings).model_dump(mode="json") == as_settings(motion.settings).model_dump(
