@@ -247,11 +247,15 @@ class TestStreamBinMovie:
 
 
 class TestSettings:
-    def test_env_var_reaches_a_setting(self, monkeypatch, tmp_path):
+    def test_env_and_dotenv_reach_settings(self, monkeypatch, tmp_path):
         monkeypatch.setenv("SUITE2P_SEGMENTATION_SPATIAL_SCALE", "1")
         monkeypatch.chdir(tmp_path)
-        (tmp_path / ".env").write_text("UNRELATED_KEY=1\n")  # a .env file is not read
-        assert seg.Suite2pSegmentationSettings().spatial_scale == 1
+        (tmp_path / ".env").write_text("UNRELATED_KEY=1\nSUITE2P_SEGMENTATION_MAX_ROIS=7\n")  # a shared .env
+        settings = seg.Suite2pSegmentationSettings()
+        assert (settings.spatial_scale, settings.max_ROIs) == (1, 7)
+        (tmp_path / ".env").write_text("SUITE2P_SEGMENTATION_MAX_ROI=7\n")  # misspelt
+        with pytest.raises(ValidationError):
+            seg.Suite2pSegmentationSettings()
 
     def test_unknown_name_raises(self):
         with pytest.raises(ValidationError):

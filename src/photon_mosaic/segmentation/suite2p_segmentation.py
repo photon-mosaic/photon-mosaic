@@ -105,12 +105,24 @@ class Suite2pSegmentationSettings(BaseSettings):
     cellpose_chan2: bool = Field(default=False, description="Must be False: chan2 detection is not supported.")
     cellpose_params_chan2: dict[str, Any] | None = Field(default=None, description="Must be None: as cellpose_chan2.")
 
-    model_config = SettingsConfigDict(env_prefix="SUITE2P_SEGMENTATION_", case_sensitive=False)
+    model_config = SettingsConfigDict(env_file=".env", env_prefix="SUITE2P_SEGMENTATION_", case_sensitive=False)
 
     @field_validator("algorithm")
     @classmethod
     def lowercase_algorithm(cls, v: str) -> str:
         return v.lower()
+
+    @classmethod
+    def settings_customise_sources(
+        cls, settings_cls: Any, init_settings: Any, env_settings: Any, dotenv_settings: Any, file_secret_settings: Any
+    ) -> tuple[Any, ...]:
+        """Skip the keys of a shared ``.env`` that are not ours; a misspelt ``SUITE2P_SEGMENTATION_*`` still raises."""
+        prefix = str(cls.model_config.get("env_prefix", "")).lower()
+
+        def own_dotenv() -> dict[str, Any]:
+            return {k: v for k, v in dotenv_settings().items() if k in cls.model_fields or k.startswith(prefix)}
+
+        return init_settings, env_settings, own_dotenv, file_secret_settings
 
 
 _UNSUPPORTED = ("cellpose_model", "chan2_threshold", "cellpose_chan2", "cellpose_params_chan2")
