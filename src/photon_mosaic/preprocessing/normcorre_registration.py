@@ -26,10 +26,12 @@ is suite2p's convention for ``displacements``.
 
 from __future__ import annotations
 
+import itertools
 from typing import Any, Literal, Sequence
 
 import cv2
 import numpy as np
+import scipy.interpolate
 from numpy.typing import NDArray
 from pydantic import ConfigDict, Field
 
@@ -533,6 +535,123 @@ def _register_translation(
     return shifts, diffphase
 
 
+def _patch_edges(dims: Sequence[int], overlaps: Sequence[int], strides: Sequence[int]) -> tuple[list[int], ...]:
+    """Where patches start along each dimension.
+
+    Patches of ``strides + overlaps`` pixels start every ``strides`` pixels; the last one
+    is placed flush with the far edge, so it may overlap its neighbour more.
+
+    Parameters
+    ----------
+    dims : sequence of int
+        Image shape.
+    overlaps, strides : sequence of int
+        Patch overlap and stride per dimension.
+
+    Returns
+    -------
+    tuple of lists of int
+        Per dimension, the first pixel of each patch.
+
+    Notes
+    -----
+    CaImAn ``get_patch_edges`` L1783.
+    """
+    window_sizes = np.add(overlaps, strides)
+    return tuple(
+        list(range(0, dim - size, stride)) + [dim - size] for dim, size, stride in zip(dims, window_sizes, strides)
+    )
+
+
+def _patch_centers(dims: Sequence[int], overlaps: Sequence[int], strides: Sequence[int]) -> tuple[NDArray, NDArray]:
+    """The centre of each patch along each dimension, in pixels.
+
+    Parameters
+    ----------
+    dims : sequence of int
+        Image shape.
+    overlaps, strides : sequence of int
+        Patch overlap and stride per dimension.
+
+    Returns
+    -------
+    cy, cx : array
+        Row centres of the patch rows and column centres of the patch columns.
+
+    Notes
+    -----
+    CaImAn ``get_patch_centers`` L1793.
+    """
+    window_sizes = np.add(overlaps, strides)
+    edges = _patch_edges(dims, overlaps, strides)
+    cy, cx = (np.array([edge + (size - 1) / 2 for edge in dim_edges]) for dim_edges, size in zip(edges, window_sizes))
+    return cy, cx
+
+
+def _sliding_window(
+    image: NDArray, overlaps: Sequence[int], strides: Sequence[int]
+) -> list[tuple[int, int, int, int, NDArray]]:
+    """Cut an image into overlapping patches.
+
+    Parameters
+    ----------
+    image : array, ``(H, W)``
+        The image.
+    overlaps, strides : sequence of int
+        Patch overlap and stride, ``(y, x)``.
+
+    Returns
+    -------
+    list of tuples
+        Per patch, in row-major order: its grid row and column, its top-left pixel
+        ``(y0, x0)`` and the patch itself (a view).
+
+    Notes
+    -----
+    CaImAn ``sliding_window`` L1839.
+    """
+    size = np.add(overlaps, strides)
+    edges = _patch_edges(image.shape, overlaps, strides)
+    return [
+        (iy, ix, y0, x0, image[y0 : y0 + size[0], x0 : x0 + size[1]])
+        for (iy, y0), (ix, x0) in itertools.product(enumerate(edges[0]), enumerate(edges[1]))
+    ]
+
+
+def _interpolate_shifts(
+    shifts: NDArray, coords_orig: tuple[NDArray, NDArray], coords_new: tuple[NDArray, NDArray], method: str = "linear"
+) -> NDArray:
+    """Interpolate values given on the patch grid at new coordinates.
+
+    Coordinates outside the grid are clipped to it, so the outermost values extend to the
+    image edge.
+
+    Parameters
+    ----------
+    shifts : array
+        One value per patch, reshapeable to ``(len(cy), len(cx))``.
+    coords_orig : tuple of arrays
+        The patch centres ``(cy, cx)`` the values belong to.
+    coords_new : tuple of arrays
+        Row and column coordinates to interpolate at.
+    method : str
+        Any ``scipy.interpolate.interpn`` method.
+
+    Returns
+    -------
+    array, ``(len(coords_new[0]), len(coords_new[1]))``
+        The interpolated values.
+
+    Notes
+    -----
+    CaImAn ``interpolate_shifts`` L1899.
+    """
+    clipped = [np.clip(new, min(orig), max(orig)) for new, orig in zip(coords_new, coords_orig)]
+    stacked = np.stack(np.meshgrid(*clipped, indexing="ij"), axis=-1)
+    grid = np.reshape(shifts, tuple(len(orig) for orig in coords_orig))
+    return scipy.interpolate.interpn(coords_orig, grid, stacked, method=method)
+
+
 def _register_patches(
     frames: NDArray,
     template: NDArray,
@@ -543,15 +662,55 @@ def _register_patches(
     upsample_factor: int,
     rigid_shifts: NDArray,
 ) -> tuple[NDArray, NDArray, tuple[NDArray, NDArray]]:
-    """:func:`_register_translation` per patch, bounded to ``ceil(rigid - d)..floor(rigid + d)``.
+    """The translation of every patch of every frame, kept close to the frame's rigid translation.
 
-    Patches of ``strides + overlaps`` (``sliding_window`` L1839). Returns raw patch shifts
-    ``(T, ny, nx, 2)``, their phase differences ``(T, ny, nx)`` and the patch centres
-    ``(cy, cx)`` (``get_patch_centers`` L1793). CaImAn ``tile_and_correct`` L2013, piecewise
-    branch; jnormcorre ``_register_to_template_pwrigid`` L1556; masknmf
-    ``_estimate_patchwise_rigid_shifts`` L614.
+    Each patch is registered to the same patch of the template by phase correlation, with
+    the search limited to ``ceil(rigid - max_nonrigid_shift)`` to
+    ``floor(rigid + max_nonrigid_shift)``.
+
+    Parameters
+    ----------
+    frames : array, ``(T, H, W)``
+        Frames to register.
+    template : array, ``(H, W)``
+        The template.
+    strides, overlaps : tuple of int
+        Patch layout, ``(y, x)``.
+    max_shifts : tuple of int
+        Passed on; unused when bounds are set, as here.
+    max_nonrigid_shift : int
+        Largest deviation of a patch from the frame's rigid translation, in pixels.
+    upsample_factor : int
+        Sub-pixel precision, in fractions of a pixel.
+    rigid_shifts : array, ``(T, 2)``
+        The frames' rigid translations, from :func:`_register_translation`.
+
+    Returns
+    -------
+    shifts : array, ``(T, ny, nx, 2)``
+        Per frame and patch, its ``(y, x)`` translation; the correction is the negative.
+    diffphase : array, ``(T, ny, nx)``
+        Per frame and patch, the phase difference at the correlation peak.
+    centers : tuple of arrays
+        The patch centres ``(cy, cx)``.
+
+    Notes
+    -----
+    CaImAn ``tile_and_correct`` L2013, piecewise branch; jnormcorre
+    ``_register_to_template_pwrigid`` L1556; masknmf ``_estimate_patchwise_rigid_shifts`` L614.
     """
-    raise NotImplementedError
+    templates = [patch for *_, patch in _sliding_window(template, overlaps, strides)]
+    grid = tuple(len(edges) for edges in _patch_edges(template.shape, overlaps, strides))
+    shifts = np.empty((len(frames), *grid, 2))
+    diffphase = np.empty((len(frames), *grid))
+    for t, img in enumerate(frames):
+        lb = np.ceil(np.subtract(rigid_shifts[t], max_nonrigid_shift)).astype(int)
+        ub = np.floor(np.add(rigid_shifts[t], max_nonrigid_shift)).astype(int)
+        for (iy, ix, _, _, patch), tpatch in zip(_sliding_window(img, overlaps, strides), templates):
+            shifts[t, iy, ix], diffphase[t, iy, ix] = _register_translation_image(
+                patch, tpatch, upsample_factor, max_shifts, lb, ub
+            )
+    return shifts, diffphase, _patch_centers(template.shape, overlaps, strides)
 
 
 def _fill_border(img: NDArray, shift: Sequence[float], border_nan: BorderNan, min_value: float) -> NDArray:
@@ -720,14 +879,97 @@ def _apply_pw_shifts_remap(
     border_nan: BorderNan,
     shifts_interpolate: bool,
 ) -> NDArray:
-    """Warp each frame by the dense field built from its correction patch shifts.
+    """Warp each frame by a smooth per-pixel field built from its patch corrections.
 
-    Field from the patch grid: interpolated from ``patch_centers`` (``shifts_interpolate``) or
-    resized corner to corner; frame sampled at ``grid - correction`` with cubic remap,
-    ``border_nan`` as the border mode. CaImAn ``apply_pw_shifts_remap_2d`` L2533 and
-    ``interpolate_shifts`` L1899; masknmf ``apply_displacement_vector_field`` L465.
+    The patch grid of corrections is expanded to one correction per pixel, either by
+    interpolating between patch centres (``shifts_interpolate``) or by stretching the
+    grid over the whole frame; each pixel is then sampled, with cubic interpolation, from
+    where its correction says it came from. Used for non-rigid shifts with
+    ``shifts_opencv=True``, and always when replaying non-rigid shifts.
+
+    Parameters
+    ----------
+    frames : array, ``(T, H, W)``
+        Frames to warp.
+    patch_shifts : array, ``(T, ny, nx, 2)``
+        Per frame and patch, the ``(y, x)`` correction.
+    patch_centers : tuple of arrays
+        The patch centres ``(cy, cx)``, in the frames' pixels.
+    border_nan : bool or {'copy', 'min'}
+        Value for pixels sampled from outside the frame: 'copy' repeats the edge, 'min' the
+        frame minimum, True NaN, False zero.
+    shifts_interpolate : bool
+        Interpolate between patch centres instead of stretching the grid.
+
+    Returns
+    -------
+    array, ``(T, H, W)``
+        The warped frames.
+
+    Notes
+    -----
+    CaImAn ``apply_pw_shifts_remap_2d`` L2533 and ``interpolate_shifts`` L1899; masknmf
+    ``apply_displacement_vector_field`` L465. For float64 frames, OpenCV rounds a constant
+    border value next to the frame edge; replay uses float32, which it does not.
     """
-    raise NotImplementedError
+    dims = frames.shape[1:]
+    x_coords, y_coords = (np.arange(0.0, dims[dim]).astype(np.float32) for dim in (1, 0))
+    x_grid, y_grid = np.meshgrid(x_coords, y_coords)
+    out = []
+    for img, correction in zip(frames, patch_shifts):
+        shift_img_y, shift_img_x = -correction[..., 0], -correction[..., 1]
+        if shifts_interpolate:
+            shifts_y = _interpolate_shifts(shift_img_y, patch_centers, (y_coords, x_coords)).astype(np.float32)
+            shifts_x = _interpolate_shifts(shift_img_x, patch_centers, (y_coords, x_coords)).astype(np.float32)
+        else:
+            shifts_y = cv2.resize(shift_img_y.astype(np.float32), dims[::-1])
+            shifts_x = cv2.resize(shift_img_x.astype(np.float32), dims[::-1])
+        if border_nan == "copy":
+            mode, value = cv2.BORDER_REPLICATE, 0.0
+        else:
+            # float(): CaImAn passes the numpy scalar, which OpenCV >= 5 rejects as a border value
+            mode, value = cv2.BORDER_CONSTANT, {False: 0.0, True: np.nan, "min": float(np.min(img))}[border_nan]
+        out.append(
+            cv2.remap(img, shifts_x + x_grid, shifts_y + y_grid, cv2.INTER_CUBIC, borderMode=mode, borderValue=value)
+        )
+    return np.stack(out)
+
+
+def _blending_weights(image: NDArray, overlaps: Sequence[int], strides: Sequence[int]) -> list[NDArray]:
+    """Per patch, weights that fade linearly to zero across the overlaps it shares.
+
+    Parameters
+    ----------
+    image : array, ``(H, W)``
+        Any image of the frame shape.
+    overlaps, strides : sequence of int
+        Patch overlap and stride, ``(y, x)``.
+
+    Returns
+    -------
+    list of arrays
+        One ``(strides + overlaps)`` weight map per patch, in :func:`_sliding_window` order.
+
+    Notes
+    -----
+    CaImAn ``create_weight_matrix_for_blending`` L1929.
+    """
+    shapes = np.add(strides, overlaps)
+    windows = _sliding_window(image, overlaps, strides)
+    max_grid_1, max_grid_2 = np.max(np.array([w[:2] for w in windows]), 0)
+    weights = []
+    for grid_1, grid_2, *_ in windows:
+        weight_mat = np.ones(shapes)
+        if grid_1 > 0:
+            weight_mat[: overlaps[0], :] = np.linspace(0, 1, overlaps[0])[:, None]
+        if grid_1 < max_grid_1:
+            weight_mat[-overlaps[0] :, :] = np.linspace(1, 0, overlaps[0])[:, None]
+        if grid_2 > 0:
+            weight_mat[:, : overlaps[1]] = weight_mat[:, : overlaps[1]] * np.linspace(0, 1, overlaps[1])[None, :]
+        if grid_2 < max_grid_2:
+            weight_mat[:, -overlaps[1] :] = weight_mat[:, -overlaps[1] :] * np.linspace(1, 0, overlaps[1])[None, :]
+        weights.append(weight_mat)
+    return weights
 
 
 def _apply_patch_shifts_fft(
@@ -741,16 +983,105 @@ def _apply_patch_shifts_fft(
     shifts_interpolate: bool,
     border_nan: BorderNan,
 ) -> tuple[NDArray, NDArray, tuple[NDArray, NDArray]]:
-    """CaImAn's FFT piecewise path: upsample the patch grid, Fourier-shift each patch, blend.
+    """Apply non-rigid shifts in the Fourier domain (``shifts_opencv=False``), patch by patch.
 
-    New strides ``round(strides / upsample_factor_grid)``; raw shifts and phases brought onto
-    the finer grid (from the centres if ``shifts_interpolate``, else resized); each finer patch
-    shifted with :func:`_apply_shifts_dft`; overlaps blended with linear weights, or cut at the
-    middle when neighbouring shifts differ by >= 0.5 px. Returns the corrected frames, the
-    *correction* shifts on the finer grid and its centres. CaImAn ``tile_and_correct`` L2013
-    (FFT branch) and ``create_weight_matrix_for_blending`` L1929.
+    The patch grid is made ``upsample_factor_grid`` times finer (strides
+    ``round(strides / upsample_factor_grid)``, same overlaps), the shifts and phases are
+    brought onto it (interpolated from the centres if ``shifts_interpolate``, else
+    resized), each fine patch is shifted in the Fourier domain, and the patches are put
+    back together: blended with linear weights where they overlap, or cut at the middle of
+    each overlap when neighbouring shifts differ by 0.5 px or more.
+
+    Parameters
+    ----------
+    frames : array, ``(T, H, W)``
+        Frames to correct.
+    patch_shifts : array, ``(T, ny, nx, 2)``
+        Per frame and patch, the ``(y, x)`` translation from :func:`_register_patches`
+        (not yet negated).
+    patch_diffphase : array, ``(T, ny, nx)``
+        The matching phase differences.
+    patch_centers : tuple of arrays
+        Centres ``(cy, cx)`` of the estimation patches.
+    strides, overlaps : tuple of int
+        Layout of the estimation patches, ``(y, x)``.
+    upsample_factor_grid : int
+        How much finer the grid of applied patches is.
+    shifts_interpolate : bool
+        Interpolate from the centres instead of resizing the grid.
+    border_nan : bool or {'copy', 'min'}
+        See :func:`_fill_border`, applied per fine patch.
+
+    Returns
+    -------
+    corrected : array, ``(T, H, W)``
+        The corrected frames.
+    corrections : array, ``(T, nfy, nfx, 2)``
+        Per frame, the correction of every fine patch.
+    centers : tuple of arrays
+        The fine patches' centres ``(cy, cx)``.
+
+    Notes
+    -----
+    CaImAn ``tile_and_correct`` L2013, FFT branch, and ``create_weight_matrix_for_blending``
+    L1929.
     """
-    raise NotImplementedError
+    dims = frames.shape[1:]
+    newoverlaps = overlaps
+    newstrides = tuple(int(s) for s in np.round(np.divide(strides, upsample_factor_grid)).astype(int))
+    newshapes = np.add(newstrides, newoverlaps)
+    fine_centers = _patch_centers(dims, newoverlaps, newstrides)
+    weights = _blending_weights(frames[0], newoverlaps, newstrides)
+    half_overlap_x, half_overlap_y = int(newoverlaps[0] / 2), int(newoverlaps[1] / 2)
+
+    corrected, corrections = [], []
+    for img, raw, phase in zip(frames, patch_shifts, patch_diffphase):
+        windows = _sliding_window(img, newoverlaps, newstrides)
+        dim_new_grid = (windows[-1][0] + 1, windows[-1][1] + 1)
+        num_tiles = len(windows)
+        # CaImAn's shift_img_x is the first (row) axis
+        shift_img_x, shift_img_y = raw[..., 0], raw[..., 1]
+        if shifts_interpolate:
+            shift_img_x = _interpolate_shifts(shift_img_x, patch_centers, fine_centers, method="cubic")
+            shift_img_y = _interpolate_shifts(shift_img_y, patch_centers, fine_centers, method="cubic")
+            phase_us = _interpolate_shifts(phase, patch_centers, fine_centers, method="cubic")
+        else:
+            shift_img_x = cv2.resize(shift_img_x, dim_new_grid[::-1], interpolation=cv2.INTER_CUBIC)
+            shift_img_y = cv2.resize(shift_img_y, dim_new_grid[::-1], interpolation=cv2.INTER_CUBIC)
+            phase_us = cv2.resize(phase, dim_new_grid[::-1], interpolation=cv2.INTER_CUBIC)
+
+        max_shear = np.percentile(
+            [np.max(np.abs(np.diff(s, axis=ax))) for s, ax in itertools.product([shift_img_x, shift_img_y], [0, 1])],
+            75,
+        )
+        total_shifts = np.stack([-shift_img_x.reshape(num_tiles), -shift_img_y.reshape(num_tiles)], axis=-1)
+        imgs = [
+            _shift_dft_image(_dft(patch, real_input=False), sh, ph, border_nan)
+            for (*_, patch), sh, ph in zip(windows, total_shifts, phase_us.reshape(num_tiles))
+        ]
+
+        normalizer = np.zeros_like(img) * np.nan
+        new_img = np.zeros_like(img) * np.nan
+        if max_shear < 0.5:
+            for (_, _, x, y, _), im, weight_mat in zip(windows, imgs, weights):
+                prev_val_1 = normalizer[x : x + newshapes[0], y : y + newshapes[1]]
+                normalizer[x : x + newshapes[0], y : y + newshapes[1]] = np.nansum(
+                    np.dstack([~np.isnan(im) * 1 * weight_mat, prev_val_1]), -1
+                )
+                prev_val = new_img[x : x + newshapes[0], y : y + newshapes[1]]
+                new_img[x : x + newshapes[0], y : y + newshapes[1]] = np.nansum(
+                    np.dstack([im * weight_mat, prev_val]), -1
+                )
+            new_img = new_img / normalizer
+        else:
+            # neighbouring shifts differ by >= 0.5 px: cut the overlaps at the middle instead of blending
+            for (idx_0, idx_1, x, y, _), im in zip(windows, imgs):
+                x_start = x if idx_0 == 0 else x + half_overlap_x
+                y_start = y if idx_1 == 0 else y + half_overlap_y
+                new_img[x_start : x + newshapes[0], y_start : y + newshapes[1]] = im[x_start - x :, y_start - y :]
+        corrected.append(new_img)
+        corrections.append(total_shifts.reshape(*dim_new_grid, 2))
+    return np.stack(corrected), np.stack(corrections), fine_centers
 
 
 # --------------------------------------------------------------------------- #
