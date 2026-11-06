@@ -957,6 +957,9 @@ class NormcorreMotion(Motion):
     metadata : dict
         ``"border_to_0"``: the largest shift, rounded up, i.e. how many pixels at each edge
         may hold filled-in values (CaImAn ``border_to_0``).
+
+    ``yranges``, ``xranges`` and ``corrected_badframes`` are accepted and kept as
+    :class:`~photon_mosaic.core.Motion` keeps them; NoRMCorre leaves them ``None``.
     """
 
     method_name = "normcorre"
@@ -967,15 +970,33 @@ class NormcorreMotion(Motion):
         imaging: BaseImaging,
         displacements: Sequence[NDArray[np.floating[Any]]],
         reference: Any = None,
+        yranges: Sequence[Sequence[tuple[int, int]]] | None = None,
+        xranges: Sequence[Sequence[tuple[int, int]]] | None = None,
+        corrected_badframes: Sequence[NDArray[np.bool_]] | None = None,
         patch_shifts: Sequence[Sequence[NDArray[np.floating[Any]] | None] | None] | None = None,
         patch_centers: Sequence[tuple[NDArray, NDArray] | None] | None = None,
         settings: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        super().__init__(imaging=imaging, displacements=displacements, reference=reference, metadata=metadata)
+        super().__init__(
+            imaging=imaging,
+            displacements=displacements,
+            reference=reference,
+            yranges=yranges,
+            xranges=xranges,
+            corrected_badframes=corrected_badframes,
+            metadata=metadata,
+        )
         self.patch_shifts = patch_shifts
         self.patch_centers = patch_centers
         self.settings = settings if settings is not None else {}
+
+    def _to_dict_kwargs(self) -> dict[str, Any]:
+        """Add the NoRMCorre-specific fields to :meth:`Motion._to_dict_kwargs`."""
+
+        kwargs = super()._to_dict_kwargs()
+        kwargs.update(patch_shifts=self.patch_shifts, patch_centers=self.patch_centers, settings=self.settings)
+        return kwargs
 
     @classmethod
     def _compute(
