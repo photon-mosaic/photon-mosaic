@@ -1,12 +1,13 @@
 """Tests for the NoRMCorre backend: the kernels on known shifts, then compute -> register end to end."""
 
+import json
 import pickle
 
 import numpy as np
 import pytest
 import scipy.ndimage as ndi
 
-from photon_mosaic.core import NumpyImaging, compute_motion, get_registration_class
+from photon_mosaic.core import Motion, NumpyImaging, compute_motion, get_registration_class
 from photon_mosaic.preprocessing import NormcorreMotion, RegisterNormcorreImagingEpoch, register_motion
 from photon_mosaic.preprocessing import normcorre_registration as nc
 
@@ -136,6 +137,22 @@ class TestEndToEnd:
         rebuilt = BaseExtractor.from_dict(registered.to_dict())
         assert isinstance(rebuilt.epochs[0], RegisterNormcorreImagingEpoch)
         np.testing.assert_array_equal(rebuilt.get_series(0, 3), registered.get_series(0, 3))
+
+    def test_motion_round_trips_through_json(self, imaging):
+        from spikeinterface.core.core_tools import SIJsonEncoder
+
+        motion = compute_motion(imaging, method="normcorre", nonrigid=False)
+        as_json = json.loads(json.dumps(motion.to_dict(), cls=SIJsonEncoder))
+        restored = Motion.from_dict(as_json, imaging=imaging)
+        assert type(restored) is NormcorreMotion
+        np.testing.assert_array_equal(restored.displacements[0], motion.displacements[0])
+        np.testing.assert_array_equal(restored.reference[0], motion.reference[0])
+        # json turns the ``str | Path`` tmp_dir into a string; compare the settings as json
+        as_settings = nc.NormcorreRegistrationSettings.model_validate
+        assert as_settings(restored.settings).model_dump(mode="json") == as_settings(motion.settings).model_dump(
+            mode="json"
+        )
+        assert restored.metadata == motion.metadata
 
     def test_registration_class_is_registered(self):
         assert get_registration_class("normcorre") is RegisterNormcorreImagingEpoch
