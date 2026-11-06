@@ -9,7 +9,11 @@
 import os
 import sys
 
+import IPython.display
 import setuptools_scm
+
+# Outside Jupyter, display() prints widgets as text ("VBox(children=...") into the gallery pages.
+IPython.display.display = lambda *objs, **kwargs: None
 
 # Used when building API docs, put the dependencies
 # of any class you are documenting here

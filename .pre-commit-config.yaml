@@ -25,7 +25,7 @@ repos:
     -   id: mypy
         additional_dependencies: [types-setuptools]
         args: [--ignore-missing-imports]
-        exclude: ^.*/tests/.*\.py$
+        exclude: ^(.*/tests/.*|examples/.*)\.py$
 
 
 -   repo: https://github.com/codespell-project/codespell
