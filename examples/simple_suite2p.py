@@ -29,7 +29,7 @@ matplotlib.use("module://ipympl.backend_nbagg")
 # We start by opening the `suite2p` sample data as an `Imaging` object. We then print some information about it, and plot it.
 
 # %%
-imaging = download_suite2p_google_drive()
+imaging = download_suite2p_google_drive(5)
 
 plot_imaging_series(imaging, backend="ipywidgets", colormap="plasma")
 
@@ -51,23 +51,17 @@ segmented_rois = run_segmentation(
     registered_imaging,
     method="suite2p",
     remove_existing_folder=True,
-    algorithm="sparsery",
+    algorithm="cellpose",
 )
 print(segmented_rois)
 
 # %% [markdown]
 # `suite2p` runs a default classifier under the hood, labelling the segmented ROIs as cells or not-cells.
-# We select the ROIs labelled as cells...
+# We select the ROIs labelled as cells and plot them:
 
 # %%
 cell_ids = [id for id in segmented_rois.roi_ids if segmented_rois.get_property("iscell", [id])]
 cell_rois = segmented_rois.select_rois(cell_ids)
-print(cell_rois)
-
-# %% [markdown]
-# ... and plot them:
-
-# %%
 plot_rois(cell_rois, registered_imaging, backend="ipywidgets")
 
 # %% [markdown]
