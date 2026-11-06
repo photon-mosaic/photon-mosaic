@@ -1268,7 +1268,7 @@ def _correct_epoch(
 class NormcorreMotion(Motion):
     """The motion NoRMCorre estimated, returned by ``compute_motion(..., method="normcorre")``.
 
-    Holds only arrays and a dump of the settings used, so it pickles. Shifts are stored in
+    Holds arrays and the settings used, dumped to a dict only when saved. Shifts are stored in
     pixels, ``(y, x)``, as the *motion* of each frame (or patch) relative to the template,
     suite2p's convention for ``displacements``: the correction applied on registration is
     the negative. CaImAn stores the corrections, so CaImAn's ``shifts_rig`` is
@@ -1285,8 +1285,8 @@ class NormcorreMotion(Motion):
         ``(frames, ny, nx, 2)``.
     patch_centers : list or None
         Non-rigid runs only: per plane, the patch centres ``(cy, cx)`` in full-frame pixels.
-    settings : dict
-        The :class:`NormcorreRegistrationSettings` used, as a dict.
+    settings : NormcorreRegistrationSettings
+        The settings used.
     metadata : dict
         ``"border_to_0"``: the largest shift, rounded up, i.e. how many pixels at each edge
         may hold filled-in values (CaImAn ``border_to_0``).
@@ -1308,7 +1308,7 @@ class NormcorreMotion(Motion):
         corrected_badframes: Sequence[NDArray[np.bool_]] | None = None,
         patch_shifts: Sequence[Sequence[NDArray[np.floating[Any]] | None] | None] | None = None,
         patch_centers: Sequence[tuple[NDArray, NDArray] | None] | None = None,
-        settings: dict[str, Any] | None = None,
+        settings: NormcorreRegistrationSettings | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(
@@ -1322,13 +1322,22 @@ class NormcorreMotion(Motion):
         )
         self.patch_shifts = patch_shifts
         self.patch_centers = patch_centers
-        self.settings = settings if settings is not None else {}
+        self.settings = settings if settings is not None else self.settings_class()
 
     def _to_dict_kwargs(self) -> dict[str, Any]:
         """Add the NoRMCorre-specific fields to :meth:`Motion._to_dict_kwargs`."""
 
         kwargs = super()._to_dict_kwargs()
-        kwargs.update(patch_shifts=self.patch_shifts, patch_centers=self.patch_centers, settings=self.settings)
+        settings = self.settings.model_dump()
+        kwargs.update(patch_shifts=self.patch_shifts, patch_centers=self.patch_centers, settings=settings)
+        return kwargs
+
+    @classmethod
+    def _from_dict_kwargs(cls, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Validate the saved settings dict back into :class:`NormcorreRegistrationSettings`."""
+
+        kwargs = super()._from_dict_kwargs(kwargs)
+        kwargs["settings"] = cls.settings_class.model_validate(kwargs.get("settings") or {})
         return kwargs
 
     @classmethod
@@ -1448,7 +1457,7 @@ class NormcorreMotion(Motion):
             reference=templates,
             patch_shifts=patch_motion if settings.nonrigid else None,
             patch_centers=centers if settings.nonrigid else None,
-            settings=settings.model_dump(),
+            settings=settings,
             metadata={"border_to_0": int(np.ceil(max(moved)))},
         )
 
@@ -1494,7 +1503,7 @@ class RegisterNormcorreImagingEpoch(RegisterImagingEpoch):
             The registered frames.
         """
 
-        settings = NormcorreRegistrationSettings.model_validate(self.motion.settings)
+        settings = self.motion.settings
         p = plane_index
         epoch_patches = self.motion.patch_shifts[self.epoch_index] if self.motion.patch_shifts is not None else None
         # stored shifts are motion; the kernels apply corrections, their negative

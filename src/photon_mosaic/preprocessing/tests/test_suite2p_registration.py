@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from spikeinterface.core.base import BaseExtractor
 
 from photon_mosaic.core import Motion, NumpyImaging, compute_motion, generate_random_imaging, get_registration_class
+from photon_mosaic.preprocessing import suite2p_registration as s2p
 from photon_mosaic.preprocessing.registration import RegisterImaging
 from photon_mosaic.preprocessing.suite2p_registration import (
     RegisterSuite2PImaging,
@@ -77,7 +78,7 @@ class TestComputeMotionSettingsResolution:
 
     def test_none_settings_no_kwargs_uses_all_defaults(self):
         resolved = Suite2pRegistrationSettings()
-        assert resolved.batch_size == 500
+        assert resolved.batch_size == 100
 
     def test_dict_settings_validated(self):
         d = {"batch_size": 300, "nonrigid": False}
@@ -135,6 +136,82 @@ class TestComputeMotionSuite2p:
         settings = Suite2pRegistrationSettings(batch_size=6)
         motion = compute_motion(imaging, method="suite2p", settings=settings, batch_size=3)
         assert motion.displacements[0].shape == (8, 1, 2)
+
+    def test_former_kwargs_are_settings(self, monkeypatch):
+        monkeypatch.setenv("SUITE2P_REGISTRATION_NIMG_INIT", "50")
+        assert Suite2pRegistrationSettings().nimg_init == 50
+        settings = {"nonrigid": False, "norm_frames": False, "spatial_taper": 2.0, "th_badframes": 0.5}
+        motion = compute_motion(_make_shifted_imaging(4, height=12, width=12), method="suite2p", settings=settings)
+        assert {k: getattr(motion.settings, k) for k in settings} == settings
+        with pytest.raises(ValidationError):  # not a setting
+            compute_motion(_make_shifted_imaging(4, height=12, width=12), method="suite2p", not_a_setting=5)
+
+    def test_every_suite2p_option_is_a_setting(self):
+        from suite2p.registration.register import default_settings
+
+        ours = {"maxregshiftNR": "max_nonrigid_shift", "align_by_chan2": "align_by_chan"}  # suite2p's name -> ours
+        saving = {"upsample_meanImg", "reg_tif", "reg_tif_chan2"}  # outputs written while applying shifts
+        suite2p_options = {ours.get(k, k) for k in default_settings()["registration"]} - saving
+        assert suite2p_options <= set(Suite2pRegistrationSettings.model_fields)
+
+    def test_clip_negative(self):
+        imaging = NumpyImaging(
+            imaging_series=[_make_shifted_video(4, height=12, width=12) - 0.5], sampling_frequency=10.0
+        )
+        for clip in (False, True):
+            motion = compute_motion(imaging, method="suite2p", nonrigid=False, clip_negative=clip)
+            assert (RegisterSuite2PImaging(imaging, motion).epochs[0].get_series(0, 4).min() < 0) == (not clip)
+
+    def test_trimmed_frames_keep_zero_shift_and_are_bad(self, monkeypatch):
+        samples = []
+        wrapper = s2p._compute_reference_wrapper
+        monkeypatch.setattr(
+            s2p, "_compute_reference_wrapper", lambda x, *a, **k: samples.append(x) or wrapper(x, *a, **k)
+        )
+        shifts = [[(1, 0), (0, 0), (1, 0), (0, 1), (1, 1), (0, 1)]]
+        imaging = _make_shifted_imaging(6, height=12, width=12, shifts=shifts)
+        motion = compute_motion(imaging, method="suite2p", nonrigid=False, trim_frames_start=1, trim_frames_end=2)
+        assert not motion.displacements[0][[0, 4, 5]].any()
+        assert motion.corrected_badframes[0][[0, 4, 5]].all()
+        np.testing.assert_array_equal(samples[0], imaging.get_series(1, 4)[..., 0])  # frames 1 to 3 only
+
+    def test_invalid_trims_and_outlier_settings_raise(self):
+        imaging = _make_shifted_imaging((6, 3), height=12, width=12)
+        for trim in ("trim_frames_start", "trim_frames_end"):
+            with pytest.raises(ValidationError):
+                compute_motion(imaging, method="suite2p", **{trim: -1})
+        with pytest.raises(ValueError, match="shorter than every epoch"):
+            compute_motion(imaging, method="suite2p", trim_frames_end=3)
+        with pytest.raises(ValueError, match="rigid shifts only"):
+            compute_motion(imaging, method="suite2p", outlier_maxregshift=0.1)
+
+    def test_outlier_shifts_are_clipped(self):
+        video = _make_shifted_video(8, height=12, width=12, shifts=[(0, 0)] * 4 + [(3, 3)] + [(0, 0)] * 3)
+        imaging = NumpyImaging(imaging_series=[video * 1000], sampling_frequency=10.0)  # suite2p's reference is int16
+        for limit, expected in ((None, 3), (0.1, 1)):  # 0.1 of 12 pixels: 1 pixel around the running median
+            motion = compute_motion(
+                imaging, method="suite2p", nonrigid=False, maxregshift=0.5, outlier_maxregshift=limit
+            )
+            assert motion.displacements[0][:, 0].tolist() == [[0, 0]] * 4 + [[expected, expected]] + [[0, 0]] * 3
+
+    @pytest.mark.parametrize(
+        "option",
+        [
+            {"subpixel": 5},
+            {"two_step_registration": True},
+            {"align_by_chan": 2},
+            {"max_reference_iterations": 4},
+        ],
+    )
+    def test_unsupported_options_are_rejected(self, option):
+        with pytest.raises(ValueError, match="Not supported"):
+            compute_motion(_make_shifted_imaging(4, height=12, width=12), method="suite2p", settings=option)
+
+    @pytest.mark.parametrize("bidi", [{"do_bidiphase": True}, {"bidiphase": 2}])
+    def test_bidiphase_is_rejected(self, bidi):
+        imaging = _make_shifted_imaging(4, height=12, width=12)
+        with pytest.raises(ValueError, match="suite2p#1265"):
+            compute_motion(imaging, method="suite2p", settings=bidi)
 
     def test_smooth_sigma_time_kwarg_is_rejected(self):
         imaging = _make_shifted_imaging(
@@ -216,7 +293,6 @@ class TestRegisterSuite2PImaging:
         return Suite2PMotion(
             imaging=imaging,
             displacements=displacements,
-            ops={"bidiphase": 0},
             reference=("ref", "masks"),
         )
 
@@ -227,7 +303,7 @@ class TestRegisterSuite2PImaging:
 
     def test_epoch_mismatch_raises(self, imaging):
         displacements = [np.zeros((10, 1, 2)), np.zeros((10, 1, 2))]
-        motion = Suite2PMotion(imaging=imaging, displacements=displacements, ops={})
+        motion = Suite2PMotion(imaging=imaging, displacements=displacements)
         with pytest.raises(ValueError, match="epochs"):
             RegisterSuite2PImaging(imaging, motion)
 
@@ -250,7 +326,9 @@ class TestRegisterImagingSerialization:
         motion = compute_motion(
             imaging,
             method="suite2p",
-            settings=Suite2pRegistrationSettings(batch_size=3, nonrigid=nonrigid, block_size=[16, 16]),
+            settings=Suite2pRegistrationSettings(
+                batch_size=3, nonrigid=nonrigid, block_size=[16, 16], clip_negative=True
+            ),
         )
         registered = RegisterImaging(imaging, motion)
 
@@ -264,6 +342,7 @@ class TestRegisterImagingSerialization:
 
         assert isinstance(reloaded, RegisterImaging)
         assert type(reloaded.epochs[0].motion) is Suite2PMotion
+        assert reloaded.epochs[0].motion.settings.clip_negative is True
         np.testing.assert_array_equal(reloaded.get_series(0, 6), registered.get_series(0, 6))
 
 
@@ -378,8 +457,8 @@ class TestGenericEntryPoints:
 
     def test_compute_motion_accepts_a_settings_dict(self, imaging):
         motion = compute_motion(imaging, method="suite2p", settings={"batch_size": 3, "nonrigid": False})
-        assert motion.ops["batch_size"] == 3
-        assert motion.ops["nonrigid"] is False
+        assert motion.settings.batch_size == 3
+        assert motion.settings.nonrigid is False
 
     def test_compute_motion_defaults_to_suite2p(self, imaging):
         motion = compute_motion(imaging, settings={"batch_size": 3, "nonrigid": False})
