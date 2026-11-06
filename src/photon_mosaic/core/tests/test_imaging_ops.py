@@ -17,7 +17,15 @@ from photon_mosaic.core.imaging_ops import (
     split_imaging_by_epochs,
     stack_planes,
 )
+from photon_mosaic.core.numpyimaging import NumpyImaging
 from photon_mosaic.core.selectplanes import select_planes
+
+
+@pytest.fixture
+def imaging_with_plane_index_values():
+    """Return a three-plane imaging where each plane is filled with its index."""
+    data = np.broadcast_to(np.arange(3, dtype=np.float32), (20, 4, 5, 3)).copy()
+    return NumpyImaging(data, sampling_frequency=10.0)
 
 
 def test_split_epoch_with_single_index_returns_single_epoch_proxy():
@@ -75,6 +83,7 @@ def test_splitting_of_selected_planes_preserves_ids():
     parent_series = img.get_series(epoch_index=0)
 
     epoch0_planes23 = split_epochs(select_planes(img, plane_ids=[2, 3]), epoch_indices=0)
+    np.testing.assert_array_equal(epoch0_planes23.plane_ids, [2, 3])
     assert np.array_equal(epoch0_planes23.get_series(epoch_index=0), parent_series[..., [2, 3]])
 
 
@@ -124,6 +133,15 @@ def test_split_epoch_at_frames_validates_boundaries():
         _ = split_epoch_at_frames(imaging, 0, [5, 5])
     with pytest.raises(ValueError):
         _ = split_epoch_at_frames(imaging, 0, [5, 3])
+
+
+def test_split_epoch_at_frames_uses_selected_plane_data(imaging_with_plane_index_values):
+    selected = select_planes(imaging_with_plane_index_values, [2])
+
+    split = split_epoch_at_frames(selected, 0, [10])
+
+    np.testing.assert_array_equal(np.unique(split.get_series(epoch_index=0)), [2.0])
+    np.testing.assert_array_equal(split.plane_ids, [2])
 
 
 def test_frame_slice_returns_the_requested_frames():
@@ -183,6 +201,16 @@ def test_frame_slice_preserves_planes():
     np.testing.assert_array_equal(stub.get_series(plane_ids=[2]), full[3:7, ..., [2]])
 
 
+def test_frame_slice_of_selected_planes_keeps_data_and_plane_ids(imaging_with_plane_index_values):
+    selected = select_planes(imaging_with_plane_index_values, [2])
+
+    stub = frame_slice(selected, 0, 10)
+
+    np.testing.assert_array_equal(np.unique(stub.get_series()), [2.0])
+    np.testing.assert_array_equal(stub.plane_ids, [2])
+    np.testing.assert_array_equal(stub.get_series(plane_ids=[2]), stub.get_series())
+
+
 def test_frame_slice_is_lazy():
     """Construction must not pull any pixels out of the parent."""
     imaging = generate_random_imaging(num_frames=(20,), height=3, width=3, sampling_frequency=10.0, seed=45)
@@ -233,6 +261,27 @@ def test_concatenate_epochs_joins_all_epochs_into_one():
     np.testing.assert_array_equal(direct.get_series(), full)
     np.testing.assert_array_equal(concatenated.get_series(start_frame=3, end_frame=12), full[3:12])
     np.testing.assert_array_equal(concatenated.get_series(start_frame=5, end_frame=8), full[5:8])
+
+
+def test_concatenate_epochs_uses_selected_plane_data_and_ids(imaging_with_plane_index_values):
+    first = imaging_with_plane_index_values.get_series()[:10]
+    second = first + 3
+    selected = select_planes(NumpyImaging([first, second], sampling_frequency=10.0), [2])
+
+    concatenated = concatenate_epochs(selected)
+
+    np.testing.assert_array_equal(np.unique(concatenated.get_series()), [2.0, 5.0])
+    np.testing.assert_array_equal(concatenated.plane_ids, [2])
+
+
+def test_append_imaging_uses_selected_plane_data(imaging_with_plane_index_values):
+    selected = select_planes(imaging_with_plane_index_values, [2])
+
+    appended = append_imaging([selected, selected])
+
+    np.testing.assert_array_equal(np.unique(appended.get_series(epoch_index=0)), [2.0])
+    np.testing.assert_array_equal(np.unique(appended.get_series(epoch_index=1)), [2.0])
+    np.testing.assert_array_equal(appended.plane_ids, [2])
 
 
 def test_concatenate_epochs_joins_epochs_from_multiple_imagings():
@@ -357,6 +406,16 @@ def test_stack_multi_plane_objects_and_plane_selection():
     assert sel.shape == (7, 5, 6, 2)
     np.testing.assert_array_equal(sel[..., 0], a.get_series()[..., 1])
     np.testing.assert_array_equal(sel[..., 1], b.get_series()[..., 1])
+
+
+def test_stack_planes_uses_selected_plane_data(imaging_with_plane_index_values):
+    selected = select_planes(imaging_with_plane_index_values, [2])
+
+    stacked = stack_planes(selected, selected)
+
+    result = stacked.get_series()
+    assert result.shape == (20, 4, 5, 2)
+    np.testing.assert_array_equal(np.unique(result), [2.0])
 
 
 def test_stack_preserves_requested_plane_order():

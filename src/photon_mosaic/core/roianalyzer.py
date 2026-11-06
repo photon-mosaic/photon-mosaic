@@ -870,7 +870,7 @@ class RoiAnalyzer:
         extension_class = get_extension_class(extension_name)
 
         # Delete children that depend on this extension
-        for child in _get_children_dependencies(extension_name):
+        for child in _get_children_dependencies(extension_name, self._get_extensions_params()):
             if self.has_extension(child):
                 if verbose:
                     print(f"Deleting extension: {child}")
@@ -927,8 +927,9 @@ class RoiAnalyzer:
         sorted_exts = _sort_extensions_by_dependency(extensions)
 
         # Delete children of all extensions we're about to recompute
+        all_params = {**self._get_extensions_params(), **extensions}
         for name in sorted_exts:
-            for child in _get_children_dependencies(name):
+            for child in _get_children_dependencies(name, all_params):
                 if verbose:
                     print(f"Deleting extension: {child}")
                 self.delete_extension(child)
@@ -1062,6 +1063,15 @@ class RoiAnalyzer:
                 ext.delete()
         self.extensions.pop(extension_name, None)
 
+    def _get_extensions_params(self) -> dict[str, dict]:
+        """Params of every computed extension, keyed by name."""
+        # saved-but-unloaded extensions fall back to default params rather than being read from disk
+        params: dict[str, dict] = (
+            {name: {} for name in self.get_saved_extension_names()} if self.format != "memory" else {}
+        )
+        params.update({name: ext.params for name, ext in self.extensions.items()})
+        return params
+
     def get_loaded_extension_names(self) -> list[str]:
         """Return names of currently loaded extensions."""
         return list(self.extensions.keys())
@@ -1089,18 +1099,23 @@ class RoiAnalyzer:
 
 _possible_extensions: list[type["AnalyzerExtension"]] = []
 
-_extension_children: dict[str, list[str]] = {}
 
+def _get_children_dependencies(extension_name, extensions):
+    """Recursively find the extensions that depend on ``extension_name``.
 
-def _get_children_dependencies(extension_name):
-    """Recursively find all extensions that depend on ``extension_name``."""
+    ``extensions`` maps each computed extension name -> params. Dependencies are resolved with those
+    params, so optional dependencies (e.g. ``fluorescence`` on ``neuropil``) are included, and an
+    ``"a|b"`` dependency resolves to its first alternative present in ``extensions``.
+    """
     names = []
-    children = _extension_children.get(extension_name, [])
-    for child in children:
-        if child not in names:
+    for child, params in extensions.items():
+        ext_class = get_extension_class(child)
+        deps = ext_class.get_required_dependencies(**params) + ext_class.get_optional_dependencies(**params)
+        parents = {next((d for d in dep.split("|") if d in extensions), None) for dep in deps}
+        if child not in names and extension_name in parents:
             names.append(child)
-        names.extend(_get_children_dependencies(child))
-    return list(names)
+            names.extend(n for n in _get_children_dependencies(child, extensions) if n not in names)
+    return names
 
 
 def _sort_extensions_by_dependency(extensions: dict) -> dict:
@@ -1146,14 +1161,6 @@ def register_result_extension(extension_class):
         ), f"Extension name '{extension_class.extension_name}' already registered"
 
         _possible_extensions.append(extension_class)
-
-        _extension_children[extension_class.extension_name] = []
-        for parent_name in extension_class.get_required_dependencies():
-            if "|" in parent_name:
-                for name in parent_name.split("|"):
-                    _extension_children.setdefault(name, []).append(extension_class.extension_name)
-            else:
-                _extension_children.setdefault(parent_name, []).append(extension_class.extension_name)
 
 
 def get_extension_class(extension_name: str, auto_import: bool = True):

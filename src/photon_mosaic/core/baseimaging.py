@@ -20,13 +20,22 @@ class BaseImaging(BaseExtractor, TimeSeries):
     The `_main_ids` attribute is used here for multi-plane imaging objects.
     """
 
-    def __init__(self, sampling_frequency: float, shape: tuple | list | ArrayLike, dtype: DTypeLike):
+    def __init__(
+        self,
+        sampling_frequency: float,
+        shape: tuple | list | ArrayLike,
+        dtype: DTypeLike,
+        plane_ids: ArrayLike | None = None,
+    ):
         # Should we allow users to provide 2D shape (H, W) for single plane imaging?
         if len(shape) == 2:
             shape = (shape[0], shape[1], 1)
         assert len(shape) == 3, "Shape must be a tuple/list/array of length 3 (height, width, planes)"
         num_planes = shape[2]
-        BaseExtractor.__init__(self, range(0, num_planes))
+        if plane_ids is None:
+            plane_ids = range(0, num_planes)
+        assert len(plane_ids) == num_planes, "Number of plane_ids must match the number of planes in the shape"
+        BaseExtractor.__init__(self, plane_ids)
         TimeSeries.__init__(self)
         self._sampling_frequency = float(sampling_frequency)
         self._shape = tuple(shape)  # Image is intended as a volume (H, W, planes)

@@ -43,7 +43,11 @@ class SelectEpochImaging(BaseImaging):
         normalized_epoch_indices = _normalize_epoch_indices(epoch_indices, imaging.get_num_epochs())
 
         BaseImaging.__init__(
-            self, sampling_frequency=imaging.sampling_frequency, shape=imaging.shape, dtype=imaging.get_dtype()
+            self,
+            sampling_frequency=imaging.sampling_frequency,
+            shape=imaging.shape,
+            dtype=imaging.get_dtype(),
+            plane_ids=imaging.plane_ids.copy(),
         )
         imaging.copy_metadata(self)
 
@@ -143,7 +147,11 @@ class SplitEpochAtFramesImaging(BaseImaging):
             raise ValueError(f"frame_boundaries must be strictly increasing; got {boundaries}")
 
         BaseImaging.__init__(
-            self, sampling_frequency=imaging.sampling_frequency, shape=imaging.shape, dtype=imaging.get_dtype()
+            self,
+            sampling_frequency=imaging.sampling_frequency,
+            shape=imaging.shape,
+            dtype=imaging.get_dtype(),
+            plane_ids=imaging.plane_ids.copy(),
         )
         imaging.copy_metadata(self)
 
@@ -237,6 +245,7 @@ class FrameSliceImaging(BaseImaging):
             sampling_frequency=parent_imaging.sampling_frequency,
             shape=parent_imaging.shape,
             dtype=parent_imaging.get_dtype(),
+            plane_ids=parent_imaging.plane_ids.copy(),
         )
         parent_imaging.copy_metadata(self)
         self.add_epoch(_FrameRangeEpoch(parent_epoch, start_frame, end_frame))
@@ -352,6 +361,7 @@ class ConcatenateImaging(BaseImaging):
             sampling_frequency=reference.sampling_frequency,
             shape=shape,
             dtype=dtype,
+            plane_ids=reference.plane_ids.copy(),
         )
         reference.copy_metadata(self)
         parent_epochs = [epoch for imaging in imagings for epoch in imaging.epochs]
@@ -402,6 +412,7 @@ class AppendImaging(BaseImaging):
             sampling_frequency=reference.sampling_frequency,
             shape=reference.shape,
             dtype=reference.get_dtype(),
+            plane_ids=reference.plane_ids.copy(),
         )
         reference.copy_metadata(self)
         for imaging in imagings:
