@@ -12,13 +12,14 @@ please run this notebook on BinderHub or download this notebook to your computer
 
 # %%
 import matplotlib
+from spikeinterface.widgets import plot_traces
+
 from photon_mosaic.core.roianalyzer import create_roi_analyzer
 from photon_mosaic.preprocessing import compute_motion, register_motion
 from photon_mosaic.sample_data import download_suite2p_google_drive
 from photon_mosaic.segmentation import run_segmentation
 from photon_mosaic.widgets.rois import plot_rois
 from photon_mosaic.widgets.series import plot_imaging_series
-from spikeinterface.widgets import plot_traces
 
 matplotlib.use("module://ipympl.backend_nbagg")
 
@@ -41,7 +42,8 @@ motion = compute_motion(imaging=imaging, method="suite2p")
 registered_imaging = register_motion(imaging=imaging, motion=motion)
 
 print(registered_imaging)
-plot_imaging_series({"raw": imaging, "motion_corrected": registered_imaging}, backend="ipywidgets", colormap="plasma")
+plot_imaging_series({"raw": imaging, "motion_corrected": registered_imaging}, backend="ipywidgets",
+                    colormap="plasma")
 
 # %% [markdown]
 # Next, we use `suite2p` with its default settings and "sparsery" algorithm to segment regions of interest (ROIs) in the registered image.
