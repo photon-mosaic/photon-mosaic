@@ -165,7 +165,8 @@ class TestRunSuite2pUnmocked:
     """Run suite2p's own detection end-to-end (no mocks)."""
 
     @pytest.fixture(scope="class")
-    def imaging(self):
+    @classmethod
+    def imaging(cls):
         # 10 ROIs; the other run tests mock _detect_rois_from_mov
         return generate_imaging_with_rois(
             num_frames=300,
