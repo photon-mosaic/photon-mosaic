@@ -205,13 +205,14 @@ def frame_correlations(
     plane_index: int = 0,
     epoch_index: int = 0,
     bounds: tuple[tuple[int, int], tuple[int, int]] | None = None,
+    template: NDArray | None = None,
     chunk_size: int = 100,
 ) -> NDArray[np.float64]:
-    """Correlation of every frame with the mean image, after CaImAn's main registration metric.
+    """Correlation of every frame with a template image, after CaImAn's main registration metric.
 
-    The better a movie is registered, the more each frame looks like the mean, so the
+    The better a movie is registered, the more each frame looks like the template, so the
     higher (and flatter over time) these Pearson correlations are. Frames are read
-    ``chunk_size`` at a time, twice (the mean, then the correlations), never all at once.
+    ``chunk_size`` at a time, never all at once.
 
     Parameters
     ----------
@@ -223,6 +224,11 @@ def frame_correlations(
         The pixels to compare. By default a registered movie's valid region (its motion's
         ``yranges``/``xranges``), so filled-in borders don't count, else the whole frame.
         Pass the same bounds to compare movies registered differently on the same pixels.
+    template : array, ``(H, W)``, optional
+        The full-frame image to compare every frame with, cropped to ``bounds`` here; pass
+        the same one to score several movies against one reference (e.g. suite2p's
+        ``motion.reference``). By default the movie's own mean image, at the cost of a
+        second pass over the frames.
     chunk_size : int
         Frames read at a time.
 
@@ -234,8 +240,8 @@ def frame_correlations(
     Notes
     -----
     CaImAn ``compute_metrics_motion_correction`` (``correlations``), without its optical
-    flow and crispness, and with the mean image as the template: CaImAn uses the median of
-    binned frames, which needs the whole movie in memory.
+    flow and crispness. Its default template is the median of binned frames, which needs the
+    whole movie in memory; here it is the mean, or the one passed.
     """
     motion = getattr(imaging, "motion", None)
     if bounds is None and motion is not None and motion.yranges is not None and motion.xranges is not None:
@@ -249,7 +255,10 @@ def frame_correlations(
             frames = epoch.get_series(start, min(start + chunk_size, n_frames), [plane_index])[:, rows, cols, 0]
             yield frames.reshape(len(frames), -1).astype(np.float64)
 
-    template = sum(frames.sum(axis=0) for frames in chunks()) / n_frames
+    if template is None:
+        template = sum(frames.sum(axis=0) for frames in chunks()) / n_frames
+    else:
+        template = np.asarray(template, dtype=np.float64)[rows, cols].ravel()
     template = (template - template.mean()) / np.linalg.norm(template - template.mean())
     out = []
     for frames in chunks():
