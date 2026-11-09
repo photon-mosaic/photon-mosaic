@@ -1345,6 +1345,16 @@ class NormcorreMotion(Motion):
         kwargs["settings"] = cls.settings_class.model_validate(kwargs.get("settings") or {})
         return kwargs
 
+    def patch_motion(self, epoch_index: int, plane_index: int) -> tuple[NDArray, tuple[NDArray, NDArray]] | None:
+        """See :meth:`Motion.patch_motion`: NoRMCorre stores exactly this."""
+
+        if self.patch_shifts is None or self.patch_centers is None:
+            return None
+        epoch_shifts = self.patch_shifts[epoch_index]
+        shifts = epoch_shifts[plane_index] if epoch_shifts is not None else None
+        centers = self.patch_centers[plane_index]
+        return None if shifts is None or centers is None else (shifts, centers)
+
     @classmethod
     def _compute(
         cls,
@@ -1489,8 +1499,6 @@ class RegisterNormcorreImagingEpoch(RegisterImagingEpoch):
     from :class:`~photon_mosaic.preprocessing.registration.RegisterImagingEpoch`.
     """
 
-    motion: NormcorreMotion
-
     def _correct_plane(
         self,
         plane_video: NDArray[np.floating[Any]],
@@ -1520,24 +1528,23 @@ class RegisterNormcorreImagingEpoch(RegisterImagingEpoch):
             The registered frames.
         """
 
-        settings = self.motion.settings
-        p = plane_index
-        epoch_patches = self.motion.patch_shifts[self.epoch_index] if self.motion.patch_shifts is not None else None
+        # another backend's motion carries no NoRMCorre settings: apply it with the defaults
+        own = isinstance(self.motion, NormcorreMotion)
+        settings = self.motion.settings if isinstance(self.motion, NormcorreMotion) else NormcorreRegistrationSettings()
+        patches = self.motion.patch_motion(self.epoch_index, plane_index)
         # stored shifts are motion; the kernels apply corrections, their negative
-        if epoch_patches is None:
-            correction = -self.motion.displacements[self.epoch_index][start_frame:end_frame, p]
+        if patches is None:
+            correction = -np.asarray(self.motion.displacements[self.epoch_index][start_frame:end_frame, plane_index])
             if settings.shifts_opencv:
-                return _apply_shift_iteration(plane_video, correction, settings.border_nan)
-            return _apply_shifts_dft(plane_video, correction, None, settings.border_nan)
+                return _apply_shift_iteration(plane_video, correction.astype(float), settings.border_nan)
+            return _apply_shifts_dft(plane_video, correction.astype(float), None, settings.border_nan)
 
-        centers = self.motion.patch_centers[p] if self.motion.patch_centers is not None else None
-        assert centers is not None, "piecewise motion without patch centres"
+        shifts, centers = patches
         cropped = settings.bounds is not None and settings.bounds != ((None, None), (None, None))
-        interpolate = settings.shifts_interpolate or cropped
-        patches = epoch_patches[p]
-        assert patches is not None
+        # another backend's patches are not on NoRMCorre's grid: interpolate between their centres
+        interpolate = settings.shifts_interpolate or cropped or not own
         return _apply_pw_shifts_remap(
-            plane_video, -patches[start_frame:end_frame], centers, settings.border_nan, interpolate
+            plane_video, -shifts[start_frame:end_frame], centers, settings.border_nan, interpolate
         )
 
 

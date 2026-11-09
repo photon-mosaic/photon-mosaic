@@ -223,3 +223,60 @@ class TestEndToEnd:
             compute_motion(imaging, method="normcorre", badframes=np.zeros(60, bool))
         with pytest.raises(ValueError, match="shifts_opencv=True"):
             compute_motion(imaging, method="normcorre", gSig_filt=(3, 3), shifts_opencv=False)
+
+
+class TestMixAndMatch:
+    """Each backend applies the other's motion, read through ``Motion.patch_motion``."""
+
+    SETTINGS = {
+        "suite2p": {"batch_size": 20, "block_size": [32, 32]},
+        "normcorre": {"strides": (32, 32), "overlaps": (16, 16), "num_frames_split": 20},
+    }
+
+    @staticmethod
+    def _ramp(ny, nx):
+        """A non-rigid field to add to the estimated one: y changes down the patch rows, x across the columns."""
+        ramp = np.zeros((ny, nx, 2))
+        ramp[..., 0], ramp[..., 1] = np.linspace(-2, 2, ny)[:, None], np.linspace(1.5, -1.5, nx)[None, :]
+        return ramp
+
+    @pytest.mark.parametrize("nonrigid", [False, True])
+    @pytest.mark.parametrize("estimated_by, applied_by", [("suite2p", "normcorre"), ("normcorre", "suite2p")])
+    def test_one_backend_applies_the_others_motion(self, imaging, estimated_by, applied_by, nonrigid):
+        motion = compute_motion(imaging, method=estimated_by, nonrigid=nonrigid, **self.SETTINGS[estimated_by])
+        assert (motion.patch_motion(0, 0) is not None) == nonrigid
+        mixed = register_motion(imaging, motion, method=applied_by).get_series(0, 60)[..., 0]
+        raw = imaging.get_series(0, 60)[..., 0]
+        # a wrong sign or a swapped axis would add motion instead of removing it
+        assert mixed[:, INNER, INNER].std(0).mean() < 0.25 * raw[:, INNER, INNER].std(0).mean()
+
+    def test_suite2p_motion_is_applied_as_suite2p_applies_it(self, imaging):
+        import torch
+        from suite2p.registration import register
+
+        motion = compute_motion(imaging, method="suite2p", nonrigid=True, **self.SETTINGS["suite2p"])
+        ramp = self._ramp(*motion.blocks[0][2]).reshape(-1, 2).astype(np.float32)
+        y1, x1 = (offsets + ramp[:, i] for i, offsets in enumerate(motion.nonrigid_offsets[0][0]))
+        motion.nonrigid_offsets[0][0] = (y1, x1)
+        rigid = torch.from_numpy(motion.displacements[0][:, 0].astype(np.int64))
+        movie = np.ascontiguousarray(imaging.get_series(0, 60)[..., 0])
+        native = register.shift_frames(
+            torch.from_numpy(movie),
+            rigid[:, 0],
+            rigid[:, 1],
+            torch.from_numpy(y1),
+            torch.from_numpy(x1),
+            blocks=motion.blocks[0],
+            device=torch.device("cpu"),
+        )
+        np.testing.assert_array_equal(register_motion(imaging, motion).get_series(0, 60)[..., 0], native)
+        mixed = register_motion(imaging, motion, method="normcorre").get_series(0, 60)[..., 0]
+        assert np.abs(mixed - native)[:, 16:-16, 16:-16].mean() < 0.25 * movie.std()
+
+    def test_normcorre_motion_is_applied_by_suite2p_as_normcorre_applies_it(self, imaging):
+        motion = compute_motion(imaging, method="normcorre", nonrigid=True, **self.SETTINGS["normcorre"])
+        _, (cy, cx) = motion.patch_motion(0, 0)
+        motion.patch_shifts[0][0] = motion.patch_shifts[0][0] + self._ramp(len(cy), len(cx))
+        own = register_motion(imaging, motion).get_series(0, 60)[..., 0]
+        mixed = register_motion(imaging, motion, method="suite2p").get_series(0, 60)[..., 0]
+        assert np.abs(mixed - own)[:, 16:-16, 16:-16].mean() < 0.25 * imaging.get_series(0, 60).std()
