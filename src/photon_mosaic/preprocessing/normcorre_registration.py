@@ -262,7 +262,7 @@ def _correct_epoch(
 
 
 class NormcorreMotion(Motion):
-    """Motion estimated by the NoRMCorre backend: arrays and a settings dump only, so it pickles.
+    """Motion estimated by the NoRMCorre backend.
 
     ``displacements`` is the rigid correction per frame ``(frames, planes, 2)`` (CaImAn
     ``shifts_rig``); ``reference`` the final per-plane template. For piecewise runs
