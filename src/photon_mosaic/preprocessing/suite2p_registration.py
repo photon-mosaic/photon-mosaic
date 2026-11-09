@@ -10,6 +10,8 @@ from pydantic import ConfigDict, Field
 from photon_mosaic.core import (
     BaseImaging,
     Motion,
+    concatenate_epochs,
+    frame_slice,
     register_motion_class,
     register_registration_class,
     split_epoch_at_frames,
@@ -401,7 +403,7 @@ class Suite2PMotion(Motion):
         n_planes = imaging.num_planes
         n_epochs = imaging.get_num_epochs()
 
-        # Reference images and bidiphase offsets computed once per plane from epoch 0
+        # Reference images and bidiphase offsets computed once per plane
         refImgs: list[NDArray | None] = [None] * n_planes
         bidiphases: list[int] = [0] * n_planes
         # Block definitions are the same for all epochs (geometry doesn't change)
@@ -416,6 +418,13 @@ class Suite2PMotion(Motion):
         trims = settings.trim_frames_start + settings.trim_frames_end
         if trims and trims >= min(imaging.get_num_samples(segment_index=e) for e in range(n_epochs)):
             raise ValueError("trim_frames_start + trim_frames_end must be shorter than every epoch.")
+        # The reference samples every epoch's untrimmed frames, joined, as suite2p samples its binary of all files
+        lo, hi = settings.trim_frames_start, settings.trim_frames_end
+        untrimmed = [
+            frame_slice(imaging, lo, imaging.get_num_frames(epoch_index=e) - hi, epoch_index=e) for e in range(n_epochs)
+        ]
+        kept = concatenate_epochs(untrimmed)
+        n_kept = kept.get_num_frames()
         for epoch_idx in range(n_epochs):
             n_frames = imaging.get_num_samples(segment_index=epoch_idx)
             Ly, Lx = imaging.shape[0], imaging.shape[1]
@@ -436,12 +445,12 @@ class Suite2PMotion(Motion):
             batched = split_epoch_at_frames(imaging, epoch_idx, range(batch_size, n_frames, batch_size))
 
             for p, plane_id in enumerate(imaging.plane_ids):
-                # Reference once, from the first epoch: read only the nimg_init evenly spaced frames suite2p
-                # samples (the wrapper then uses all of them)
+                # Reference once: read only the nimg_init evenly spaced frames suite2p samples (the wrapper then
+                # uses all of them)
                 if epoch_idx == 0:
-                    picks = np.linspace(start, end, 1 + min(settings.nimg_init, end - start), dtype=int)[:-1]
-                    plane = select_planes(imaging, [plane_id])
-                    sample = np.concatenate([plane.get_series(i, i + 1, epoch_index=0) for i in picks])
+                    picks = np.linspace(0, n_kept, 1 + min(settings.nimg_init, n_kept), dtype=int)[:-1]
+                    plane = select_planes(kept, [plane_id])
+                    sample = np.concatenate([plane.get_series(i, i + 1) for i in picks])
                     sample = sample[:, rows, cols, 0].astype(np.float32)
                     refImgs[p], bidiphases[p] = _compute_reference_wrapper(sample, settings, refImg=None, device=device)
 
