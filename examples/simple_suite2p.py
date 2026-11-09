@@ -28,7 +28,7 @@ import warnings
 warnings.filterwarnings("ignore", message="Sparse invariant checks")
 
 # %% [markdown]
-# We will run our analysis on `suite2p`'s example data (via a `photon_mosaic.sample_data` function that downloads and caches it from their Google drive), on just 1000 frames. Note that this is a toy example to showcase functionality: its result is intentionally far from perfect, illustrating how users must evaluate and optimise their settings in order to get good results form their data. This is expected.
+# We will run our analysis on `suite2p`'s example data (via a `photon_mosaic.sample_data` function that downloads and caches it from their Google drive), on 4000 frames. Note that this is a toy example to showcase functionality: its result is intentionally far from perfect, illustrating how users must evaluate and optimise their settings in order to get good results from their data. This is expected.
 
 # %% [markdown]
 # We start by opening the `suite2p` sample data as an `Imaging` object. We then print some information about it, and plot it.
