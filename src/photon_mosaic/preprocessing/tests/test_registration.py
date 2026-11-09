@@ -13,6 +13,7 @@ from photon_mosaic.preprocessing import (
     RegisterImagingEpoch,
     RegistrationSettings,
     Suite2pRegistrationSettings,
+    frame_correlations,
     register_motion,
 )
 
@@ -182,3 +183,25 @@ def test_dotenv_file_reads_only_its_own_prefix(settings_class, tmp_path, monkeyp
         f.write("\nREGISTRATION_BATCH_SIZ=1\nSUITE2P_REGISTRATION_BATCH_SIZ=1\nNORMCORRE_REGISTRATION_BATCH_SIZ=1\n")
     with pytest.raises(ValidationError):  # a typo with the class's own prefix
         settings_class()
+
+
+class TestFrameCorrelations:
+    def test_a_still_movie_scores_one_and_a_moving_one_less(self):
+        from photon_mosaic.core import NumpyImaging
+
+        frame = np.random.default_rng(0).random((20, 24)).astype(np.float32)
+        still = np.repeat(frame[None, :, :, None], 6, axis=0)
+        moving = np.stack([np.roll(frame, k, axis=1) for k in range(6)])[..., None]
+        np.testing.assert_allclose(frame_correlations(NumpyImaging([still], 10.0), chunk_size=4), 1.0)
+        scores = frame_correlations(NumpyImaging([moving], 10.0), chunk_size=4)
+        assert scores.shape == (6,) and scores.max() < 0.9
+
+    def test_matches_pearson_and_reads_the_motion_s_valid_region(self, imaging):
+        motion = DoublingMotion(
+            imaging=imaging, displacements=[np.zeros((6, 1, 2))], yranges=[[(1, 7)]], xranges=[[(2, 8)]]
+        )
+        registered = RegisterImaging(imaging, motion)
+        movie = registered.get_series(0, 6)[:, 1:7, 2:8, 0]
+        template = movie.mean(axis=0)
+        expected = [np.corrcoef(f.ravel(), template.ravel())[0, 1] for f in movie]
+        np.testing.assert_allclose(frame_correlations(registered, chunk_size=4), expected, rtol=1e-6)
