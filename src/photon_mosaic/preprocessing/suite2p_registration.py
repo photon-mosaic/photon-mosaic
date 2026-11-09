@@ -10,6 +10,8 @@ from pydantic import ConfigDict, Field
 from photon_mosaic.core import (
     BaseImaging,
     Motion,
+    concatenate_epochs,
+    frame_slice,
     register_motion_class,
     register_registration_class,
     split_epoch_at_frames,
@@ -43,7 +45,9 @@ class Suite2pRegistrationSettings(RegistrationSettings):
         description="max allowed registration shift, as a fraction of frame max(width and height)",
     )
     force_refImg: bool = Field(default=True, description="Force the use of an external reference image")
-    nimg_init: int = Field(default=400, description="Number of evenly spaced frames used to build the reference image")
+    nimg_init: int = Field(
+        default=400, description="Number of frames, evenly spaced over all epochs, used to build the reference image"
+    )
     do_bidiphase: bool = Field(
         default=False,
         description="Estimate the bidirectional scanning phase offset. Must be False: suite2p 1.x corrupts odd scan "
@@ -359,8 +363,9 @@ class Suite2PMotion(Motion):
     ) -> "Suite2PMotion":
         """Pre-compute Suite2P displacements for all planes and epochs.
 
-        Computes the reference image and per-frame rigid (and optionally nonrigid)
-        shifts without applying them to the data. Shifts are stored in the returned
+        Computes one reference image per plane, from ``nimg_init`` frames spaced evenly over
+        all epochs as suite2p spaces them over its binary, and per-frame rigid (and optionally
+        nonrigid) shifts without applying them to the data. Shifts are stored in the returned
         ``Motion`` object and applied lazily by ``RegisterSuite2PImagingEpoch``.
 
         Called through :meth:`photon_mosaic.core.Motion.compute` (or its
@@ -414,7 +419,7 @@ class Suite2PMotion(Motion):
         n_planes = imaging.num_planes
         n_epochs = imaging.get_num_epochs()
 
-        # Reference images and bidiphase offsets computed once per plane from epoch 0
+        # Reference images and bidiphase offsets, one per plane
         refImgs: list[NDArray | None] = [None] * n_planes
         bidiphases: list[int] = [0] * n_planes
         # Block definitions are the same for all epochs (geometry doesn't change)
@@ -429,6 +434,28 @@ class Suite2PMotion(Motion):
         trims = settings.trim_frames_start + settings.trim_frames_end
         if trims and trims >= min(imaging.get_num_samples(segment_index=e) for e in range(n_epochs)):
             raise ValueError("trim_frames_start + trim_frames_end must be shorter than every epoch.")
+        # Each plane's reference: nimg_init frames spaced evenly over the untrimmed frames of every epoch, end to
+        # end, as suite2p samples its binary of all files. Only those frames are read.
+        kept = concatenate_epochs(
+            [
+                frame_slice(
+                    imaging,
+                    settings.trim_frames_start,
+                    imaging.get_num_samples(segment_index=e) - settings.trim_frames_end,
+                    epoch_index=e,
+                )
+                for e in range(n_epochs)
+            ]
+        )
+        n_kept = kept.get_num_samples()
+        picks = np.linspace(0, n_kept, 1 + min(settings.nimg_init, n_kept), dtype=int)[:-1]
+        for p, plane_id in enumerate(imaging.plane_ids):
+            plane = select_planes(kept, [plane_id])
+            sample = np.concatenate([plane.get_series(i, i + 1) for i in picks])[:, rows, cols, 0]
+            refImgs[p], bidiphases[p] = _compute_reference_wrapper(
+                sample.astype(np.float32), settings, refImg=None, device=device
+            )
+
         for epoch_idx in range(n_epochs):
             n_frames = imaging.get_num_samples(segment_index=epoch_idx)
             Ly, Lx = imaging.shape[0], imaging.shape[1]
@@ -449,15 +476,6 @@ class Suite2PMotion(Motion):
             batched = split_epoch_at_frames(imaging, epoch_idx, range(batch_size, n_frames, batch_size))
 
             for p, plane_id in enumerate(imaging.plane_ids):
-                # Reference once, from the first epoch: read only the nimg_init evenly spaced frames suite2p
-                # samples (the wrapper then uses all of them)
-                if epoch_idx == 0:
-                    picks = np.linspace(start, end, 1 + min(settings.nimg_init, end - start), dtype=int)[:-1]
-                    plane = select_planes(imaging, [plane_id])
-                    sample = np.concatenate([plane.get_series(i, i + 1, epoch_index=0) for i in picks])
-                    sample = sample[:, rows, cols, 0].astype(np.float32)
-                    refImgs[p], bidiphases[p] = _compute_reference_wrapper(sample, settings, refImg=None, device=device)
-
                 # Compute shifts without applying them, one sub-epoch (= one suite2p batch) per call.
                 # Only the offsets are kept per batch: the other returns include a mean image per call.
                 # Select the plane after splitting: selection is applied by get_series, not by the epochs.
