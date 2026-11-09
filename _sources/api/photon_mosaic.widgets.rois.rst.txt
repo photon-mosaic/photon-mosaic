@@ -1,0 +1,13 @@
+﻿photon\_mosaic.widgets.rois
+===========================
+
+.. automodule:: photon_mosaic.widgets.rois
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      RoisWidget
+      plot_rois
+   

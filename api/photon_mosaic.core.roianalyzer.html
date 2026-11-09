@@ -1,0 +1,1636 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>photon_mosaic.core.roianalyzer &#8212; photon-mosaic</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx_autodoc_typehints.css?v=057ac668" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery.css?v=c83e6b79" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/css/custom.css?v=b4aaff1f" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=75c7c72ae941e8b558d8"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8" />
+
+    <script src="../_static/documentation_options.js?v=d45e8c67"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/sg-tags.js?v=d80f6fa4"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'api/photon_mosaic.core.roianalyzer';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="canonical" href="https://api.photon-mosaic.org/api/photon_mosaic.core.roianalyzer.html" />
+    <link rel="icon" href="../_static/logo.png"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="photon_mosaic.core.roianalyzer_core_extensions" href="photon_mosaic.core.roianalyzer_core_extensions.html" />
+    <link rel="prev" title="photon_mosaic.core.numpyimaging" href="photon_mosaic.core.numpyimaging.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation" aria-expanded="false" aria-controls="pst-primary-sidebar-modal">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/logo.png" class="logo__image only-light" alt=""/>
+    <img src="../_static/logo.png" class="logo__image only-dark pst-js-only" alt=""/>
+  
+  
+    <p class="title logo__title">photon-mosaic v0.0.1</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../user-guide.html">
+    Usage
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../developer-intro.html">
+    For Developers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../contributing.html">
+    Contributing
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../api_index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/photon-mosaic/photon-mosaic" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://neuroinformatics.zulipchat.com/#narrow/channel/500681-photon-mosaic" title="Zulip (chat)" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-solid fa-comments fa-lg" aria-hidden="true"></i><span class="visually-hidden">Zulip (chat)</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button type="button" class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page" aria-expanded="false" aria-controls="pst-secondary-sidebar-modal">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal" tabindex="-1"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../user-guide.html">
+    Usage
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../developer-intro.html">
+    For Developers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../contributing.html">
+    Contributing
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../api_index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/photon-mosaic/photon-mosaic" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://neuroinformatics.zulipchat.com/#narrow/channel/500681-photon-mosaic" title="Zulip (chat)" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-solid fa-comments fa-lg" aria-hidden="true"></i><span class="visually-hidden">Zulip (chat)</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button type="button" id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar">
+  <svg class="pst-icon" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="core.html">Core</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.baseimaging.html">photon_mosaic.core.baseimaging</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.baserois.html">photon_mosaic.core.baserois</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.binaryimaging.html">photon_mosaic.core.binaryimaging</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.binaryrois.html">photon_mosaic.core.binaryrois</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.core_tools.html">photon_mosaic.core.core_tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.generators.html">photon_mosaic.core.generators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.imaging_ops.html">photon_mosaic.core.imaging_ops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.imaging_tools.html">photon_mosaic.core.imaging_tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.loading.html">photon_mosaic.core.loading</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.motion.html">photon_mosaic.core.motion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.numpyimaging.html">photon_mosaic.core.numpyimaging</a></li>
+<li class="toctree-l2 current active"><a aria-current="page" class="current reference internal" href="#">photon_mosaic.core.roianalyzer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.roianalyzer_core_extensions.html">photon_mosaic.core.roianalyzer_core_extensions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.selectplanes.html">photon_mosaic.core.selectplanes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.selectrois.html">photon_mosaic.core.selectrois</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.testingtools.html">photon_mosaic.core.testingtools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.zarrimaging.html">photon_mosaic.core.zarrimaging</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.zarrrois.html">photon_mosaic.core.zarrrois</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="extractors.html">Extractors</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.extractors.roiextractors.html">photon_mosaic.extractors.roiextractors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.extractors.suite2prois.html">photon_mosaic.extractors.suite2prois</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="preprocessing.html">Preprocessing</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.preprocessing.basepreprocessor.html">photon_mosaic.preprocessing.basepreprocessor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.preprocessing.registration.html">photon_mosaic.preprocessing.registration</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.preprocessing.suite2p_registration.html">photon_mosaic.preprocessing.suite2p_registration</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="sample_data.html">Sample Data</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.sample_data.suite2p_sample_data.html">photon_mosaic.sample_data.suite2p_sample_data</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="segmentation.html">Segmentation</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.segmentation.basesegmentation.html">photon_mosaic.segmentation.basesegmentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.segmentation.run_segmentation.html">photon_mosaic.segmentation.run_segmentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.segmentation.suite2p_segmentation.html">photon_mosaic.segmentation.suite2p_segmentation</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="widgets.html">Widgets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.widgets.rois.html">photon_mosaic.widgets.rois</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.widgets.series.html">photon_mosaic.widgets.series</a></li>
+</ul>
+</details></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-house"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../api_index.html" class="nav-link">API Reference</a></li>
+    
+    
+    <li class="breadcrumb-item"><a href="core.html" class="nav-link">Core</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">photon_mosaic.core.roianalyzer</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="module-photon_mosaic.core.roianalyzer">
+<span id="photon-mosaic-core-roianalyzer"></span><h1>photon_mosaic.core.roianalyzer<a class="headerlink" href="#module-photon_mosaic.core.roianalyzer" title="Link to this heading">#</a></h1>
+<p>RoiAnalyzer: core class for pairing BaseRois and BaseImaging for analysis.</p>
+<p>Adapted from SpikeInterface’s SortingAnalyzer to work with photon-mosaic’s
+BaseRois and BaseImaging instead of BaseSorting and BaseRecording.</p>
+<p class="rubric">Functions</p>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.create_roi_analyzer" title="photon_mosaic.core.roianalyzer.create_roi_analyzer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_roi_analyzer</span></code></a>(rois, imaging[, format, ...])</p></td>
+<td><p>Create a RoiAnalyzer by pairing a BaseRois and a BaseImaging.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.get_available_analyzer_extensions" title="photon_mosaic.core.roianalyzer.get_available_analyzer_extensions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_available_analyzer_extensions</span></code></a>()</p></td>
+<td><p>Get all built-in extension names.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.get_default_analyzer_extension_params" title="photon_mosaic.core.roianalyzer.get_default_analyzer_extension_params"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_default_analyzer_extension_params</span></code></a>(...)</p></td>
+<td><p>Get the default params for an extension.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.get_extension_class" title="photon_mosaic.core.roianalyzer.get_extension_class"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_extension_class</span></code></a>(extension_name[, ...])</p></td>
+<td><p>Get extension class by name, auto-importing if needed.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.load_roi_analyzer" title="photon_mosaic.core.roianalyzer.load_roi_analyzer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_roi_analyzer</span></code></a>(folder[, load_extensions, ...])</p></td>
+<td><p>Load a RoiAnalyzer from disk.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.register_result_extension" title="photon_mosaic.core.roianalyzer.register_result_extension"><code class="xref py py-obj docutils literal notranslate"><span class="pre">register_result_extension</span></code></a>(extension_class)</p></td>
+<td><p>Register an AnalyzerExtension subclass so it can be discovered by name.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<p class="rubric">Classes</p>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension" title="photon_mosaic.core.roianalyzer.AnalyzerExtension"><code class="xref py py-obj docutils literal notranslate"><span class="pre">AnalyzerExtension</span></code></a>(roi_analyzer)</p></td>
+<td><p>Base class for RoiAnalyzer extensions.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer" title="photon_mosaic.core.roianalyzer.RoiAnalyzer"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RoiAnalyzer</span></code></a>(rois[, imaging, ...])</p></td>
+<td><p>Pair BaseRois and BaseImaging for extensible post-processing analysis.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<dl class="py function">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.create_roi_analyzer">
+<span class="sig-prename descclassname"><span class="pre">photon_mosaic.core.roianalyzer.</span></span><span class="sig-name descname"><span class="pre">create_roi_analyzer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rois</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">imaging</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'memory'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">overwrite</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend_options</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#create_roi_analyzer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.create_roi_analyzer" title="Link to this definition">#</a></dt>
+<dd><p>Create a RoiAnalyzer by pairing a BaseRois and a BaseImaging.</p>
+<p>The RoiAnalyzer manages a collection of AnalyzerExtension instances for
+post-processing steps such as trace extraction, dF/F, deconvolution, etc.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rois</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="photon_mosaic.core.baserois.html#photon_mosaic.core.baserois.BaseRois" title="photon_mosaic.core.baserois.BaseRois"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseRois</span></code></a></span>) – The ROIs object.</p></li>
+<li><p><strong>imaging</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging" title="photon_mosaic.core.baseimaging.BaseImaging"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseImaging</span></code></a></span>) – The imaging object.</p></li>
+<li><p><strong>format</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></span>) – The storage backend. If “binary_folder” or “zarr”, <code class="docutils literal notranslate"><span class="pre">folder</span></code> must be provided.</p></li>
+<li><p><strong>folder</strong> (<em>str</em><em> | </em><em>Path</em><em> | </em><em>None</em><em>, </em><em>default: None</em>) – The folder where the analyzer is persisted (required for non-memory formats).</p></li>
+<li><p><strong>overwrite</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – If True, overwrite the folder if it already exists.</p></li>
+<li><p><strong>backend_options</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code> | <span class="highlight sphinx_autodoc_typehints-value"><code class="xref py py-obj docutils literal notranslate"><span class="kc"><span class="pre">None</span></span></code></span></span>) – <p>Backend-specific options. May contain:</p>
+<blockquote>
+<div><ul>
+<li><p>storage_options: dict | None (fsspec storage options)</p></li>
+<li><p>saving_options: dict | None (e.g. compression for zarr)</p></li>
+</ul>
+</div></blockquote>
+</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The created RoiAnalyzer object.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer" title="photon_mosaic.core.roianalyzer.RoiAnalyzer"><code class="xref py py-class docutils literal notranslate"><span class="pre">RoiAnalyzer</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.load_roi_analyzer">
+<span class="sig-prename descclassname"><span class="pre">photon_mosaic.core.roianalyzer.</span></span><span class="sig-name descname"><span class="pre">load_roi_analyzer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">load_extensions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend_options</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#load_roi_analyzer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.load_roi_analyzer" title="Link to this definition">#</a></dt>
+<dd><p>Load a RoiAnalyzer from disk.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>folder</strong> (<em>str</em><em> or </em><em>Path</em>) – The folder where the analyzer is stored.</p></li>
+<li><p><strong>load_extensions</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – Whether to load all saved extensions.</p></li>
+<li><p><strong>format</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></span>) – The format of the stored analyzer. “auto” will guess from the path.</p></li>
+<li><p><strong>backend_options</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code> | <span class="highlight sphinx_autodoc_typehints-value"><code class="xref py py-obj docutils literal notranslate"><span class="kc"><span class="pre">None</span></span></code></span></span>) – Backend-specific options (e.g. storage_options for remote zarr).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The loaded RoiAnalyzer.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer" title="photon_mosaic.core.roianalyzer.RoiAnalyzer"><code class="xref py py-class docutils literal notranslate"><span class="pre">RoiAnalyzer</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">photon_mosaic.core.roianalyzer.</span></span><span class="sig-name descname"><span class="pre">RoiAnalyzer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rois</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">imaging</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">imaging_attributes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend_options</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer" title="Link to this definition">#</a></dt>
+<dd><p>Pair BaseRois and BaseImaging for extensible post-processing analysis.</p>
+<p>Maintains a collection of computed AnalyzerExtension instances. Supports
+three storage backends: <code class="docutils literal notranslate"><span class="pre">&quot;memory&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;binary_folder&quot;</span></code>, and <code class="docutils literal notranslate"><span class="pre">&quot;zarr&quot;</span></code>.</p>
+<p>Do not instantiate directly — use <a class="reference internal" href="#photon_mosaic.core.roianalyzer.create_roi_analyzer" title="photon_mosaic.core.roianalyzer.create_roi_analyzer"><code class="xref py py-func docutils literal notranslate"><span class="pre">create_roi_analyzer()</span></code></a> or
+<a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.create" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.create"><code class="xref py py-meth docutils literal notranslate"><span class="pre">RoiAnalyzer.create()</span></code></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Attributes<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>imaging</strong></dt><dd></dd>
+<dt><strong>num_planes</strong></dt><dd></dd>
+<dt><strong>roi_ids</strong></dt><dd></dd>
+<dt><strong>sampling_frequency</strong></dt><dd></dd>
+<dt><strong>shape</strong></dt><dd></dd>
+</dl>
+</dd>
+</dl>
+<p class="rubric">Methods</p>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.compute" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.compute"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute</span></code></a>(input[, save, extension_params, verbose])</p></td>
+<td><p>Compute one or several extensions.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.compute_one_extension" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.compute_one_extension"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_one_extension</span></code></a>(extension_name[, ...])</p></td>
+<td><p>Compute a single extension.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.compute_several_extensions" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.compute_several_extensions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_several_extensions</span></code></a>(extensions[, ...])</p></td>
+<td><p>Compute several extensions respecting dependency order.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.copy" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.copy"><code class="xref py py-obj docutils literal notranslate"><span class="pre">copy</span></code></a>()</p></td>
+<td><p>Create an in-memory copy.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.create" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.create"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create</span></code></a>(rois, imaging[, format, folder, ...])</p></td>
+<td><p>Create a new RoiAnalyzer.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.delete_extension" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.delete_extension"><code class="xref py py-obj docutils literal notranslate"><span class="pre">delete_extension</span></code></a>(extension_name)</p></td>
+<td><p>Delete an extension from memory and from disk.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_computable_extensions" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_computable_extensions"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_computable_extensions</span></code></a>()</p></td>
+<td><p>List all registered extension names.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_default_extension_params" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_default_extension_params"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_default_extension_params</span></code></a>(extension_name)</p></td>
+<td><p>Get default params for an extension.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_extension" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_extension"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_extension</span></code></a>(extension_name)</p></td>
+<td><p>Get an extension, auto-loading from disk if needed.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_loaded_extension_names" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_loaded_extension_names"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_loaded_extension_names</span></code></a>()</p></td>
+<td><p>Return names of currently loaded extensions.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_roi_property" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_roi_property"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_roi_property</span></code></a>(key[, ids])</p></td>
+<td><p>Get a property from the internal ROIs copy.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_rois_provenance" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_rois_provenance"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_rois_provenance</span></code></a>()</p></td>
+<td><p>Get the original rois object if possible, otherwise None.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_saved_extension_names" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_saved_extension_names"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_saved_extension_names</span></code></a>()</p></td>
+<td><p>Get extension names saved on disk (without loading data).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.has_extension" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.has_extension"><code class="xref py py-obj docutils literal notranslate"><span class="pre">has_extension</span></code></a>(extension_name)</p></td>
+<td><p>Check if an extension exists (in memory or on disk).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.load" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.load"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load</span></code></a>(folder[, imaging, load_extensions, ...])</p></td>
+<td><p>Load from folder or zarr.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.load_all_saved_extension" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.load_all_saved_extension"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_all_saved_extension</span></code></a>()</p></td>
+<td><p>Load all saved extensions into memory.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.load_extension" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.load_extension"><code class="xref py py-obj docutils literal notranslate"><span class="pre">load_extension</span></code></a>(extension_name)</p></td>
+<td><p>Load an extension from disk into memory.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.remove_rois" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.remove_rois"><code class="xref py py-obj docutils literal notranslate"><span class="pre">remove_rois</span></code></a>(remove_roi_ids[, format, folder])</p></td>
+<td><p>Create a new RoiAnalyzer with some ROIs removed.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.save_as" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.save_as"><code class="xref py py-obj docutils literal notranslate"><span class="pre">save_as</span></code></a>([format, folder, backend_options])</p></td>
+<td><p>Save the analyzer to a different backend.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.select_rois" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.select_rois"><code class="xref py py-obj docutils literal notranslate"><span class="pre">select_rois</span></code></a>(roi_ids[, format, folder])</p></td>
+<td><p>Create a new RoiAnalyzer with a subset of ROIs.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.set_roi_property" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.set_roi_property"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_roi_property</span></code></a>(key, values[, ids, ...])</p></td>
+<td><p>Set a property on the internal ROIs copy, optionally persisting to disk.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.set_temporary_imaging" title="photon_mosaic.core.roianalyzer.RoiAnalyzer.set_temporary_imaging"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_temporary_imaging</span></code></a>(imaging[, check_dtype])</p></td>
+<td><p>Set a temporary imaging (e.g. a cached/loaded copy) without persisting it.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="pst-scrollable-table-container"><table class="table">
+<tbody>
+<tr class="row-odd"><td><p><strong>create_binary_folder</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>create_memory</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><strong>create_zarr</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>get_dtype</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><strong>get_num_epochs</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>get_num_rois</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><strong>get_num_samples</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>get_total_duration</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><strong>get_total_samples</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>has_imaging</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><strong>has_temporary_imaging</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>is_read_only</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><strong>load_from_binary_folder</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>load_from_zarr</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+</div>
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.create">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">create</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rois</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">imaging</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'memory'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend_options</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.create"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.create" title="Link to this definition">#</a></dt>
+<dd><p>Create a new RoiAnalyzer.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>rois</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="photon_mosaic.core.baserois.html#photon_mosaic.core.baserois.BaseRois" title="photon_mosaic.core.baserois.BaseRois"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseRois</span></code></a></span>) – The ROIs object.</p></li>
+<li><p><strong>imaging</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging" title="photon_mosaic.core.baseimaging.BaseImaging"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseImaging</span></code></a></span>) – The imaging object.</p></li>
+<li><p><strong>format</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Literal</span></code>[<span class="highlight sphinx_autodoc_typehints-value"><code class="docutils literal notranslate"><span class="s1"><span class="pre">'memory'</span></span></code></span>, <span class="highlight sphinx_autodoc_typehints-value"><code class="docutils literal notranslate"><span class="s1"><span class="pre">'binary_folder'</span></span></code></span>, <span class="highlight sphinx_autodoc_typehints-value"><code class="docutils literal notranslate"><span class="s1"><span class="pre">'zarr'</span></span></code></span>]</span>) – Storage backend.</p></li>
+<li><p><strong>folder</strong> (<em>str</em><em> | </em><em>Path</em><em> | </em><em>None</em>) – Required for non-memory formats.</p></li>
+<li><p><strong>backend_options</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code> | <span class="highlight sphinx_autodoc_typehints-value"><code class="xref py py-obj docutils literal notranslate"><span class="kc"><span class="pre">None</span></span></code></span></span>) – Backend-specific options.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer" title="photon_mosaic.core.roianalyzer.RoiAnalyzer">RoiAnalyzer</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.load">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">imaging</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">load_extensions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'auto'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend_options</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.load" title="Link to this definition">#</a></dt>
+<dd><p>Load from folder or zarr.</p>
+<p>The imaging can be provided if its location has changed.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.create_memory">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">create_memory</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">rois</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">imaging</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">imaging_attributes</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.create_memory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.create_memory" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.create_binary_folder">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">create_binary_folder</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rois</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">imaging</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">imaging_attributes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend_options</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.create_binary_folder"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.create_binary_folder" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.load_from_binary_folder">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">load_from_binary_folder</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">imaging</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend_options</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.load_from_binary_folder"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.load_from_binary_folder" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.create_zarr">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">create_zarr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rois</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">imaging</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">imaging_attributes</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend_options</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.create_zarr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.create_zarr" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.load_from_zarr">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">load_from_zarr</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">folder</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">imaging</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend_options</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.load_from_zarr"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.load_from_zarr" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.set_temporary_imaging">
+<span class="sig-name descname"><span class="pre">set_temporary_imaging</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">imaging</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">check_dtype</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.set_temporary_imaging"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.set_temporary_imaging" title="Link to this definition">#</a></dt>
+<dd><p>Set a temporary imaging (e.g. a cached/loaded copy) without persisting it.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>imaging</strong> (<span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging" title="photon_mosaic.core.baseimaging.BaseImaging"><code class="xref py py-class docutils literal notranslate"><span class="pre">BaseImaging</span></code></a></span>) – The imaging object.</p></li>
+<li><p><strong>check_dtype</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – Whether to validate dtype match.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.set_roi_property">
+<span class="sig-name descname"><span class="pre">set_roi_property</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">values</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">missing_value</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.set_roi_property"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.set_roi_property" title="Link to this definition">#</a></dt>
+<dd><p>Set a property on the internal ROIs copy, optionally persisting to disk.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>key</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></span>) – Property name.</p></li>
+<li><p><strong>values</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code> | <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code> | <code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code></span>) – Property values.</p></li>
+<li><p><strong>ids</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code> | <code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code> | <code class="xref py py-class docutils literal notranslate"><span class="pre">tuple</span></code> | <span class="highlight sphinx_autodoc_typehints-value"><code class="xref py py-obj docutils literal notranslate"><span class="kc"><span class="pre">None</span></span></code></span></span>) – Subset of ROI ids to set. If None, set for all.</p></li>
+<li><p><strong>missing_value</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-data docutils literal notranslate"><span class="pre">Any</span></code></span>) – Fill value for ids not in <code class="docutils literal notranslate"><span class="pre">ids</span></code>.</p></li>
+<li><p><strong>save</strong> (<span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span>) – Whether to persist (binary_folder / zarr only).</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><span class="highlight sphinx_autodoc_typehints-value"><code class="xref py py-obj docutils literal notranslate"><span class="kc"><span class="pre">None</span></span></code></span></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_roi_property">
+<span class="sig-name descname"><span class="pre">get_roi_property</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.get_roi_property"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_roi_property" title="Link to this definition">#</a></dt>
+<dd><p>Get a property from the internal ROIs copy.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">ndarray</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.save_as">
+<span class="sig-name descname"><span class="pre">save_as</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'memory'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">backend_options</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.save_as"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.save_as" title="Link to this definition">#</a></dt>
+<dd><p>Save the analyzer to a different backend.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>format</strong> (<em>&quot;memory&quot;</em><em> | </em><em>&quot;binary_folder&quot;</em><em> | </em><em>&quot;zarr&quot;</em>) – Target backend.</p></li>
+<li><p><strong>folder</strong> (<em>str</em><em> | </em><em>Path</em><em> | </em><em>None</em>) – Required for non-memory formats.</p></li>
+<li><p><strong>backend_options</strong> (<em>dict</em><em> | </em><em>None</em>) – Backend-specific options.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer" title="photon_mosaic.core.roianalyzer.RoiAnalyzer"><code class="xref py py-class docutils literal notranslate"><span class="pre">RoiAnalyzer</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.select_rois">
+<span class="sig-name descname"><span class="pre">select_rois</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">roi_ids</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'memory'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.select_rois"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.select_rois" title="Link to this definition">#</a></dt>
+<dd><p>Create a new RoiAnalyzer with a subset of ROIs.</p>
+<p>Extensions are filtered to the selected ROI ids.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>roi_ids</strong> (<em>array-like</em>) – ROI ids to keep.</p></li>
+<li><p><strong>format</strong> (<em>str</em>) – Target backend.</p></li>
+<li><p><strong>folder</strong> (<em>str</em><em> | </em><em>Path</em><em> | </em><em>None</em>) – Required for non-memory formats.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer" title="photon_mosaic.core.roianalyzer.RoiAnalyzer"><code class="xref py py-class docutils literal notranslate"><span class="pre">RoiAnalyzer</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.remove_rois">
+<span class="sig-name descname"><span class="pre">remove_rois</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">remove_roi_ids</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">format</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'memory'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">folder</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.remove_rois"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.remove_rois" title="Link to this definition">#</a></dt>
+<dd><p>Create a new RoiAnalyzer with some ROIs removed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>remove_roi_ids</strong> (<em>array-like</em>) – ROI ids to remove.</p></li>
+<li><p><strong>format</strong> (<em>str</em>) – Target backend.</p></li>
+<li><p><strong>folder</strong> (<em>str</em><em> | </em><em>Path</em><em> | </em><em>None</em>) – Required for non-memory formats.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer" title="photon_mosaic.core.roianalyzer.RoiAnalyzer"><code class="xref py py-class docutils literal notranslate"><span class="pre">RoiAnalyzer</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.copy">
+<span class="sig-name descname"><span class="pre">copy</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.copy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.copy" title="Link to this definition">#</a></dt>
+<dd><p>Create an in-memory copy.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer" title="photon_mosaic.core.roianalyzer.RoiAnalyzer"><code class="xref py py-class docutils literal notranslate"><span class="pre">RoiAnalyzer</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.imaging">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">imaging</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging" title="photon_mosaic.core.baseimaging.BaseImaging"><span class="pre">BaseImaging</span></a></span><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.imaging" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.roi_ids">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">roi_ids</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ndarray</span></span><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.roi_ids" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.sampling_frequency">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">sampling_frequency</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></span><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.sampling_frequency" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.shape">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">shape</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">tuple</span></span><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.shape" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.num_planes">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">num_planes</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.num_planes" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.has_imaging">
+<span class="sig-name descname"><span class="pre">has_imaging</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.has_imaging"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.has_imaging" title="Link to this definition">#</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.has_temporary_imaging">
+<span class="sig-name descname"><span class="pre">has_temporary_imaging</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.has_temporary_imaging"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.has_temporary_imaging" title="Link to this definition">#</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_num_rois">
+<span class="sig-name descname"><span class="pre">get_num_rois</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.get_num_rois"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_num_rois" title="Link to this definition">#</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_num_epochs">
+<span class="sig-name descname"><span class="pre">get_num_epochs</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.get_num_epochs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_num_epochs" title="Link to this definition">#</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_num_samples">
+<span class="sig-name descname"><span class="pre">get_num_samples</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">epoch_index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.get_num_samples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_num_samples" title="Link to this definition">#</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_total_samples">
+<span class="sig-name descname"><span class="pre">get_total_samples</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.get_total_samples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_total_samples" title="Link to this definition">#</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">int</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_total_duration">
+<span class="sig-name descname"><span class="pre">get_total_duration</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.get_total_duration"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_total_duration" title="Link to this definition">#</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">float</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_dtype">
+<span class="sig-name descname"><span class="pre">get_dtype</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.get_dtype"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_dtype" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.is_read_only">
+<span class="sig-name descname"><span class="pre">is_read_only</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.is_read_only"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.is_read_only" title="Link to this definition">#</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_rois_provenance">
+<span class="sig-name descname"><span class="pre">get_rois_provenance</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.get_rois_provenance"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_rois_provenance" title="Link to this definition">#</a></dt>
+<dd><p>Get the original rois object if possible, otherwise None.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.compute">
+<span class="sig-name descname"><span class="pre">compute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">input</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">extension_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.compute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.compute" title="Link to this definition">#</a></dt>
+<dd><p>Compute one or several extensions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>input</strong> (<em>str</em><em> | </em><em>dict</em><em> | </em><em>list</em>) – Extension name (str), dict of {name: params}, or list of names.</p></li>
+<li><p><strong>save</strong> (<em>bool</em><em>, </em><em>default: True</em>) – Whether to persist computed extensions.</p></li>
+<li><p><strong>extension_params</strong> (<em>dict</em><em> | </em><em>None</em>) – Per-extension params when <code class="docutils literal notranslate"><span class="pre">input</span></code> is a list.</p></li>
+<li><p><strong>verbose</strong> (<em>bool</em>) – Print progress.</p></li>
+<li><p><strong>**kwargs</strong> – Passed to the extension’s <code class="docutils literal notranslate"><span class="pre">set_params</span></code> (if str) or as job_kwargs.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The extension instance if input is a string, None otherwise.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension" title="photon_mosaic.core.roianalyzer.AnalyzerExtension"><code class="xref py py-class docutils literal notranslate"><span class="pre">AnalyzerExtension</span></code></a> | <span class="highlight sphinx_autodoc_typehints-value"><code class="xref py py-obj docutils literal notranslate"><span class="kc"><span class="pre">None</span></span></code></span></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.compute_one_extension">
+<span class="sig-name descname"><span class="pre">compute_one_extension</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">extension_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.compute_one_extension"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.compute_one_extension" title="Link to this definition">#</a></dt>
+<dd><p>Compute a single extension.</p>
+<p>Automatically deletes dependent extensions to keep data coherent.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension" title="photon_mosaic.core.roianalyzer.AnalyzerExtension"><code class="xref py py-class docutils literal notranslate"><span class="pre">AnalyzerExtension</span></code></a></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.compute_several_extensions">
+<span class="sig-name descname"><span class="pre">compute_several_extensions</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">extensions</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">save</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">verbose</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">job_kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.compute_several_extensions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.compute_several_extensions" title="Link to this definition">#</a></dt>
+<dd><p>Compute several extensions respecting dependency order.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>extensions</strong> (<em>dict</em>) – Mapping of extension_name -&gt; params dict.</p></li>
+<li><p><strong>save</strong> (<em>bool</em>) – Whether to persist.</p></li>
+<li><p><strong>verbose</strong> (<em>bool</em>) – Print progress.</p></li>
+<li><p><strong>**job_kwargs</strong> – Parallelization kwargs.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_saved_extension_names">
+<span class="sig-name descname"><span class="pre">get_saved_extension_names</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.get_saved_extension_names"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_saved_extension_names" title="Link to this definition">#</a></dt>
+<dd><p>Get extension names saved on disk (without loading data).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]</span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_extension">
+<span class="sig-name descname"><span class="pre">get_extension</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">extension_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.get_extension"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_extension" title="Link to this definition">#</a></dt>
+<dd><p>Get an extension, auto-loading from disk if needed. Returns None if not computed.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension" title="photon_mosaic.core.roianalyzer.AnalyzerExtension"><code class="xref py py-class docutils literal notranslate"><span class="pre">AnalyzerExtension</span></code></a> | <span class="highlight sphinx_autodoc_typehints-value"><code class="xref py py-obj docutils literal notranslate"><span class="kc"><span class="pre">None</span></span></code></span></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.load_extension">
+<span class="sig-name descname"><span class="pre">load_extension</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">extension_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.load_extension"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.load_extension" title="Link to this definition">#</a></dt>
+<dd><p>Load an extension from disk into memory.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><a class="reference internal" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension" title="photon_mosaic.core.roianalyzer.AnalyzerExtension"><code class="xref py py-class docutils literal notranslate"><span class="pre">AnalyzerExtension</span></code></a> | <span class="highlight sphinx_autodoc_typehints-value"><code class="xref py py-obj docutils literal notranslate"><span class="kc"><span class="pre">None</span></span></code></span></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.load_all_saved_extension">
+<span class="sig-name descname"><span class="pre">load_all_saved_extension</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.load_all_saved_extension"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.load_all_saved_extension" title="Link to this definition">#</a></dt>
+<dd><p>Load all saved extensions into memory.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.delete_extension">
+<span class="sig-name descname"><span class="pre">delete_extension</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">extension_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.delete_extension"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.delete_extension" title="Link to this definition">#</a></dt>
+<dd><p>Delete an extension from memory and from disk.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><span class="highlight sphinx_autodoc_typehints-value"><code class="xref py py-obj docutils literal notranslate"><span class="kc"><span class="pre">None</span></span></code></span></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_loaded_extension_names">
+<span class="sig-name descname"><span class="pre">get_loaded_extension_names</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.get_loaded_extension_names"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_loaded_extension_names" title="Link to this definition">#</a></dt>
+<dd><p>Return names of currently loaded extensions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]</span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.has_extension">
+<span class="sig-name descname"><span class="pre">has_extension</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">extension_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.has_extension"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.has_extension" title="Link to this definition">#</a></dt>
+<dd><p>Check if an extension exists (in memory or on disk).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">bool</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_computable_extensions">
+<span class="sig-name descname"><span class="pre">get_computable_extensions</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.get_computable_extensions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_computable_extensions" title="Link to this definition">#</a></dt>
+<dd><p>List all registered extension names.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]</span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.RoiAnalyzer.get_default_extension_params">
+<span class="sig-name descname"><span class="pre">get_default_extension_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">extension_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#RoiAnalyzer.get_default_extension_params"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_default_extension_params" title="Link to this definition">#</a></dt>
+<dd><p>Get default params for an extension.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.register_result_extension">
+<span class="sig-prename descclassname"><span class="pre">photon_mosaic.core.roianalyzer.</span></span><span class="sig-name descname"><span class="pre">register_result_extension</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">extension_class</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#register_result_extension"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.register_result_extension" title="Link to this definition">#</a></dt>
+<dd><p>Register an AnalyzerExtension subclass so it can be discovered by name.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.get_extension_class">
+<span class="sig-prename descclassname"><span class="pre">photon_mosaic.core.roianalyzer.</span></span><span class="sig-name descname"><span class="pre">get_extension_class</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">extension_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">auto_import</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#get_extension_class"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.get_extension_class" title="Link to this definition">#</a></dt>
+<dd><p>Get extension class by name, auto-importing if needed.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.get_available_analyzer_extensions">
+<span class="sig-prename descclassname"><span class="pre">photon_mosaic.core.roianalyzer.</span></span><span class="sig-name descname"><span class="pre">get_available_analyzer_extensions</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#get_available_analyzer_extensions"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.get_available_analyzer_extensions" title="Link to this definition">#</a></dt>
+<dd><p>Get all built-in extension names.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code>[<code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code>]</span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.get_default_analyzer_extension_params">
+<span class="sig-prename descclassname"><span class="pre">photon_mosaic.core.roianalyzer.</span></span><span class="sig-name descname"><span class="pre">get_default_analyzer_extension_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">extension_name</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#get_default_analyzer_extension_params"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.get_default_analyzer_extension_params" title="Link to this definition">#</a></dt>
+<dd><p>Get the default params for an extension.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p><span class="sphinx_autodoc_typehints-type"><code class="xref py py-class docutils literal notranslate"><span class="pre">dict</span></code></span></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">photon_mosaic.core.roianalyzer.</span></span><span class="sig-name descname"><span class="pre">AnalyzerExtension</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">roi_analyzer</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension" title="Link to this definition">#</a></dt>
+<dd><p>Base class for RoiAnalyzer extensions.</p>
+<p>Subclasses must set <code class="docutils literal notranslate"><span class="pre">extension_name</span></code> and implement:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">_set_params(**params)</span></code> — validate / clean params</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_run(**kwargs)</span></code> — populate <code class="docutils literal notranslate"><span class="pre">self.data</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_select_extension_data(roi_ids)</span></code> — filter data to a subset</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">_get_data()</span></code> — return the computed result</p></li>
+</ul>
+<p>Optionally (for pipeline extensions):</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">_get_pipeline_nodes()</span></code> — if <code class="docutils literal notranslate"><span class="pre">use_nodepipeline</span> <span class="pre">=</span> <span class="pre">True</span></code></p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Attributes<span class="colon">:</span></dt>
+<dd class="field-odd"><dl class="simple">
+<dt><strong>extension_name</strong></dt><dd></dd>
+<dt><strong>folder</strong></dt><dd></dd>
+<dt><strong>format</strong></dt><dd></dd>
+<dt><strong>nodepipeline_variables</strong></dt><dd></dd>
+<dt><strong>roi_analyzer</strong></dt><dd></dd>
+</dl>
+</dd>
+</dl>
+<p class="rubric">Methods</p>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.copy" title="photon_mosaic.core.roianalyzer.AnalyzerExtension.copy"><code class="xref py py-obj docutils literal notranslate"><span class="pre">copy</span></code></a>(new_roi_analyzer[, roi_ids])</p></td>
+<td><p>Copy this extension to a new RoiAnalyzer, optionally filtering to roi_ids.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.delete" title="photon_mosaic.core.roianalyzer.AnalyzerExtension.delete"><code class="xref py py-obj docutils literal notranslate"><span class="pre">delete</span></code></a>()</p></td>
+<td><p>Delete extension from disk and clear in-memory data.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.reset" title="photon_mosaic.core.roianalyzer.AnalyzerExtension.reset"><code class="xref py py-obj docutils literal notranslate"><span class="pre">reset</span></code></a>()</p></td>
+<td><p>Reset extension: clear data and recreate empty folder.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.set_params" title="photon_mosaic.core.roianalyzer.AnalyzerExtension.set_params"><code class="xref py py-obj docutils literal notranslate"><span class="pre">set_params</span></code></a>([save])</p></td>
+<td><p>Set parameters and optionally persist.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="pst-scrollable-table-container"><table class="table">
+<tbody>
+<tr class="row-odd"><td><p><strong>function_factory</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>get_any_dependencies</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><strong>get_data</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>get_default_params</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><strong>get_optional_dependencies</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>get_pipeline_nodes</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><strong>get_required_dependencies</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>load</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><strong>load_data</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>load_params</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><strong>load_run_info</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>run</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-odd"><td><p><strong>save</strong></p></td>
+<td></td>
+</tr>
+<tr class="row-even"><td><p><strong>set_data</strong></p></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.extension_name">
+<span class="sig-name descname"><span class="pre">extension_name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.extension_name" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.depend_on">
+<span class="sig-name descname"><span class="pre">depend_on</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[]</span></span><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.depend_on" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.need_imaging">
+<span class="sig-name descname"><span class="pre">need_imaging</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></span><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.need_imaging" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.use_nodepipeline">
+<span class="sig-name descname"><span class="pre">use_nodepipeline</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></span><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.use_nodepipeline" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.nodepipeline_variables">
+<span class="sig-name descname"><span class="pre">nodepipeline_variables</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.nodepipeline_variables" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.need_job_kwargs">
+<span class="sig-name descname"><span class="pre">need_job_kwargs</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></span><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.need_job_kwargs" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.need_backward_compatibility_on_load">
+<span class="sig-name descname"><span class="pre">need_backward_compatibility_on_load</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></span><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.need_backward_compatibility_on_load" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.roi_analyzer">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">roi_analyzer</span></span><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.roi_analyzer" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.format">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">format</span></span><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.format" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.folder">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">folder</span></span><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.folder" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.get_required_dependencies">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_required_dependencies</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.get_required_dependencies"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.get_required_dependencies" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.get_optional_dependencies">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_optional_dependencies</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.get_optional_dependencies"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.get_optional_dependencies" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.get_any_dependencies">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_any_dependencies</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.get_any_dependencies"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.get_any_dependencies" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.get_default_params">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">get_default_params</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.get_default_params"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.get_default_params" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.load">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">load</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">roi_analyzer</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.load"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.load" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.load_run_info">
+<span class="sig-name descname"><span class="pre">load_run_info</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.load_run_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.load_run_info" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.load_params">
+<span class="sig-name descname"><span class="pre">load_params</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.load_params"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.load_params" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.load_data">
+<span class="sig-name descname"><span class="pre">load_data</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.load_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.load_data" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.run">
+<span class="sig-name descname"><span class="pre">run</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">save</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.run"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.run" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.save">
+<span class="sig-name descname"><span class="pre">save</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.save"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.save" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.copy">
+<span class="sig-name descname"><span class="pre">copy</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">new_roi_analyzer</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">roi_ids</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.copy"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.copy" title="Link to this definition">#</a></dt>
+<dd><p>Copy this extension to a new RoiAnalyzer, optionally filtering to roi_ids.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.delete">
+<span class="sig-name descname"><span class="pre">delete</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.delete"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.delete" title="Link to this definition">#</a></dt>
+<dd><p>Delete extension from disk and clear in-memory data.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.reset">
+<span class="sig-name descname"><span class="pre">reset</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.reset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.reset" title="Link to this definition">#</a></dt>
+<dd><p>Reset extension: clear data and recreate empty folder.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.set_params">
+<span class="sig-name descname"><span class="pre">set_params</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">save</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">params</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.set_params"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.set_params" title="Link to this definition">#</a></dt>
+<dd><p>Set parameters and optionally persist.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.get_data">
+<span class="sig-name descname"><span class="pre">get_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="o"><span class="pre">*</span></span><span class="n"><span class="pre">args</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.get_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.get_data" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.set_data">
+<span class="sig-name descname"><span class="pre">set_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">value</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.set_data"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.set_data" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.get_pipeline_nodes">
+<span class="sig-name descname"><span class="pre">get_pipeline_nodes</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.get_pipeline_nodes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.get_pipeline_nodes" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="photon_mosaic.core.roianalyzer.AnalyzerExtension.function_factory">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">function_factory</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/core/roianalyzer.html#AnalyzerExtension.function_factory"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.function_factory" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="photon_mosaic.core.numpyimaging.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">photon_mosaic.core.numpyimaging</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="photon_mosaic.core.roianalyzer_core_extensions.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">photon_mosaic.core.roianalyzer_core_extensions</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal" tabindex="-1"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.create_roi_analyzer"><code class="docutils literal notranslate"><span class="pre">create_roi_analyzer()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.load_roi_analyzer"><code class="docutils literal notranslate"><span class="pre">load_roi_analyzer()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.create"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.create()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.load"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.load()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.create_memory"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.create_memory()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.create_binary_folder"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.create_binary_folder()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.load_from_binary_folder"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.load_from_binary_folder()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.create_zarr"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.create_zarr()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.load_from_zarr"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.load_from_zarr()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.set_temporary_imaging"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.set_temporary_imaging()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.set_roi_property"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.set_roi_property()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_roi_property"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.get_roi_property()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.save_as"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.save_as()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.select_rois"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.select_rois()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.remove_rois"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.remove_rois()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.copy"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.copy()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.imaging"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.imaging</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.roi_ids"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.roi_ids</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.sampling_frequency"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.sampling_frequency</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.shape"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.shape</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.num_planes"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.num_planes</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.has_imaging"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.has_imaging()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.has_temporary_imaging"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.has_temporary_imaging()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_num_rois"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.get_num_rois()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_num_epochs"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.get_num_epochs()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_num_samples"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.get_num_samples()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_total_samples"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.get_total_samples()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_total_duration"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.get_total_duration()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_dtype"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.get_dtype()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.is_read_only"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.is_read_only()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_rois_provenance"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.get_rois_provenance()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.compute"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.compute()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.compute_one_extension"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.compute_one_extension()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.compute_several_extensions"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.compute_several_extensions()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_saved_extension_names"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.get_saved_extension_names()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_extension"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.get_extension()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.load_extension"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.load_extension()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.load_all_saved_extension"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.load_all_saved_extension()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.delete_extension"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.delete_extension()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_loaded_extension_names"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.get_loaded_extension_names()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.has_extension"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.has_extension()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_computable_extensions"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.get_computable_extensions()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.RoiAnalyzer.get_default_extension_params"><code class="docutils literal notranslate"><span class="pre">RoiAnalyzer.get_default_extension_params()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.register_result_extension"><code class="docutils literal notranslate"><span class="pre">register_result_extension()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.get_extension_class"><code class="docutils literal notranslate"><span class="pre">get_extension_class()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.get_available_analyzer_extensions"><code class="docutils literal notranslate"><span class="pre">get_available_analyzer_extensions()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.get_default_analyzer_extension_params"><code class="docutils literal notranslate"><span class="pre">get_default_analyzer_extension_params()</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.extension_name"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.extension_name</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.depend_on"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.depend_on</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.need_imaging"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.need_imaging</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.use_nodepipeline"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.use_nodepipeline</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.nodepipeline_variables"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.nodepipeline_variables</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.need_job_kwargs"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.need_job_kwargs</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.need_backward_compatibility_on_load"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.need_backward_compatibility_on_load</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.roi_analyzer"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.roi_analyzer</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.format"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.format</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.folder"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.folder</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.get_required_dependencies"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.get_required_dependencies()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.get_optional_dependencies"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.get_optional_dependencies()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.get_any_dependencies"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.get_any_dependencies()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.get_default_params"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.get_default_params()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.load"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.load()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.load_run_info"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.load_run_info()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.load_params"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.load_params()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.load_data"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.load_data()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.run"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.run()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.save"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.save()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.copy"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.copy()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.delete"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.delete()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.reset"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.reset()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.set_params"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.set_params()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.get_data"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.get_data()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.set_data"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.set_data()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.get_pipeline_nodes"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.get_pipeline_nodes()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.core.roianalyzer.AnalyzerExtension.function_factory"><code class="docutils literal notranslate"><span class="pre">AnalyzerExtension.function_factory()</span></code></a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item"><p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+    <br/>
+    </p>
+    <p class="theme-version">
+    Built with the
+    <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a>
+    0.24.0.
+    </p></div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item"><div class="things-in-a-row">
+    <a href="https://neuroinformatics.dev/">
+        <img src="../_static/light-logo-niu.png" alt="NIU" class="only-light img-sponsor"/>
+        <img src="../_static/dark-logo-niu.png" alt="NIU" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.sainsburywellcome.org/web/">
+        <img src="../_static/light-logo-swc.png" alt="SWC" class="only-light img-sponsor"/>
+        <img src="../_static/dark-logo-swc.png" alt="SWC" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://https://alleninstitute.org/neural-dynamics">
+        <img src="../_static/light-logo-aind.png" alt="AIND" class="only-light img-sponsor"/>
+        <img src="../_static/dark-logo-aind.png" alt="AIND" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.sainsburywellcome.org/web/">
+        <img src="../_static/logo-ibl.png" alt="IBL" class="only-light img-sponsor"/>
+        <img src="../_static/logo-ibl.png" alt="IBL" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.ucl.ac.uk/">
+        <img src="../_static/light-logo-ucl.png" alt="UCL" class="only-light img-sponsor"/>
+        <img src="../_static/dark-logo-ucl.png" alt="UCL" class="only-dark img-sponsor"/>
+    </a>
+</div></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

@@ -1,0 +1,24 @@
+﻿photon\_mosaic.core.roianalyzer
+===============================
+
+.. automodule:: photon_mosaic.core.roianalyzer
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      create_roi_analyzer
+      get_available_analyzer_extensions
+      get_default_analyzer_extension_params
+      get_extension_class
+      load_roi_analyzer
+      register_result_extension
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      AnalyzerExtension
+      RoiAnalyzer
+   

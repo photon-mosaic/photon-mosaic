@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>photon_mosaic.core.generators &#8212; photon-mosaic</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../_static/styles/theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx_autodoc_typehints.css?v=057ac668" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery.css?v=c83e6b79" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css?v=b4aaff1f" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=75c7c72ae941e8b558d8"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8" />
+
+    <script src="../../../_static/documentation_options.js?v=d45e8c67"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/sg-tags.js?v=d80f6fa4"></script>
+    <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/photon_mosaic/core/generators';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="canonical" href="https://api.photon-mosaic.org/_modules/photon_mosaic/core/generators.html" />
+    <link rel="icon" href="../../../_static/logo.png"/>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="../../../_static/searchtools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <script src="../../../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation" aria-expanded="false" aria-controls="pst-primary-sidebar-modal">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../../_static/logo.png" class="logo__image only-light" alt=""/>
+    <img src="../../../_static/logo.png" class="logo__image only-dark pst-js-only" alt=""/>
+  
+  
+    <p class="title logo__title">photon-mosaic v0.0.1</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user-guide.html">
+    Usage
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../developer-intro.html">
+    For Developers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../contributing.html">
+    Contributing
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../api_index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/photon-mosaic/photon-mosaic" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://neuroinformatics.zulipchat.com/#narrow/channel/500681-photon-mosaic" title="Zulip (chat)" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-solid fa-comments fa-lg" aria-hidden="true"></i><span class="visually-hidden">Zulip (chat)</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal" tabindex="-1"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user-guide.html">
+    Usage
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../developer-intro.html">
+    For Developers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../contributing.html">
+    Contributing
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../api_index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/photon-mosaic/photon-mosaic" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://neuroinformatics.zulipchat.com/#narrow/channel/500681-photon-mosaic" title="Zulip (chat)" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-solid fa-comments fa-lg" aria-hidden="true"></i><span class="visually-hidden">Zulip (chat)</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-house"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">photon_mosaic.core.generators</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for photon_mosaic.core.generators</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""Module to generate synthetic imaging and ROI objects for testing and example purposes."""</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Literal</span><span class="p">,</span> <span class="n">NamedTuple</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">photon_mosaic.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseRois</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">photon_mosaic.core.numpyimaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">NumpyImaging</span><span class="p">,</span> <span class="n">NumpyRois</span>
+
+
+<div class="viewcode-block" id="FluorescenceData">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.generators.html#photon_mosaic.core.generators.FluorescenceData">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">FluorescenceData</span><span class="p">(</span><span class="n">NamedTuple</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Return type of :func:`generate_fluorescence`.</span>
+
+<span class="sd">    Attributes</span>
+<span class="sd">    ----------</span>
+<span class="sd">    traces : np.ndarray</span>
+<span class="sd">        Final fluorescence traces ``(num_frames, num_rois)``, float32. Always</span>
+<span class="sd">        ``(1 + clean_traces) * bleach(t)`` (plus additive noise if `noise_std` &gt; 0), i.e.</span>
+<span class="sd">        absolute fluorescence normalised so ``F0(0) == 1``; ``bleach(t) == 1`` for all</span>
+<span class="sd">        frames when there is no photobleaching (`bleaching_time` is ``inf``).</span>
+<span class="sd">    spikes : np.ndarray</span>
+<span class="sd">        Binary spike trains ``(num_frames, num_rois)``, float32.</span>
+<span class="sd">    clean_traces : np.ndarray</span>
+<span class="sd">        Convolved traces before bleaching and noise ``(num_frames, num_rois)``, float32.</span>
+<span class="sd">    neuropil : np.ndarray | None</span>
+<span class="sd">        True background/neuropil level at each ROI's own mask (mask-weighted mean over the</span>
+<span class="sd">        ROI's own pixels, before noise), ``(num_frames, num_rois)``, float32. Only populated by</span>
+<span class="sd">        :func:`generate_imaging_with_rois` (:func:`generate_fluorescence` alone has no</span>
+<span class="sd">        background to report); ``None`` otherwise. Lets a `NeuropilExtension` surround-based</span>
+<span class="sd">        estimate be checked against the true *local* contamination, rather than only the end</span>
+<span class="sd">        effect on recovered dF/F.</span>
+<span class="sd">    """</span>
+
+    <span class="n">traces</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">spikes</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">clean_traces</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span>
+    <span class="n">neuropil</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
+
+
+
+<div class="viewcode-block" id="generate_random_imaging">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.generators.html#photon_mosaic.core.generators.generate_random_imaging">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">generate_random_imaging</span><span class="p">(</span>
+    <span class="n">num_frames</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span>
+    <span class="n">height</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span>
+    <span class="n">width</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span>
+    <span class="n">num_planes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">sampling_frequency</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">30.0</span><span class="p">,</span>
+    <span class="n">dtype</span><span class="p">:</span> <span class="nb">type</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
+    <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NumpyImaging</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Generate a random NumpyImaging object for testing.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    num_frames : int | tuple[int, ...], default: 1000</span>
+<span class="sd">        Number of frames for each epoch in the imaging data.</span>
+<span class="sd">    height : int, default: 256</span>
+<span class="sd">        Height of each frame in pixels.</span>
+<span class="sd">    width : int, default: 256</span>
+<span class="sd">        Width of each frame in pixels.</span>
+<span class="sd">    sampling_frequency : float, default: 30.0</span>
+<span class="sd">        Sampling frequency in Hz.</span>
+<span class="sd">    dtype : type, default: np.float32</span>
+<span class="sd">        Dtype of the generated video (``np.float32``/``np.float64``). Float32 halves memory</span>
+<span class="sd">        with no precision cost -- nothing downstream reads above float32 precision anyway.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    NumpyImaging</span>
+<span class="sd">        A NumpyImaging object containing the generated random imaging data.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">num_frames</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="n">num_frames</span> <span class="o">=</span> <span class="p">(</span><span class="n">num_frames</span><span class="p">,)</span>
+    <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+    <span class="n">videos</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">n_frames</span> <span class="ow">in</span> <span class="n">num_frames</span><span class="p">:</span>
+        <span class="n">video</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">random</span><span class="p">((</span><span class="n">n_frames</span><span class="p">,</span> <span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">num_planes</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="n">videos</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">video</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">NumpyImaging</span><span class="p">(</span><span class="n">imaging_series</span><span class="o">=</span><span class="n">videos</span><span class="p">,</span> <span class="n">sampling_frequency</span><span class="o">=</span><span class="n">sampling_frequency</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="generate_rois">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.generators.html#photon_mosaic.core.generators.generate_rois">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">generate_rois</span><span class="p">(</span>
+    <span class="n">num_rois</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+    <span class="n">height</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span>
+    <span class="n">width</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span>
+    <span class="n">radius_range</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">15</span><span class="p">),</span>
+    <span class="n">sampling_frequency</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">30.0</span><span class="p">,</span>
+    <span class="n">roi_ids</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">weighted</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">num_planes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">sparse</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BaseRois</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Generate circular ROIs for testing.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    num_rois : int, default: 20</span>
+<span class="sd">        Number of ROIs to generate, by default 20</span>
+<span class="sd">    height : int, default: 256</span>
+<span class="sd">        Height of the imaging field, by default 256</span>
+<span class="sd">    width : int, default: 256</span>
+<span class="sd">        Width of the imaging field, by default 256</span>
+<span class="sd">    radius_range : tuple[int, int] | tuple[int, int, int], default: (5, 15)</span>
+<span class="sd">        Range of radii for the circular ROIs, by default (5, 15) (for 2D).</span>
+<span class="sd">        If num_planes &gt; 1 and a tuple of three ints is provided, the third int is used as the radius for the</span>
+<span class="sd">        z-dimension. If a tuple of two ints is provided, the depth radius will be half of the num_planes.</span>
+<span class="sd">    sampling_frequency : float, default: 30.</span>
+<span class="sd">        Sampling frequency, by default 30.0</span>
+<span class="sd">    roi_ids : np.ndarray | None, default: None</span>
+<span class="sd">        Array of ROI IDs. If None, defaults to np.arange(num_rois)</span>
+<span class="sd">    weighted : bool, default: False</span>
+<span class="sd">        Whether to create weighted masks (values between 0 and 1) or binary masks (0 or 1), by default False</span>
+<span class="sd">    num_planes : int, default: 1</span>
+<span class="sd">        Number of planes for the ROIs, by default 1 (2D masks). If &gt;1, creates 3D masks.</span>
+<span class="sd">    sparse : bool, default: False</span>
+<span class="sd">        If True, return the masks as a sparse.GCXS array instead of a dense np.ndarray.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">num_planes</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">roi_masks</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_rois</span><span class="p">,</span> <span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="p">))</span>
+        <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">roi_masks</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_rois</span><span class="p">,</span> <span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">num_planes</span><span class="p">))</span>
+        <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">radius_range</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">depth_radius</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">num_planes</span> <span class="o">//</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">depth_radius</span> <span class="o">=</span> <span class="n">radius_range</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+
+    <span class="k">assert</span> <span class="n">radius_range</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">radius_range</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="s2">"Invalid radius range"</span>
+    <span class="k">assert</span> <span class="n">radius_range</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">width</span> <span class="o">-</span> <span class="n">radius_range</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="s2">"ROIs may not fit in the image with the given radius range"</span>
+    <span class="k">assert</span> <span class="n">radius_range</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">&lt;</span> <span class="n">height</span> <span class="o">-</span> <span class="n">radius_range</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="s2">"ROIs may not fit in the image with the given radius range"</span>
+
+    <span class="k">for</span> <span class="n">roi_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_rois</span><span class="p">):</span>
+        <span class="n">center_x</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="n">radius_range</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">width</span> <span class="o">-</span> <span class="n">radius_range</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">center_y</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="n">radius_range</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">height</span> <span class="o">-</span> <span class="n">radius_range</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">radius</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="n">radius_range</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">radius_range</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+        <span class="k">if</span> <span class="n">num_planes</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">y</span><span class="p">,</span> <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ogrid</span><span class="p">[:</span><span class="n">height</span><span class="p">,</span> <span class="p">:</span><span class="n">width</span><span class="p">]</span>
+            <span class="n">mask</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">center_x</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">y</span> <span class="o">-</span> <span class="n">center_y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">&lt;=</span> <span class="n">radius</span><span class="o">**</span><span class="mi">2</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">weighted</span><span class="p">:</span>
+                <span class="n">roi_masks</span><span class="p">[</span><span class="n">roi_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">mask</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># Create a weighted mask with values decreasing from center to edge</span>
+                <span class="n">distance_from_center</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">((</span><span class="n">x</span> <span class="o">-</span> <span class="n">center_x</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">y</span> <span class="o">-</span> <span class="n">center_y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+                <span class="n">weighted_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="p">(</span><span class="n">distance_from_center</span> <span class="o">/</span> <span class="n">radius</span><span class="p">),</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">mask</span>
+                <span class="n">roi_masks</span><span class="p">[</span><span class="n">roi_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">weighted_mask</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Choose z-center so the ROI fits in depth; fall back to middle plane if too shallow</span>
+            <span class="k">if</span> <span class="n">num_planes</span> <span class="o">&gt;</span> <span class="mi">2</span> <span class="o">*</span> <span class="n">depth_radius</span><span class="p">:</span>
+                <span class="n">center_z</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="n">depth_radius</span><span class="p">,</span> <span class="n">num_planes</span> <span class="o">-</span> <span class="n">depth_radius</span><span class="p">)</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">center_z</span> <span class="o">=</span> <span class="n">num_planes</span> <span class="o">//</span> <span class="mi">2</span>
+
+            <span class="n">y</span><span class="p">,</span> <span class="n">x</span><span class="p">,</span> <span class="n">z</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ogrid</span><span class="p">[:</span><span class="n">height</span><span class="p">,</span> <span class="p">:</span><span class="n">width</span><span class="p">,</span> <span class="p">:</span><span class="n">num_planes</span><span class="p">]</span>
+
+            <span class="c1"># Ellipsoidal ROI: (dx^2+dy^2)/r^2 + dz^2/drz^2 &lt;= 1</span>
+            <span class="n">dx2_dy2</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">center_x</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">y</span> <span class="o">-</span> <span class="n">center_y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+            <span class="n">dz2</span> <span class="o">=</span> <span class="p">(</span><span class="n">z</span> <span class="o">-</span> <span class="n">center_z</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span>
+            <span class="n">ellipsoid_distance</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">((</span><span class="n">dx2_dy2</span> <span class="o">/</span> <span class="p">(</span><span class="n">radius</span><span class="o">**</span><span class="mi">2</span><span class="p">))</span> <span class="o">+</span> <span class="p">(</span><span class="n">dz2</span> <span class="o">/</span> <span class="p">(</span><span class="n">depth_radius</span><span class="o">**</span><span class="mi">2</span><span class="p">)))</span>
+            <span class="n">mask</span> <span class="o">=</span> <span class="n">ellipsoid_distance</span> <span class="o">&lt;=</span> <span class="mi">1</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">weighted</span><span class="p">:</span>
+                <span class="n">roi_masks</span><span class="p">[</span><span class="n">roi_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">mask</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">weighted_mask</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">ellipsoid_distance</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="n">mask</span>
+                <span class="n">roi_masks</span><span class="p">[</span><span class="n">roi_idx</span><span class="p">]</span> <span class="o">=</span> <span class="n">weighted_mask</span>
+
+    <span class="n">roi_ids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">num_rois</span><span class="p">)</span> <span class="k">if</span> <span class="n">roi_ids</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">roi_ids</span>
+    <span class="k">if</span> <span class="n">sparse</span><span class="p">:</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">sparse</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">sparse_module</span>
+
+        <span class="c1"># Compress along the ROI axis so per-ROI indexing (e.g. select_rois) stays fast --</span>
+        <span class="c1"># the default heuristic often picks a different axis, making it ~40x slower.</span>
+        <span class="n">roi_masks</span> <span class="o">=</span> <span class="n">sparse_module</span><span class="o">.</span><span class="n">GCXS</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">roi_masks</span><span class="p">,</span> <span class="n">compressed_axes</span><span class="o">=</span><span class="p">(</span><span class="mi">0</span><span class="p">,))</span>
+    <span class="k">return</span> <span class="n">NumpyRois</span><span class="p">(</span><span class="n">roi_image_masks</span><span class="o">=</span><span class="n">roi_masks</span><span class="p">,</span> <span class="n">roi_ids</span><span class="o">=</span><span class="n">roi_ids</span><span class="p">,</span> <span class="n">sampling_frequency</span><span class="o">=</span><span class="n">sampling_frequency</span><span class="p">)</span></div>
+
+
+
+<span class="c1"># Internal constants for the "vignette" neuropil model (see `generate_imaging_with_rois`).</span>
+<span class="n">_VIGNETTE_FALLOFF</span> <span class="o">=</span> <span class="mf">0.25</span>  <span class="c1"># fraction of center brightness lost at the frame corners</span>
+<span class="n">_NEUROPIL_TAU_SECONDS</span> <span class="o">=</span> <span class="mf">5.0</span>  <span class="c1"># OU mean-reversion timescale -- slow drift, not frame-to-frame noise</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_generate_vignette_profile</span><span class="p">(</span><span class="n">height</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">width</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">num_planes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Static radial illumination falloff, brighter at the frame center than the edges.</span>
+
+<span class="sd">    Simple linear falloff from the frame center -- real 2P vignetting (Gaussian beam, finite-NA</span>
+<span class="sd">    lens falloff) isn't modeled exactly. Renormalized to spatial mean 1, so multiplying it into</span>
+<span class="sd">    `background` preserves that parameter's "mean photon count per pixel per frame" semantics</span>
+<span class="sd">    regardless of `neuropil_model`.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    height, width : int</span>
+<span class="sd">        Frame dimensions in pixels.</span>
+<span class="sd">    num_planes : int, default: 1</span>
+<span class="sd">        Number of imaging planes; the same 2D profile is broadcast across all planes.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    np.ndarray</span>
+<span class="sd">        ``(height, width)`` or ``(height, width, num_planes)``, float32, spatial mean 1.</span>
+<span class="sd">    """</span>
+    <span class="n">y</span><span class="p">,</span> <span class="n">x</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ogrid</span><span class="p">[:</span><span class="n">height</span><span class="p">,</span> <span class="p">:</span><span class="n">width</span><span class="p">]</span>
+    <span class="n">center_y</span><span class="p">,</span> <span class="n">center_x</span> <span class="o">=</span> <span class="p">(</span><span class="n">height</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="mf">2.0</span><span class="p">,</span> <span class="p">(</span><span class="n">width</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="mf">2.0</span>
+    <span class="n">distance</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">((</span><span class="n">y</span> <span class="o">-</span> <span class="n">center_y</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span> <span class="o">+</span> <span class="p">(</span><span class="n">x</span> <span class="o">-</span> <span class="n">center_x</span><span class="p">)</span> <span class="o">**</span> <span class="mi">2</span><span class="p">)</span>
+    <span class="n">max_distance</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="n">center_y</span><span class="o">**</span><span class="mi">2</span> <span class="o">+</span> <span class="n">center_x</span><span class="o">**</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">profile</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">-</span> <span class="n">_VIGNETTE_FALLOFF</span> <span class="o">*</span> <span class="p">(</span><span class="n">distance</span> <span class="o">/</span> <span class="n">max_distance</span><span class="p">)</span>
+    <span class="n">profile</span> <span class="o">=</span> <span class="n">profile</span> <span class="o">/</span> <span class="n">profile</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span>
+    <span class="k">if</span> <span class="n">num_planes</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">profile</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">broadcast_to</span><span class="p">(</span><span class="n">profile</span><span class="p">[:,</span> <span class="p">:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">],</span> <span class="p">(</span><span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">num_planes</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">profile</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_generate_ou_process</span><span class="p">(</span>
+    <span class="n">num_frames</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">sampling_frequency</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="n">rng</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">Generator</span><span class="p">,</span>
+    <span class="n">num_traces</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Ornstein-Uhlenbeck-like fluctuation(s): exactly zero-mean per trace, asymptotically unit variance.</span>
+
+<span class="sd">    Discrete-time AR(1), ``x[t] = phi * x[t-1] + sqrt(1 - phi**2) * white[t]`` with</span>
+<span class="sd">    ``phi = exp(-1 / (_NEUROPIL_TAU_SECONDS * sampling_frequency))``, run through `lfilter`. It starts</span>
+<span class="sd">    at 0 and reaches unit variance within a few `_NEUROPIL_TAU_SECONDS`; the brief initial transient</span>
+<span class="sd">    is ignored. Each trace is then centered to exactly zero mean.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    num_frames : int</span>
+<span class="sd">        Number of time points to generate.</span>
+<span class="sd">    sampling_frequency : float</span>
+<span class="sd">        Sampling frequency in Hz.</span>
+<span class="sd">    rng : np.random.Generator</span>
+<span class="sd">        Source of randomness.</span>
+<span class="sd">    num_traces : int, default: 1</span>
+<span class="sd">        Number of independent traces to generate at once.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    np.ndarray</span>
+<span class="sd">        ``(num_frames, num_traces)``, float32, each column exactly zero-mean.</span>
+<span class="sd">    """</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">scipy.signal</span><span class="w"> </span><span class="kn">import</span> <span class="n">lfilter</span>
+
+    <span class="n">phi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mf">1.0</span> <span class="o">/</span> <span class="p">(</span><span class="n">_NEUROPIL_TAU_SECONDS</span> <span class="o">*</span> <span class="n">sampling_frequency</span><span class="p">))</span>
+    <span class="n">white</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="p">(</span><span class="n">num_frames</span><span class="p">,</span> <span class="n">num_traces</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">ou</span> <span class="o">=</span> <span class="n">lfilter</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">sqrt</span><span class="p">(</span><span class="mi">1</span> <span class="o">-</span> <span class="n">phi</span><span class="o">**</span><span class="mi">2</span><span class="p">)],</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="o">-</span><span class="n">phi</span><span class="p">],</span> <span class="n">white</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">ou</span> <span class="o">=</span> <span class="n">ou</span> <span class="o">-</span> <span class="n">ou</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">keepdims</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">ou</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="generate_imaging_with_rois">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.generators.html#photon_mosaic.core.generators.generate_imaging_with_rois">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">generate_imaging_with_rois</span><span class="p">(</span>
+    <span class="n">num_frames</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1000</span><span class="p">,</span>
+    <span class="n">height</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span>
+    <span class="n">width</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">256</span><span class="p">,</span>
+    <span class="n">num_planes</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">num_rois</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+    <span class="n">radius_range</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">15</span><span class="p">),</span>
+    <span class="n">sampling_frequency</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">30.0</span><span class="p">,</span>
+    <span class="n">decay_time</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span>
+    <span class="n">event_rate</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.3</span><span class="p">,</span>
+    <span class="n">weighted_rois</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">background</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.2</span><span class="p">,</span>
+    <span class="n">baseline_range</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span>
+    <span class="n">noise_std</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"poisson"</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.3</span><span class="p">,</span>
+    <span class="n">bleaching_time</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span>
+    <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">neuropil_model</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"constant"</span><span class="p">,</span> <span class="s2">"vignette"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"constant"</span><span class="p">,</span>
+    <span class="n">neuropil_fluctuation_std</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span>
+    <span class="n">neuropil_roi_coefficient</span><span class="p">:</span> <span class="nb">float</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">BaseRois</span><span class="p">,</span> <span class="n">NumpyImaging</span><span class="p">,</span> <span class="n">FluorescenceData</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Generate a random NumpyImaging object and corresponding ROIs with fluorescence activity.</span>
+
+<span class="sd">    Creates synthetic imaging data with exponentially decaying fluorescence bumps</span>
+<span class="sd">    injected at random times for each ROI, on top of a background with Gaussian or</span>
+<span class="sd">    Poisson (shot) noise.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    num_frames : int, default: 1000</span>
+<span class="sd">        Number of frames in the imaging data.</span>
+<span class="sd">    height : int, default: 256</span>
+<span class="sd">        Height of each frame in pixels.</span>
+<span class="sd">    width : int, default: 256</span>
+<span class="sd">        Width of each frame in pixels.</span>
+<span class="sd">    num_planes : int, default: 1</span>
+<span class="sd">        Number of imaging planes.</span>
+<span class="sd">    num_rois : int, default: 20</span>
+<span class="sd">        Number of ROIs to generate.</span>
+<span class="sd">    radius_range : tuple[int, int] | tuple[int, int, int], default: (5, 15)</span>
+<span class="sd">        Range of radii for circular ROIs.</span>
+<span class="sd">    sampling_frequency : float, default: 30.0</span>
+<span class="sd">        Sampling frequency in Hz.</span>
+<span class="sd">    decay_time : float, default: 0.5</span>
+<span class="sd">        Duration of exponential decay for fluorescence events in seconds. Since this generative</span>
+<span class="sd">        model (sharp rise, single-exponential decay) matches OASIS's own deconvolution model, the</span>
+<span class="sd">        relevant reference is OASIS's optimal single-exponential fit to real GCaMP8 recordings --</span>
+<span class="sd">        0.2/0.45/0.5 s for GCaMP8f/8m/8s (Rupprecht et al. 2026, Nat. Methods) -- not the sensor's</span>
+<span class="sd">        true, more complex kinetics. Default follows GCaMP8s, the variant most often recommended</span>
+<span class="sd">        for reliably detecting isolated action potentials.</span>
+<span class="sd">    event_rate : float, default: 0.3</span>
+<span class="sd">        Mean spike-event rate in Hz, passed through to :func:`generate_fluorescence`. Each</span>
+<span class="sd">        ROI's number of events scales with the recording's duration (`num_frames` /</span>
+<span class="sd">        `sampling_frequency`).</span>
+<span class="sd">    weighted_rois : bool, default: False</span>
+<span class="sd">        Whether to create weighted masks.</span>
+<span class="sd">    background : float, default: 0.2</span>
+<span class="sd">        Mean photon count per pixel per frame, exact only under</span>
+<span class="sd">        ``noise_std="poisson"`` (otherwise just an intensity scale) -- present</span>
+<span class="sd">        everywhere in the frame, including under the ROIs (e.g. neuropil, out-of-</span>
+<span class="sd">        focus light). 0 means a dark background with only noise. Subject to the same</span>
+<span class="sd">        `bleaching_time` decay as the ROI signal, since it mostly represents genuine</span>
+<span class="sd">        fluorescence rather than non-bleaching dark counts. This is the true</span>
+<span class="sd">        frame-and-time-averaged mean regardless of `neuropil_model`: each model's spatial</span>
+<span class="sd">        profile and/or temporal fluctuation is normalized to mean 1, so `background` always</span>
+<span class="sd">        means the same thing. (The one exception is a `neuropil_roi_coefficient` other than 1,</span>
+<span class="sd">        which scales the background on ROI pixels only, as ``"vignette"`` does by default.)</span>
+<span class="sd">    baseline_range : tuple[float, float], default: (0.5, 1.0)</span>
+<span class="sd">        Range from which each ROI's baseline fluorescence (F0) is drawn uniformly at</span>
+<span class="sd">        random, modeling cell-to-cell brightness variability -- same photon-count</span>
+<span class="sd">        semantics as `background` (exact only under ``noise_std="poisson"``).</span>
+<span class="sd">        Recovered dF/F matches `clean_traces` when `background` is 0; a nonzero</span>
+<span class="sd">        `background` attenuates it (see `FluorescenceNode`'s `neuropil` argument to</span>
+<span class="sd">        correct for this).</span>
+<span class="sd">    noise_std : float or "poisson", default: 1.3</span>
+<span class="sd">        Standard deviation of additive Gaussian noise on the video, per pixel</span>
+<span class="sd">        and frame. 0 means no noise. Pass ``"poisson"`` instead to draw</span>
+<span class="sd">        physically realistic shot noise (variance equals the local mean</span>
+<span class="sd">        signal) rather than fixed-variance Gaussian noise. The default of</span>
+<span class="sd">        1.3 gives roughly the same recovered dF/F noise level (measured via</span>
+<span class="sd">        ``aind_ophys_utils.signal_utils.noise_std(method="welch")``) as</span>
+<span class="sd">        ``noise_std="poisson"`` at the default `background`/`baseline_range`.</span>
+<span class="sd">    bleaching_time : float, default: inf</span>
+<span class="sd">        Time constant of multiplicative photobleaching in seconds, passed through to</span>
+<span class="sd">        :func:`generate_fluorescence`. The default of ``inf`` means no photobleaching.</span>
+<span class="sd">    seed : int | None, default: None</span>
+<span class="sd">        Random seed for reproducibility.</span>
+<span class="sd">    neuropil_model : {"constant", "vignette"}, default: "constant"</span>
+<span class="sd">        How `background` varies over space and time:</span>
+
+<span class="sd">        - ``"constant"``: spatially uniform, no fluctuation beyond `bleaching_time` decay.</span>
+<span class="sd">        - ``"vignette"``: one shared Ornstein-Uhlenbeck-like fluctuation (slow, ~5s timescale)</span>
+<span class="sd">          modulated by a static radial illumination falloff (brighter center, dimmer edges --</span>
+<span class="sd">          real 2P vignetting). Every background pixel shares the same fluctuation, just scaled</span>
+<span class="sd">          by its own position.</span>
+
+<span class="sd">        ``"vignette"`` is normalized to preserve `background`'s mean-photon-count semantics</span>
+<span class="sd">        (see `background` above); only its *spatial and temporal structure* differs from</span>
+<span class="sd">        ``"constant"``. Kept intentionally simple -- just enough realism to make neuropil</span>
+<span class="sd">        subtraction demonstrably matter, not an optically/biologically precise model. A</span>
+<span class="sd">        ``"diffuse"`` model (many independently-fluctuating sources) is not implemented.</span>
+<span class="sd">    neuropil_fluctuation_std : float, default: 0.5</span>
+<span class="sd">        How strongly the background fluctuates relative to `background`, for</span>
+<span class="sd">        ``neuropil_model="vignette"`` (ignored for ``"constant"``). The fluctuation is additive</span>
+<span class="sd">        around a mean level, so large values can push the instantaneous background negative</span>
+<span class="sd">        (unphysical); 0.5 balances a clearly demonstrable effect against that risk.</span>
+<span class="sd">    neuropil_roi_coefficient : float or None, default: None</span>
+<span class="sd">        Background level on ROI pixels relative to the background around them, applied to every</span>
+<span class="sd">        pixel covered by any ROI mask. ``1.0``: the same background everywhere, so a ring around</span>
+<span class="sd">        an ROI estimates the neuropil under it exactly. Below 1, ROI pixels are dimmer than their</span>
+<span class="sd">        surroundings (e.g. cell bodies displacing neuropil), the situation Suite2p's default</span>
+<span class="sd">        neuropil weight of 0.7 corrects for; the optimal ``neuropil_weight`` of a ``"surround"``</span>
+<span class="sd">        correction is then about this value. ``None`` (the default) is ``1.0`` for</span>
+<span class="sd">        ``neuropil_model="constant"``, which stays spatially uniform, and ``0.7`` for</span>
+<span class="sd">        ``"vignette"``. Must be non-negative.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    rois : BaseRois</span>
+<span class="sd">        The generated ROIs.</span>
+<span class="sd">    imaging : NumpyImaging</span>
+<span class="sd">        The imaging data with injected fluorescence activity.</span>
+<span class="sd">    fluorescence : FluorescenceData</span>
+<span class="sd">        The ground-truth fluorescence (traces, spikes, clean_traces) injected into the video,</span>
+<span class="sd">        plus `neuropil` (unlike bare :func:`generate_fluorescence`, which leaves it ``None``) --</span>
+<span class="sd">        e.g. for comparison against values recovered from `imaging` via an</span>
+<span class="sd">        :class:`~photon_mosaic.core.roianalyzer.RoiAnalyzer`.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="n">neuropil_model</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="s2">"constant"</span><span class="p">,</span> <span class="s2">"vignette"</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unknown neuropil_model: </span><span class="si">{</span><span class="n">neuropil_model</span><span class="si">!r}</span><span class="s2">. Supported: 'constant', 'vignette'."</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">neuropil_roi_coefficient</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">neuropil_roi_coefficient</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="k">if</span> <span class="n">neuropil_model</span> <span class="o">==</span> <span class="s2">"constant"</span> <span class="k">else</span> <span class="mf">0.7</span>
+    <span class="k">if</span> <span class="n">neuropil_roi_coefficient</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"neuropil_roi_coefficient must be non-negative, got </span><span class="si">{</span><span class="n">neuropil_roi_coefficient</span><span class="si">}</span><span class="s2">."</span><span class="p">)</span>
+
+    <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+    <span class="n">imaging_seed</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="o">**</span><span class="mi">31</span><span class="p">))</span>
+    <span class="n">rois_seed</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="o">**</span><span class="mi">31</span><span class="p">))</span>
+    <span class="n">fluorescence_seed</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="o">**</span><span class="mi">31</span><span class="p">))</span>
+    <span class="n">noise_seed</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="o">**</span><span class="mi">31</span><span class="p">))</span>
+    <span class="n">roi_baseline</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="n">baseline_range</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">baseline_range</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">size</span><span class="o">=</span><span class="n">num_rois</span><span class="p">)</span>
+    <span class="n">neuropil_seed</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">rng</span><span class="o">.</span><span class="n">integers</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="o">**</span><span class="mi">31</span><span class="p">))</span>
+
+    <span class="n">imaging</span> <span class="o">=</span> <span class="n">generate_random_imaging</span><span class="p">(</span>
+        <span class="n">num_frames</span><span class="o">=</span><span class="n">num_frames</span><span class="p">,</span>
+        <span class="n">height</span><span class="o">=</span><span class="n">height</span><span class="p">,</span>
+        <span class="n">width</span><span class="o">=</span><span class="n">width</span><span class="p">,</span>
+        <span class="n">num_planes</span><span class="o">=</span><span class="n">num_planes</span><span class="p">,</span>
+        <span class="n">sampling_frequency</span><span class="o">=</span><span class="n">sampling_frequency</span><span class="p">,</span>
+        <span class="n">seed</span><span class="o">=</span><span class="n">imaging_seed</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">rois</span> <span class="o">=</span> <span class="n">generate_rois</span><span class="p">(</span>
+        <span class="n">num_rois</span><span class="o">=</span><span class="n">num_rois</span><span class="p">,</span>
+        <span class="n">height</span><span class="o">=</span><span class="n">height</span><span class="p">,</span>
+        <span class="n">width</span><span class="o">=</span><span class="n">width</span><span class="p">,</span>
+        <span class="n">radius_range</span><span class="o">=</span><span class="n">radius_range</span><span class="p">,</span>
+        <span class="n">sampling_frequency</span><span class="o">=</span><span class="n">sampling_frequency</span><span class="p">,</span>
+        <span class="n">weighted</span><span class="o">=</span><span class="n">weighted_rois</span><span class="p">,</span>
+        <span class="n">num_planes</span><span class="o">=</span><span class="n">num_planes</span><span class="p">,</span>
+        <span class="n">seed</span><span class="o">=</span><span class="n">rois_seed</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">fluorescence</span> <span class="o">=</span> <span class="n">generate_fluorescence</span><span class="p">(</span>
+        <span class="n">num_frames</span><span class="o">=</span><span class="n">num_frames</span><span class="p">,</span>
+        <span class="n">num_rois</span><span class="o">=</span><span class="n">num_rois</span><span class="p">,</span>
+        <span class="n">sampling_frequency</span><span class="o">=</span><span class="n">sampling_frequency</span><span class="p">,</span>
+        <span class="n">decay_time</span><span class="o">=</span><span class="n">decay_time</span><span class="p">,</span>
+        <span class="n">event_rate</span><span class="o">=</span><span class="n">event_rate</span><span class="p">,</span>
+        <span class="n">bleaching_time</span><span class="o">=</span><span class="n">bleaching_time</span><span class="p">,</span>
+        <span class="n">seed</span><span class="o">=</span><span class="n">fluorescence_seed</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="c1"># background bleaches too, so bleaching cancels out of the dF/F ratio instead of drifting.</span>
+    <span class="c1"># (T, N) @ (N, H*W*P) -&gt; (T, H*W*P) -&gt; (T, H, W, P).</span>
+    <span class="n">video</span> <span class="o">=</span> <span class="n">imaging</span><span class="o">.</span><span class="n">epochs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">_video</span>
+    <span class="n">masks</span> <span class="o">=</span> <span class="n">rois</span><span class="o">.</span><span class="n">get_roi_image_masks</span><span class="p">()</span>  <span class="c1"># (N, H, W) or (N, H, W, P)</span>
+    <span class="n">masks_flat</span> <span class="o">=</span> <span class="n">masks</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">num_rois</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">video</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+    <span class="c1"># roi_baseline is float64 by default; cast to video.dtype, or the matmul below (out=flat)</span>
+    <span class="c1"># silently allocates a full movie-sized float64 temporary for the mixed-precision multiply.</span>
+    <span class="n">signal</span> <span class="o">=</span> <span class="p">(</span><span class="n">roi_baseline</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:]</span> <span class="o">*</span> <span class="n">fluorescence</span><span class="o">.</span><span class="n">traces</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">video</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>  <span class="c1"># (T, N)</span>
+    <span class="n">bleach</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">num_frames</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">bleaching_time</span> <span class="o">*</span> <span class="n">sampling_frequency</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+    <span class="c1"># `video` is reused as scratch (about to be overwritten); background+noise are added slab by</span>
+    <span class="c1"># slab to avoid a full (num_frames, height*width*num_planes) temporary for either.</span>
+    <span class="n">flat</span> <span class="o">=</span> <span class="n">video</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">num_frames</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">np</span><span class="o">.</span><span class="n">matmul</span><span class="p">(</span><span class="n">signal</span><span class="p">,</span> <span class="n">masks_flat</span><span class="p">,</span> <span class="n">out</span><span class="o">=</span><span class="n">flat</span><span class="p">)</span>
+
+    <span class="n">neuropil_rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">neuropil_seed</span><span class="p">)</span>
+    <span class="c1"># Static spatial profile of the background; None means spatially uniform.</span>
+    <span class="n">profile_flat</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">fluctuation</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">num_frames</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">neuropil_model</span> <span class="o">==</span> <span class="s2">"vignette"</span><span class="p">:</span>
+        <span class="n">profile_flat</span> <span class="o">=</span> <span class="n">_generate_vignette_profile</span><span class="p">(</span><span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">num_planes</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">video</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="n">fluctuation</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">+</span> <span class="n">neuropil_fluctuation_std</span> <span class="o">*</span> <span class="n">_generate_ou_process</span><span class="p">(</span>
+            <span class="n">num_frames</span><span class="p">,</span> <span class="n">sampling_frequency</span><span class="p">,</span> <span class="n">neuropil_rng</span>
+        <span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">neuropil_roi_coefficient</span> <span class="o">!=</span> <span class="mf">1.0</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">profile_flat</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">profile_flat</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">masks_flat</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">video</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="n">profile_flat</span><span class="p">[</span><span class="n">masks_flat</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)]</span> <span class="o">*=</span> <span class="n">neuropil_roi_coefficient</span>
+
+    <span class="c1"># Both backgrounds are a per-frame scalar times a nonnegative spatial profile, so Poisson's</span>
+    <span class="c1"># clip to nonnegative acts on the scalar alone and the true background under each ROI's mask</span>
+    <span class="c1"># (mask-weighted mean, before noise) stays closed-form -- it only needs the ROI masks, not the</span>
+    <span class="c1"># full pixel grid.</span>
+    <span class="n">mask_sums</span> <span class="o">=</span> <span class="n">masks_flat</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">background_scale</span> <span class="o">=</span> <span class="n">background</span> <span class="o">*</span> <span class="n">bleach</span> <span class="o">*</span> <span class="n">fluctuation</span>
+    <span class="k">if</span> <span class="n">noise_std</span> <span class="o">==</span> <span class="s2">"poisson"</span><span class="p">:</span>
+        <span class="n">background_scale</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">background_scale</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">profile_flat</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">neuropil</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">broadcast_to</span><span class="p">(</span><span class="n">background_scale</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">],</span> <span class="p">(</span><span class="n">num_frames</span><span class="p">,</span> <span class="n">num_rois</span><span class="p">))</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">roi_profile_avg</span> <span class="o">=</span> <span class="p">(</span><span class="n">masks_flat</span> <span class="o">*</span> <span class="n">profile_flat</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:])</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="o">/</span> <span class="n">mask_sums</span>
+        <span class="n">neuropil</span> <span class="o">=</span> <span class="n">background_scale</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span> <span class="o">*</span> <span class="n">roi_profile_avg</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:]</span>
+
+    <span class="n">noise_rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">noise_seed</span><span class="p">)</span>
+    <span class="n">slab_size</span> <span class="o">=</span> <span class="mi">256</span>
+    <span class="k">for</span> <span class="n">t0</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">num_frames</span><span class="p">,</span> <span class="n">slab_size</span><span class="p">):</span>
+        <span class="n">sl</span> <span class="o">=</span> <span class="n">flat</span><span class="p">[</span><span class="n">t0</span> <span class="p">:</span> <span class="n">t0</span> <span class="o">+</span> <span class="n">slab_size</span><span class="p">]</span>
+        <span class="n">scale_sl</span> <span class="o">=</span> <span class="n">background_scale</span><span class="p">[</span><span class="n">t0</span> <span class="p">:</span> <span class="n">t0</span> <span class="o">+</span> <span class="n">slab_size</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">sl</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="n">sl</span> <span class="o">+=</span> <span class="n">scale_sl</span> <span class="k">if</span> <span class="n">profile_flat</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">scale_sl</span> <span class="o">*</span> <span class="n">profile_flat</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:]</span>
+
+        <span class="k">if</span> <span class="n">noise_std</span> <span class="o">==</span> <span class="s2">"poisson"</span><span class="p">:</span>
+            <span class="n">sl</span><span class="p">[:]</span> <span class="o">=</span> <span class="n">noise_rng</span><span class="o">.</span><span class="n">poisson</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">clip</span><span class="p">(</span><span class="n">sl</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="kc">None</span><span class="p">))</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">sl</span> <span class="o">+=</span> <span class="n">noise_rng</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">noise_std</span><span class="p">,</span> <span class="n">sl</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span>
+
+    <span class="n">fluorescence</span> <span class="o">=</span> <span class="n">fluorescence</span><span class="o">.</span><span class="n">_replace</span><span class="p">(</span><span class="n">neuropil</span><span class="o">=</span><span class="n">neuropil</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">))</span>
+    <span class="n">rois</span><span class="o">.</span><span class="n">register_imaging</span><span class="p">(</span><span class="n">imaging</span><span class="p">)</span>  <span class="c1"># Link the ROIs to the imaging data</span>
+
+    <span class="k">return</span> <span class="n">rois</span><span class="p">,</span> <span class="n">imaging</span><span class="p">,</span> <span class="n">fluorescence</span></div>
+
+
+
+<div class="viewcode-block" id="generate_fluorescence">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.generators.html#photon_mosaic.core.generators.generate_fluorescence">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">generate_fluorescence</span><span class="p">(</span>
+    <span class="n">num_frames</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">num_rois</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="n">sampling_frequency</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">30.0</span><span class="p">,</span>
+    <span class="n">decay_time</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.5</span><span class="p">,</span>
+    <span class="n">event_rate</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.3</span><span class="p">,</span>
+    <span class="n">noise_std</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mf">0.0</span><span class="p">,</span>
+    <span class="n">bleaching_time</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">inf</span><span class="p">,</span>
+    <span class="n">seed</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FluorescenceData</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Generate synthetic fluorescence traces by convolving random spike events with an exponential kernel.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    num_frames : int</span>
+<span class="sd">        Number of frames (time points) to generate.</span>
+<span class="sd">    num_rois : int, default: 1</span>
+<span class="sd">        Number of independent fluorescence traces to generate.</span>
+<span class="sd">    sampling_frequency : float, default: 30.0</span>
+<span class="sd">        Sampling frequency in Hz.</span>
+<span class="sd">    decay_time : float, default: 0.5</span>
+<span class="sd">        Time constant of the exponential decay kernel in seconds. This sharp-rise,</span>
+<span class="sd">        single-exponential kernel is the same simplified model OASIS itself fits during</span>
+<span class="sd">        deconvolution, so the default follows the single-exponential time constant OASIS finds</span>
+<span class="sd">        optimal when fit to real GCaMP8s ground-truth recordings under that same model (0.5 s;</span>
+<span class="sd">        Rupprecht et al. 2026, Nat. Methods) rather than the sensor's true single-spike kinetics.</span>
+<span class="sd">    event_rate : float, default: 0.3</span>
+<span class="sd">        Mean spike-event rate in Hz. Each ROI's number of events is drawn as</span>
+<span class="sd">        ``round(uniform(0.5, 1.5) * event_rate * num_frames / sampling_frequency)``, scaling</span>
+<span class="sd">        with the recording's duration. Clamped to ``[0, num_frames]``.</span>
+<span class="sd">    noise_std : float, default: 0.0</span>
+<span class="sd">        Standard deviation of additive Gaussian noise. 0 means no noise.</span>
+<span class="sd">    bleaching_time : float, default: inf</span>
+<span class="sd">        Time constant of multiplicative photobleaching in seconds. The default of ``inf``</span>
+<span class="sd">        means no photobleaching.</span>
+<span class="sd">    seed : int | None, default: None</span>
+<span class="sd">        Random seed for reproducibility.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    FluorescenceData</span>
+<span class="sd">        See :class:`FluorescenceData` for field descriptions.</span>
+<span class="sd">    """</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">scipy.signal</span><span class="w"> </span><span class="kn">import</span> <span class="n">lfilter</span>
+
+    <span class="n">rng</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">default_rng</span><span class="p">(</span><span class="n">seed</span><span class="p">)</span>
+
+    <span class="c1"># Generate binary spike trains. Each event has unit amplitude, i.e. a single, isolated</span>
+    <span class="c1"># spike produces a dF/F peak of 1 (100%); this is close to single-AP responses reported</span>
+    <span class="c1"># for newer, high-sensitivity indicators like jGCaMP8m/8s (Zhang et al. 2023, Nature).</span>
+    <span class="n">spikes</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_frames</span><span class="p">,</span> <span class="n">num_rois</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">roi_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_rois</span><span class="p">):</span>
+        <span class="n">num_events</span> <span class="o">=</span> <span class="nb">round</span><span class="p">(</span><span class="n">rng</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="mf">1.5</span><span class="p">)</span> <span class="o">*</span> <span class="n">event_rate</span> <span class="o">*</span> <span class="n">num_frames</span> <span class="o">/</span> <span class="n">sampling_frequency</span><span class="p">)</span>
+        <span class="n">num_events</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">num_events</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">num_frames</span><span class="p">)</span>
+        <span class="n">event_times</span> <span class="o">=</span> <span class="n">rng</span><span class="o">.</span><span class="n">choice</span><span class="p">(</span><span class="n">num_frames</span><span class="p">,</span> <span class="n">size</span><span class="o">=</span><span class="n">num_events</span><span class="p">,</span> <span class="n">replace</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+        <span class="n">spikes</span><span class="p">[</span><span class="n">event_times</span><span class="p">,</span> <span class="n">roi_idx</span><span class="p">]</span> <span class="o">=</span> <span class="mf">1.0</span>
+
+    <span class="c1"># Convolve spikes with exponential kernel via exact IIR recurrence: traces[t] = spikes[t] + g * traces[t-1]</span>
+    <span class="n">g</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="mf">1.0</span> <span class="o">/</span> <span class="p">(</span><span class="n">decay_time</span> <span class="o">*</span> <span class="n">sampling_frequency</span><span class="p">))</span>
+    <span class="n">clean_traces</span> <span class="o">=</span> <span class="n">lfilter</span><span class="p">([</span><span class="mf">1.0</span><span class="p">],</span> <span class="p">[</span><span class="mf">1.0</span><span class="p">,</span> <span class="o">-</span><span class="n">g</span><span class="p">],</span> <span class="n">spikes</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+    <span class="c1"># traces acts as F = (1 + dF/F) * F0(t), with F0 normalised to 1 at t=0; bleaching_time=inf</span>
+    <span class="c1"># is exactly the no-bleaching limit, since bleach(t) = exp(-t / (inf * sf)) == 1 for all t.</span>
+    <span class="n">bleach</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">exp</span><span class="p">(</span><span class="o">-</span><span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">num_frames</span><span class="p">)</span> <span class="o">/</span> <span class="p">(</span><span class="n">bleaching_time</span> <span class="o">*</span> <span class="n">sampling_frequency</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">traces</span> <span class="o">=</span> <span class="p">(</span><span class="mf">1.0</span> <span class="o">+</span> <span class="n">clean_traces</span><span class="p">)</span> <span class="o">*</span> <span class="n">bleach</span><span class="p">[:,</span> <span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">noise_std</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">traces</span> <span class="o">=</span> <span class="n">traces</span> <span class="o">+</span> <span class="n">rng</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">noise_std</span><span class="p">,</span> <span class="p">(</span><span class="n">num_frames</span><span class="p">,</span> <span class="n">num_rois</span><span class="p">))</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">FluorescenceData</span><span class="p">(</span><span class="n">traces</span><span class="o">=</span><span class="n">traces</span><span class="p">,</span> <span class="n">spikes</span><span class="o">=</span><span class="n">spikes</span><span class="p">,</span> <span class="n">clean_traces</span><span class="o">=</span><span class="n">clean_traces</span><span class="p">)</span></div>
+
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item"><p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+    <br/>
+    </p>
+    <p class="theme-version">
+    Built with the
+    <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a>
+    0.24.0.
+    </p></div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item"><div class="things-in-a-row">
+    <a href="https://neuroinformatics.dev/">
+        <img src="../../../_static/light-logo-niu.png" alt="NIU" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-niu.png" alt="NIU" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.sainsburywellcome.org/web/">
+        <img src="../../../_static/light-logo-swc.png" alt="SWC" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-swc.png" alt="SWC" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://https://alleninstitute.org/neural-dynamics">
+        <img src="../../../_static/light-logo-aind.png" alt="AIND" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-aind.png" alt="AIND" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.sainsburywellcome.org/web/">
+        <img src="../../../_static/logo-ibl.png" alt="IBL" class="only-light img-sponsor"/>
+        <img src="../../../_static/logo-ibl.png" alt="IBL" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.ucl.ac.uk/">
+        <img src="../../../_static/light-logo-ucl.png" alt="UCL" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-ucl.png" alt="UCL" class="only-dark img-sponsor"/>
+    </a>
+</div></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

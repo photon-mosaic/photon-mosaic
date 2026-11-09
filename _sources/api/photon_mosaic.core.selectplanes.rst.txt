@@ -1,0 +1,18 @@
+﻿photon\_mosaic.core.selectplanes
+================================
+
+.. automodule:: photon_mosaic.core.selectplanes
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      select_planes
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      SelectPlanesImaging
+   

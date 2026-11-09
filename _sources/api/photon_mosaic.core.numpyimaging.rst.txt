@@ -1,0 +1,14 @@
+﻿photon\_mosaic.core.numpyimaging
+================================
+
+.. automodule:: photon_mosaic.core.numpyimaging
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      NumpyImaging
+      NumpyImagingEpoch
+      NumpyRois
+   

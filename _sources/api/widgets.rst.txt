@@ -1,0 +1,9 @@
+Widgets
+=======
+
+.. autosummary::
+   :toctree: .
+   :nosignatures:
+
+   photon_mosaic.widgets.rois
+   photon_mosaic.widgets.series

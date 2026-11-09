@@ -1,0 +1,15 @@
+﻿photon\_mosaic.preprocessing.registration
+=========================================
+
+.. automodule:: photon_mosaic.preprocessing.registration
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      RegisterImaging
+      RegisterImagingEpoch
+      RegistrationSettings
+      register_motion
+   

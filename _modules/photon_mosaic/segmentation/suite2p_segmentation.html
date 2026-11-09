@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>photon_mosaic.segmentation.suite2p_segmentation &#8212; photon-mosaic</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../_static/styles/theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx_autodoc_typehints.css?v=057ac668" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery.css?v=c83e6b79" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css?v=b4aaff1f" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=75c7c72ae941e8b558d8"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8" />
+
+    <script src="../../../_static/documentation_options.js?v=d45e8c67"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/sg-tags.js?v=d80f6fa4"></script>
+    <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/photon_mosaic/segmentation/suite2p_segmentation';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="canonical" href="https://api.photon-mosaic.org/_modules/photon_mosaic/segmentation/suite2p_segmentation.html" />
+    <link rel="icon" href="../../../_static/logo.png"/>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="../../../_static/searchtools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <script src="../../../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation" aria-expanded="false" aria-controls="pst-primary-sidebar-modal">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../../_static/logo.png" class="logo__image only-light" alt=""/>
+    <img src="../../../_static/logo.png" class="logo__image only-dark pst-js-only" alt=""/>
+  
+  
+    <p class="title logo__title">photon-mosaic v0.0.1</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user-guide.html">
+    Usage
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../developer-intro.html">
+    For Developers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../contributing.html">
+    Contributing
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../api_index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/photon-mosaic/photon-mosaic" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://neuroinformatics.zulipchat.com/#narrow/channel/500681-photon-mosaic" title="Zulip (chat)" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-solid fa-comments fa-lg" aria-hidden="true"></i><span class="visually-hidden">Zulip (chat)</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal" tabindex="-1"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user-guide.html">
+    Usage
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../developer-intro.html">
+    For Developers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../contributing.html">
+    Contributing
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../api_index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/photon-mosaic/photon-mosaic" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://neuroinformatics.zulipchat.com/#narrow/channel/500681-photon-mosaic" title="Zulip (chat)" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-solid fa-comments fa-lg" aria-hidden="true"></i><span class="visually-hidden">Zulip (chat)</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-house"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">photon_mosaic.segmentation.suite2p_segmentation</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for photon_mosaic.segmentation.suite2p_segmentation</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">importlib.metadata</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Annotated</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Sequence</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">numpy.typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">NDArray</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">Field</span><span class="p">,</span> <span class="n">field_validator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic_settings</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseSettings</span><span class="p">,</span> <span class="n">SettingsConfigDict</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">photon_mosaic.core</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseImaging</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">photon_mosaic.extractors.suite2prois</span><span class="w"> </span><span class="kn">import</span> <span class="n">Suite2pRois</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.basesegmentation</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseSegmentation</span><span class="p">,</span> <span class="n">register_segmentation_class</span>
+
+
+<div class="viewcode-block" id="Suite2pSegmentationSettings">
+<a class="viewcode-back" href="../../../api/photon_mosaic.segmentation.suite2p_segmentation.html#photon_mosaic.segmentation.suite2p_segmentation.Suite2pSegmentationSettings">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Suite2pSegmentationSettings</span><span class="p">(</span><span class="n">BaseSettings</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Settings for Suite2P ROI detection."""</span>
+
+    <span class="n">diameter</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Annotated</span><span class="p">[</span><span class="nb">float</span><span class="p">,</span> <span class="n">Field</span><span class="p">(</span><span class="n">ge</span><span class="o">=</span><span class="mi">1</span><span class="p">)]]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="p">[</span><span class="mf">12.0</span><span class="p">,</span> <span class="mf">12.0</span><span class="p">],</span>
+        <span class="n">description</span><span class="o">=</span><span class="p">(</span>
+            <span class="s2">"Expected cell diameter in pixels [y, x], each at least 1. Cellpose rescales the image by "</span>
+            <span class="s2">"30 / diameter, so [30, 30] runs Cellpose-SAM at its native scale, as when no diameter is "</span>
+            <span class="s2">"given; use the same value for y and x. Sourcery uses it to set its smoothing and neuropil scales."</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+    <span class="n">tau</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Timescale of the indicator (seconds). GCaMP6s ~1.5, GCaMP6f ~0.7."</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">fs</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Sampling frequency of the imaging data in Hz."</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">preclassify</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Apply classifier before refinement with probability threshold. 0 disables."</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">device</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">"cpu"</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Torch device for detection: 'cpu', 'cuda', or 'mps'."</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">algorithm</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="s2">"sparsery"</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="p">(</span>
+            <span class="s2">"ROI detection algorithm. Options: 'sparsery' (suite2p sparse mode), "</span>
+            <span class="s2">"'sourcery' (suite2p dense mode), 'cellpose' (CellPose)."</span>
+        <span class="p">),</span>
+    <span class="p">)</span>
+    <span class="n">denoise</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Apply denoising to binned movie before cell detection."</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">threshold_scaling</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Scale the automatically determined detection threshold."</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">max_overlap</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mf">0.75</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"ROIs with more overlap than this are removed during triage."</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">soma_crop</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Crop dendrites for cell classification stats like compactness."</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">allow_overlap</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"If False, overlapping pixels are discarded; if True, added to both ROIs."</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">nbins</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">5000</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Number of bins for the activity histogram."</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">highpass_time</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">100</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Window size (frames) for temporal high-pass filter before detection."</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="n">model_config</span> <span class="o">=</span> <span class="n">SettingsConfigDict</span><span class="p">(</span>
+        <span class="n">env_file</span><span class="o">=</span><span class="s2">".env"</span><span class="p">,</span> <span class="n">env_prefix</span><span class="o">=</span><span class="s2">"SUITE2P_SEGMENTATION_"</span><span class="p">,</span> <span class="n">case_sensitive</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">extra</span><span class="o">=</span><span class="s2">"ignore"</span>
+    <span class="p">)</span>
+
+<div class="viewcode-block" id="Suite2pSegmentationSettings.lowercase_algorithm">
+<a class="viewcode-back" href="../../../api/photon_mosaic.segmentation.suite2p_segmentation.html#photon_mosaic.segmentation.suite2p_segmentation.Suite2pSegmentationSettings.lowercase_algorithm">[docs]</a>
+    <span class="nd">@field_validator</span><span class="p">(</span><span class="s2">"algorithm"</span><span class="p">)</span>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">lowercase_algorithm</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">v</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">v</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="Suite2pSegmentationSettings.merged_with_suite2p_defaults">
+<a class="viewcode-back" href="../../../api/photon_mosaic.segmentation.suite2p_segmentation.html#photon_mosaic.segmentation.suite2p_segmentation.Suite2pSegmentationSettings.merged_with_suite2p_defaults">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">merged_with_suite2p_defaults</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Return suite2p's installed detection defaults overlaid with our overrides.</span>
+
+<span class="sd">        Used to source per-algorithm sub-dicts (``sparsery_settings``,</span>
+<span class="sd">        ``sourcery_settings``, ``cellpose_settings``) without hard-coding them</span>
+<span class="sd">        and to forward ``denoise``/``highpass_time`` etc. to the inner calls.</span>
+<span class="sd">        """</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">suite2p</span><span class="w"> </span><span class="kn">import</span> <span class="n">default_settings</span>  <span class="c1"># noqa: PLC0415</span>
+
+        <span class="n">base</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="n">default_settings</span><span class="p">()[</span><span class="s2">"detection"</span><span class="p">])</span>
+        <span class="n">base</span><span class="o">.</span><span class="n">update</span><span class="p">(</span>
+            <span class="p">{</span>
+                <span class="s2">"algorithm"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">algorithm</span><span class="p">,</span>
+                <span class="s2">"denoise"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">denoise</span><span class="p">,</span>
+                <span class="s2">"threshold_scaling"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">threshold_scaling</span><span class="p">,</span>
+                <span class="s2">"max_overlap"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_overlap</span><span class="p">,</span>
+                <span class="s2">"soma_crop"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">soma_crop</span><span class="p">,</span>
+                <span class="s2">"allow_overlap"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">allow_overlap</span><span class="p">,</span>
+                <span class="s2">"nbins"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">nbins</span><span class="p">,</span>
+                <span class="s2">"highpass_time"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">highpass_time</span><span class="p">,</span>
+            <span class="p">}</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">base</span></div>
+</div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_read_plane_range</span><span class="p">(</span>
+    <span class="n">imaging</span><span class="p">:</span> <span class="n">BaseImaging</span><span class="p">,</span>
+    <span class="n">epoch_offsets</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">],</span>
+    <span class="n">start</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">stop</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NDArray</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Read frames ``[start, stop)`` of one plane, stitched across epochs.</span>
+
+<span class="sd">    Pulls only the epoch chunks that overlap the requested global frame</span>
+<span class="sd">    range via :func:`BaseImagingEpoch.get_series`. Returns whatever dtype</span>
+<span class="sd">    the underlying epochs produce (no upcast).</span>
+<span class="sd">    """</span>
+    <span class="n">chunks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">NDArray</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">imaging</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">()):</span>
+        <span class="n">ep_lo</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">epoch_offsets</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="n">ep_hi</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">epoch_offsets</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">])</span>
+        <span class="k">if</span> <span class="n">ep_hi</span> <span class="o">&lt;=</span> <span class="n">start</span> <span class="ow">or</span> <span class="n">ep_lo</span> <span class="o">&gt;=</span> <span class="n">stop</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">local_start</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">start</span> <span class="o">-</span> <span class="n">ep_lo</span><span class="p">)</span>
+        <span class="n">local_end</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">ep_hi</span> <span class="o">-</span> <span class="n">ep_lo</span><span class="p">,</span> <span class="n">stop</span> <span class="o">-</span> <span class="n">ep_lo</span><span class="p">)</span>
+        <span class="n">frames</span> <span class="o">=</span> <span class="n">imaging</span><span class="o">.</span><span class="n">get_series</span><span class="p">(</span><span class="n">start_frame</span><span class="o">=</span><span class="n">local_start</span><span class="p">,</span> <span class="n">end_frame</span><span class="o">=</span><span class="n">local_end</span><span class="p">,</span> <span class="n">epoch_index</span><span class="o">=</span><span class="n">i</span><span class="p">)</span>
+        <span class="n">chunks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">frames</span><span class="p">[:,</span> <span class="p">:,</span> <span class="p">:,</span> <span class="mi">0</span><span class="p">])</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">chunks</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">chunks</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">chunks</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_stream_bin_movie</span><span class="p">(</span>
+    <span class="n">imaging</span><span class="p">:</span> <span class="n">BaseImaging</span><span class="p">,</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">bin_size</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">yrange</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+    <span class="n">xrange</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+    <span class="n">badframes</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">bool_</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">nbins</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Stream-bin one plane across all epochs of ``imaging``.</span>
+
+<span class="sd">    Mirrors :func:`suite2p.detection.detect.bin_movie` but pulls each batch</span>
+<span class="sd">    via :func:`BaseImagingEpoch.get_series` instead of holding the full</span>
+<span class="sd">    movie in memory. The only large array kept is the binned ``mov``.</span>
+<span class="sd">    """</span>
+    <span class="n">n_epochs</span> <span class="o">=</span> <span class="n">imaging</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">()</span>
+    <span class="n">sizes</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">imaging</span><span class="o">.</span><span class="n">get_num_frames</span><span class="p">(</span><span class="n">epoch_index</span><span class="o">=</span><span class="n">i</span><span class="p">))</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_epochs</span><span class="p">)]</span>
+    <span class="n">epoch_offsets</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="o">*</span><span class="n">sizes</span><span class="p">])</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+    <span class="n">n_frames</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">epoch_offsets</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+
+    <span class="n">good_frames</span> <span class="o">=</span> <span class="o">~</span><span class="n">badframes</span> <span class="k">if</span> <span class="n">badframes</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">n_frames</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)</span>
+    <span class="n">n_good</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">good_frames</span><span class="o">.</span><span class="n">sum</span><span class="p">())</span>
+    <span class="k">if</span> <span class="n">n_good</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"no good frames available for binning"</span><span class="p">)</span>
+    <span class="n">batch_size</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">n_good</span><span class="p">,</span> <span class="mi">500</span><span class="p">)</span>
+
+    <span class="n">Lyc</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">yrange</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">yrange</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="n">Lxc</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">xrange</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">-</span> <span class="n">xrange</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+
+    <span class="n">num_binned_frames</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">nbins</span><span class="p">,</span> <span class="n">n_frames</span> <span class="o">//</span> <span class="n">bin_size</span><span class="p">)</span>
+    <span class="n">mov</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_binned_frames</span><span class="p">,</span> <span class="n">Lyc</span><span class="p">,</span> <span class="n">Lxc</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+    <span class="n">curr</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="n">tstarts</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">n_frames</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">)</span>
+    <span class="n">bins_per_batch</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">batch_size</span> <span class="o">//</span> <span class="n">bin_size</span><span class="p">)</span>
+    <span class="n">n_batches</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">nbins</span> <span class="o">//</span> <span class="n">bins_per_batch</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">tstarts</span><span class="p">))</span>
+    <span class="k">if</span> <span class="n">n_batches</span> <span class="o">&lt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">n_batches</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">tstarts</span><span class="p">))</span>
+    <span class="n">tstarts</span> <span class="o">=</span> <span class="n">tstarts</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">tstarts</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="n">n_batches</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)]</span>
+
+    <span class="k">for</span> <span class="n">raw_tstart</span> <span class="ow">in</span> <span class="n">tstarts</span><span class="p">:</span>
+        <span class="n">tstart</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">raw_tstart</span><span class="p">)</span>
+        <span class="n">tend</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">tstart</span> <span class="o">+</span> <span class="n">batch_size</span><span class="p">,</span> <span class="n">n_frames</span><span class="p">)</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="n">_read_plane_range</span><span class="p">(</span><span class="n">imaging</span><span class="p">,</span> <span class="n">epoch_offsets</span><span class="p">,</span> <span class="n">tstart</span><span class="p">,</span> <span class="n">tend</span><span class="p">)</span>
+
+        <span class="n">good</span> <span class="o">=</span> <span class="n">good_frames</span><span class="p">[</span><span class="n">tstart</span><span class="p">:</span><span class="n">tend</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">good</span><span class="o">.</span><span class="n">mean</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mf">0.5</span><span class="p">:</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">good</span><span class="p">]</span>
+
+        <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[:,</span> <span class="nb">slice</span><span class="p">(</span><span class="o">*</span><span class="n">yrange</span><span class="p">),</span> <span class="nb">slice</span><span class="p">(</span><span class="o">*</span><span class="n">xrange</span><span class="p">)]</span>
+
+        <span class="k">if</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">bin_size</span><span class="p">:</span>
+            <span class="n">n_d</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="p">[:</span> <span class="p">(</span><span class="n">n_d</span> <span class="o">//</span> <span class="n">bin_size</span><span class="p">)</span> <span class="o">*</span> <span class="n">bin_size</span><span class="p">]</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">bin_size</span><span class="p">,</span> <span class="n">Lyc</span><span class="p">,</span> <span class="n">Lxc</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)[</span><span class="n">np</span><span class="o">.</span><span class="n">newaxis</span><span class="p">,</span> <span class="p">:,</span> <span class="p">:]</span>
+
+        <span class="k">if</span> <span class="n">mov</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">&gt;</span> <span class="n">curr</span><span class="p">:</span>
+            <span class="n">nb</span> <span class="o">=</span> <span class="n">data</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">mov</span><span class="p">[</span><span class="n">curr</span> <span class="p">:</span> <span class="n">curr</span> <span class="o">+</span> <span class="n">nb</span><span class="p">]</span> <span class="o">=</span> <span class="n">data</span>
+            <span class="n">curr</span> <span class="o">+=</span> <span class="n">nb</span>
+
+    <span class="k">return</span> <span class="n">mov</span><span class="p">[:</span><span class="n">curr</span><span class="p">]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_detect_rois_from_mov</span><span class="p">(</span>
+    <span class="n">mov</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">],</span>
+    <span class="o">*</span><span class="p">,</span>
+    <span class="n">cfg</span><span class="p">:</span> <span class="n">Suite2pSegmentationSettings</span><span class="p">,</span>
+    <span class="n">Ly</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">Lx</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">yrange</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+    <span class="n">xrange</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">"""Run the configured suite2p detection algorithm on a binned movie.</span>
+
+<span class="sd">    Replaces :func:`suite2p.detection.detect.detection_wrapper` with a</span>
+<span class="sd">    direct dispatch onto the algorithm-specific entry points</span>
+<span class="sd">    (``sparsedetect.sparsery``, ``sourcery.sourcery``, or</span>
+<span class="sd">    ``anatomical.select_rois``) so each backend's settings are wired</span>
+<span class="sd">    explicitly. Returns the post-:func:`roi_stats` stat list with pixel</span>
+<span class="sd">    coordinates already shifted back to the full image.</span>
+<span class="sd">    """</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>  <span class="c1"># noqa: PLC0415</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">suite2p.detection</span><span class="w"> </span><span class="kn">import</span> <span class="n">anatomical</span><span class="p">,</span> <span class="n">sourcery</span><span class="p">,</span> <span class="n">sparsedetect</span><span class="p">,</span> <span class="n">utils</span>  <span class="c1"># noqa: PLC0415</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">suite2p.detection.stats</span><span class="w"> </span><span class="kn">import</span> <span class="n">roi_stats</span>  <span class="c1"># noqa: PLC0415</span>
+
+    <span class="n">s</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">merged_with_suite2p_defaults</span><span class="p">()</span>
+    <span class="n">device</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">device</span><span class="p">)</span>
+    <span class="n">diameter</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">cfg</span><span class="o">.</span><span class="n">diameter</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">float</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">s</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"denoise"</span><span class="p">,</span> <span class="kc">False</span><span class="p">):</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">suite2p.detection.denoise</span><span class="w"> </span><span class="kn">import</span> <span class="n">pca_denoise</span>  <span class="c1"># noqa: PLC0415</span>
+
+        <span class="n">mov</span> <span class="o">=</span> <span class="n">pca_denoise</span><span class="p">(</span><span class="n">mov</span><span class="p">,</span> <span class="n">block_size</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s2">"block_size"</span><span class="p">],</span> <span class="n">n_comps_frac</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
+
+    <span class="n">meanImg</span> <span class="o">=</span> <span class="n">mov</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+    <span class="n">mov</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">temporal_high_pass_filter</span><span class="p">(</span><span class="n">mov</span><span class="o">=</span><span class="n">mov</span><span class="p">,</span> <span class="n">width</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s2">"highpass_time"</span><span class="p">])</span>
+    <span class="n">max_proj</span> <span class="o">=</span> <span class="n">mov</span><span class="o">.</span><span class="n">max</span><span class="p">(</span><span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+    <span class="n">use_cellpose</span> <span class="o">=</span> <span class="n">cfg</span><span class="o">.</span><span class="n">algorithm</span> <span class="o">==</span> <span class="s2">"cellpose"</span> <span class="ow">and</span> <span class="n">anatomical</span><span class="o">.</span><span class="n">CELLPOSE_INSTALLED</span>
+    <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">algorithm</span> <span class="o">==</span> <span class="s2">"cellpose"</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">anatomical</span><span class="o">.</span><span class="n">CELLPOSE_INSTALLED</span><span class="p">:</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+            <span class="s2">"cellpose requested but not installed (</span><span class="si">%s</span><span class="s2">); falling back to sparsery"</span><span class="p">,</span>
+            <span class="n">anatomical</span><span class="o">.</span><span class="n">cellpose_error</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">use_cellpose</span><span class="p">:</span>
+        <span class="n">_</span><span class="p">,</span> <span class="n">raw_stat</span> <span class="o">=</span> <span class="n">anatomical</span><span class="o">.</span><span class="n">select_rois</span><span class="p">(</span>
+            <span class="n">meanImg</span><span class="p">,</span>
+            <span class="n">max_proj</span><span class="p">,</span>
+            <span class="n">settings</span><span class="o">=</span><span class="n">s</span><span class="p">[</span><span class="s2">"cellpose_settings"</span><span class="p">],</span>
+            <span class="n">diameter</span><span class="o">=</span><span class="n">diameter</span><span class="p">,</span>
+            <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">algo</span> <span class="o">=</span> <span class="s2">"sparsery"</span> <span class="k">if</span> <span class="n">cfg</span><span class="o">.</span><span class="n">algorithm</span> <span class="o">==</span> <span class="s2">"cellpose"</span> <span class="k">else</span> <span class="n">cfg</span><span class="o">.</span><span class="n">algorithm</span>
+        <span class="n">sdmov</span> <span class="o">=</span> <span class="n">utils</span><span class="o">.</span><span class="n">standard_deviation_over_time</span><span class="p">(</span><span class="n">mov</span><span class="p">,</span> <span class="n">batch_size</span><span class="o">=</span><span class="mi">1000</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">algo</span> <span class="o">==</span> <span class="s2">"sparsery"</span><span class="p">:</span>
+            <span class="n">_</span><span class="p">,</span> <span class="n">raw_stat</span> <span class="o">=</span> <span class="n">sparsedetect</span><span class="o">.</span><span class="n">sparsery</span><span class="p">(</span>
+                <span class="n">mov</span><span class="o">=</span><span class="n">mov</span><span class="p">,</span>
+                <span class="n">sdmov</span><span class="o">=</span><span class="n">sdmov</span><span class="p">,</span>
+                <span class="n">threshold_scaling</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">threshold_scaling</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">s</span><span class="p">[</span><span class="s2">"sparsery_settings"</span><span class="p">],</span>
+            <span class="p">)</span>
+        <span class="k">elif</span> <span class="n">algo</span> <span class="o">==</span> <span class="s2">"sourcery"</span><span class="p">:</span>
+            <span class="n">_</span><span class="p">,</span> <span class="n">raw_stat</span> <span class="o">=</span> <span class="n">sourcery</span><span class="o">.</span><span class="n">sourcery</span><span class="p">(</span>
+                <span class="n">mov</span><span class="o">=</span><span class="n">mov</span><span class="p">,</span>
+                <span class="n">sdmov</span><span class="o">=</span><span class="n">sdmov</span><span class="p">,</span>
+                <span class="n">diameter</span><span class="o">=</span><span class="n">diameter</span><span class="p">,</span>
+                <span class="n">threshold_scaling</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">threshold_scaling</span><span class="p">,</span>
+                <span class="o">**</span><span class="n">s</span><span class="p">[</span><span class="s2">"sourcery_settings"</span><span class="p">],</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"unknown algorithm </span><span class="si">{</span><span class="n">cfg</span><span class="o">.</span><span class="n">algorithm</span><span class="si">!r}</span><span class="s2">"</span><span class="p">)</span>
+
+    <span class="n">stat</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">raw_stat</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">stat</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">[]</span>
+
+    <span class="c1"># shift ROI pixel coordinates from cropped frame back to full image</span>
+    <span class="n">ymin</span><span class="p">,</span> <span class="n">xmin</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">yrange</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">xrange</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span>
+    <span class="k">for</span> <span class="n">st</span> <span class="ow">in</span> <span class="n">stat</span><span class="p">:</span>
+        <span class="n">st</span><span class="p">[</span><span class="s2">"ypix"</span><span class="p">]</span> <span class="o">+=</span> <span class="n">ymin</span>
+        <span class="n">st</span><span class="p">[</span><span class="s2">"xpix"</span><span class="p">]</span> <span class="o">+=</span> <span class="n">xmin</span>
+        <span class="k">if</span> <span class="s2">"med"</span> <span class="ow">in</span> <span class="n">st</span><span class="p">:</span>
+            <span class="n">st</span><span class="p">[</span><span class="s2">"med"</span><span class="p">][</span><span class="mi">0</span><span class="p">]</span> <span class="o">+=</span> <span class="n">ymin</span>
+            <span class="n">st</span><span class="p">[</span><span class="s2">"med"</span><span class="p">][</span><span class="mi">1</span><span class="p">]</span> <span class="o">+=</span> <span class="n">xmin</span>
+
+    <span class="c1"># roi_stats indexes its first arg with a boolean mask, so it must be a</span>
+    <span class="c1"># numpy object array — not a plain list.</span>
+    <span class="n">stat_array</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">stat</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">list</span><span class="p">(</span>
+        <span class="n">roi_stats</span><span class="p">(</span>
+            <span class="n">stat_array</span><span class="p">,</span>
+            <span class="n">Ly</span><span class="p">,</span>
+            <span class="n">Lx</span><span class="p">,</span>
+            <span class="n">diameter</span><span class="o">=</span><span class="n">diameter</span><span class="p">,</span>
+            <span class="n">max_overlap</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">max_overlap</span><span class="p">,</span>
+            <span class="n">do_soma_crop</span><span class="o">=</span><span class="n">cfg</span><span class="o">.</span><span class="n">soma_crop</span><span class="p">,</span>
+            <span class="n">median</span><span class="o">=</span><span class="n">use_cellpose</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="p">)</span>
+
+
+<div class="viewcode-block" id="Suite2pSegmentation">
+<a class="viewcode-back" href="../../../api/photon_mosaic.segmentation.suite2p_segmentation.html#photon_mosaic.segmentation.suite2p_segmentation.Suite2pSegmentation">[docs]</a>
+<span class="nd">@register_segmentation_class</span>
+<span class="k">class</span><span class="w"> </span><span class="nc">Suite2pSegmentation</span><span class="p">(</span><span class="n">BaseSegmentation</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Suite2p ROI detection, streamed from the imaging object.</span>
+
+<span class="sd">    Frames are pulled lazily via :func:`BaseImagingEpoch.get_series` and</span>
+<span class="sd">    stream-binned in place, so the full raw movie is never materialised.</span>
+<span class="sd">    Returns a :class:`Suite2pRois` holding every plane's suite2p ``stat``.</span>
+<span class="sd">    """</span>
+
+    <span class="n">method_name</span> <span class="o">=</span> <span class="s2">"suite2p"</span>
+    <span class="n">settings_class</span> <span class="o">=</span> <span class="n">Suite2pSegmentationSettings</span>
+
+<div class="viewcode-block" id="Suite2pSegmentation.is_installed">
+<a class="viewcode-back" href="../../../api/photon_mosaic.segmentation.suite2p_segmentation.html#photon_mosaic.segmentation.suite2p_segmentation.Suite2pSegmentation.is_installed">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_installed</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="kn">import</span><span class="w"> </span><span class="nn">suite2p</span>  <span class="c1"># noqa: F401, PLC0415</span>
+        <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="kc">True</span></div>
+
+
+<div class="viewcode-block" id="Suite2pSegmentation.get_method_version">
+<a class="viewcode-back" href="../../../api/photon_mosaic.segmentation.suite2p_segmentation.html#photon_mosaic.segmentation.suite2p_segmentation.Suite2pSegmentation.get_method_version">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_method_version</span><span class="p">(</span><span class="bp">cls</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">importlib</span><span class="o">.</span><span class="n">metadata</span><span class="o">.</span><span class="n">version</span><span class="p">(</span><span class="s2">"suite2p"</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Suite2pSegmentation.run">
+<a class="viewcode-back" href="../../../api/photon_mosaic.segmentation.suite2p_segmentation.html#photon_mosaic.segmentation.suite2p_segmentation.Suite2pSegmentation.run">[docs]</a>
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">imaging</span><span class="p">:</span> <span class="n">BaseImaging</span><span class="p">,</span>
+        <span class="n">yrange</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+        <span class="n">xrange</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+        <span class="n">badframes</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">bool_</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Suite2pSegmentationSettings</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Suite2pRois</span><span class="p">:</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">suite2p.classification</span><span class="w"> </span><span class="kn">import</span> <span class="n">builtin_classfile</span><span class="p">,</span> <span class="n">classify</span>  <span class="c1"># noqa: PLC0415</span>
+
+        <span class="n">H</span><span class="p">,</span> <span class="n">W</span><span class="p">,</span> <span class="n">n_planes</span> <span class="o">=</span> <span class="n">imaging</span><span class="o">.</span><span class="n">shape</span>
+
+        <span class="n">n_epochs</span> <span class="o">=</span> <span class="n">imaging</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">()</span>
+        <span class="n">n_frames</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">imaging</span><span class="o">.</span><span class="n">get_total_frames</span><span class="p">())</span>
+        <span class="n">bin_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">n_frames</span> <span class="o">//</span> <span class="n">settings</span><span class="o">.</span><span class="n">nbins</span><span class="p">,</span> <span class="n">np</span><span class="o">.</span><span class="n">round</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">tau</span> <span class="o">*</span> <span class="n">settings</span><span class="o">.</span><span class="n">fs</span><span class="p">)))</span>
+
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Suite2p detection — </span><span class="si">%d</span><span class="s2"> epochs"</span><span class="p">,</span> <span class="n">n_epochs</span><span class="p">)</span>
+        <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+        <span class="n">mov</span> <span class="o">=</span> <span class="n">_stream_bin_movie</span><span class="p">(</span>
+            <span class="n">imaging</span><span class="p">,</span>
+            <span class="n">bin_size</span><span class="o">=</span><span class="n">bin_size</span><span class="p">,</span>
+            <span class="n">yrange</span><span class="o">=</span><span class="n">yrange</span><span class="p">,</span>
+            <span class="n">xrange</span><span class="o">=</span><span class="n">xrange</span><span class="p">,</span>
+            <span class="n">badframes</span><span class="o">=</span><span class="n">badframes</span><span class="p">,</span>
+            <span class="n">nbins</span><span class="o">=</span><span class="n">settings</span><span class="o">.</span><span class="n">nbins</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">stat</span> <span class="o">=</span> <span class="n">_detect_rois_from_mov</span><span class="p">(</span>
+            <span class="n">mov</span><span class="p">,</span>
+            <span class="n">cfg</span><span class="o">=</span><span class="n">settings</span><span class="p">,</span>
+            <span class="n">Ly</span><span class="o">=</span><span class="n">H</span><span class="p">,</span>
+            <span class="n">Lx</span><span class="o">=</span><span class="n">W</span><span class="p">,</span>
+            <span class="n">yrange</span><span class="o">=</span><span class="n">yrange</span><span class="p">,</span>
+            <span class="n">xrange</span><span class="o">=</span><span class="n">xrange</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"  found </span><span class="si">%d</span><span class="s2"> ROIs in </span><span class="si">%.1f</span><span class="s2">s"</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">stat</span><span class="p">),</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span><span class="p">)</span>
+
+        <span class="n">rois</span> <span class="o">=</span> <span class="n">Suite2pRois</span><span class="o">.</span><span class="n">from_stat</span><span class="p">(</span>
+            <span class="n">stats</span><span class="o">=</span><span class="n">stat</span><span class="p">,</span>
+            <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">H</span><span class="p">,</span> <span class="n">W</span><span class="p">,</span> <span class="n">n_planes</span><span class="p">),</span>
+            <span class="n">sampling_frequency</span><span class="o">=</span><span class="n">imaging</span><span class="o">.</span><span class="n">sampling_frequency</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="n">stat</span><span class="p">:</span>  <span class="c1"># classify reads stat[0]</span>
+            <span class="n">iscell</span> <span class="o">=</span> <span class="n">classify</span><span class="p">(</span><span class="n">stat</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">stat</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">object</span><span class="p">),</span> <span class="n">classfile</span><span class="o">=</span><span class="n">builtin_classfile</span><span class="p">)</span>
+            <span class="c1"># same properties Suite2pRois sets when loading iscell.npy from a suite2p folder</span>
+            <span class="n">rois</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span><span class="s2">"iscell"</span><span class="p">,</span> <span class="n">iscell</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="n">rois</span><span class="o">.</span><span class="n">set_property</span><span class="p">(</span><span class="s2">"iscell_probability"</span><span class="p">,</span> <span class="n">iscell</span><span class="p">[:,</span> <span class="mi">1</span><span class="p">])</span>
+
+        <span class="k">return</span> <span class="n">rois</span></div>
+</div>
+
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item"><p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+    <br/>
+    </p>
+    <p class="theme-version">
+    Built with the
+    <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a>
+    0.24.0.
+    </p></div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item"><div class="things-in-a-row">
+    <a href="https://neuroinformatics.dev/">
+        <img src="../../../_static/light-logo-niu.png" alt="NIU" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-niu.png" alt="NIU" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.sainsburywellcome.org/web/">
+        <img src="../../../_static/light-logo-swc.png" alt="SWC" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-swc.png" alt="SWC" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://https://alleninstitute.org/neural-dynamics">
+        <img src="../../../_static/light-logo-aind.png" alt="AIND" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-aind.png" alt="AIND" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.sainsburywellcome.org/web/">
+        <img src="../../../_static/logo-ibl.png" alt="IBL" class="only-light img-sponsor"/>
+        <img src="../../../_static/logo-ibl.png" alt="IBL" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.ucl.ac.uk/">
+        <img src="../../../_static/light-logo-ucl.png" alt="UCL" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-ucl.png" alt="UCL" class="only-dark img-sponsor"/>
+    </a>
+</div></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

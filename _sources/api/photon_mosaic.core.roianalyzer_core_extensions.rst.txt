@@ -1,0 +1,17 @@
+﻿photon\_mosaic.core.roianalyzer\_core\_extensions
+=================================================
+
+.. automodule:: photon_mosaic.core.roianalyzer_core_extensions
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      BackgroundExtension
+      DeconvolutionExtension
+      DfOverFExtension
+      FluorescenceExtension
+      FluorescenceNode
+      NeuropilExtension
+   

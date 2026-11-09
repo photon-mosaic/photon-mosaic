@@ -1,0 +1,13 @@
+﻿photon\_mosaic.widgets.series
+=============================
+
+.. automodule:: photon_mosaic.widgets.series
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      ImagingSeriesWidget
+      plot_imaging_series
+   

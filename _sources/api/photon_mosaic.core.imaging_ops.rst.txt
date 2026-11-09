@@ -1,0 +1,29 @@
+﻿photon\_mosaic.core.imaging\_ops
+================================
+
+.. automodule:: photon_mosaic.core.imaging_ops
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      append_imaging
+      concatenate_epochs
+      frame_slice
+      split_epoch_at_frames
+      split_epochs
+      split_imaging_by_epochs
+      stack_planes
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      AppendImaging
+      ConcatenateImaging
+      FrameSliceImaging
+      SelectEpochImaging
+      SplitEpochAtFramesImaging
+      StackPlanesImaging
+   

@@ -1,0 +1,12 @@
+﻿photon\_mosaic.core.selectrois
+==============================
+
+.. automodule:: photon_mosaic.core.selectrois
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      SelectRois
+   

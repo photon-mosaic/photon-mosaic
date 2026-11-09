@@ -1,0 +1,15 @@
+﻿photon\_mosaic.preprocessing.suite2p\_registration
+==================================================
+
+.. automodule:: photon_mosaic.preprocessing.suite2p_registration
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      RegisterSuite2PImaging
+      RegisterSuite2PImagingEpoch
+      Suite2PMotion
+      Suite2pRegistrationSettings
+   

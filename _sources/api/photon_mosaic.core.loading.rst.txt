@@ -1,0 +1,12 @@
+﻿photon\_mosaic.core.loading
+===========================
+
+.. automodule:: photon_mosaic.core.loading
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      load
+   

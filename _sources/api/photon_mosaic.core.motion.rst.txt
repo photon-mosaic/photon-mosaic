@@ -1,0 +1,21 @@
+﻿photon\_mosaic.core.motion
+==========================
+
+.. automodule:: photon_mosaic.core.motion
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      compute_motion
+      get_registration_class
+      register_motion_class
+      register_registration_class
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      Motion
+   

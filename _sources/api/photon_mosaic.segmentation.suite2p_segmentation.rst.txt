@@ -1,0 +1,13 @@
+﻿photon\_mosaic.segmentation.suite2p\_segmentation
+=================================================
+
+.. automodule:: photon_mosaic.segmentation.suite2p_segmentation
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      Suite2pSegmentation
+      Suite2pSegmentationSettings
+   

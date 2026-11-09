@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>photon_mosaic.preprocessing.suite2p_registration &#8212; photon-mosaic</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../_static/styles/theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+<link href="../_static/styles/pydata-sphinx-theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx_autodoc_typehints.css?v=057ac668" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery.css?v=c83e6b79" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../_static/css/custom.css?v=b4aaff1f" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../_static/scripts/fontawesome.js?digest=75c7c72ae941e8b558d8"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8" />
+<link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8" />
+
+    <script src="../_static/documentation_options.js?v=d45e8c67"></script>
+    <script src="../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../_static/sg-tags.js?v=d80f6fa4"></script>
+    <script src="../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = 'api/photon_mosaic.preprocessing.suite2p_registration';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="canonical" href="https://api.photon-mosaic.org/api/photon_mosaic.preprocessing.suite2p_registration.html" />
+    <link rel="icon" href="../_static/logo.png"/>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Sample Data" href="sample_data.html" />
+    <link rel="prev" title="photon_mosaic.preprocessing.registration" href="photon_mosaic.preprocessing.registration.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="../_static/searchtools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <script src="../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation" aria-expanded="false" aria-controls="pst-primary-sidebar-modal">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../_static/logo.png" class="logo__image only-light" alt=""/>
+    <img src="../_static/logo.png" class="logo__image only-dark pst-js-only" alt=""/>
+  
+  
+    <p class="title logo__title">photon-mosaic v0.0.1</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../user-guide.html">
+    Usage
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../developer-intro.html">
+    For Developers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../contributing.html">
+    Contributing
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../api_index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/photon-mosaic/photon-mosaic" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://neuroinformatics.zulipchat.com/#narrow/channel/500681-photon-mosaic" title="Zulip (chat)" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-solid fa-comments fa-lg" aria-hidden="true"></i><span class="visually-hidden">Zulip (chat)</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+    <button type="button" class="pst-navbar-icon sidebar-toggle secondary-toggle" aria-label="On this page" aria-expanded="false" aria-controls="pst-secondary-sidebar-modal">
+      <span class="fa-solid fa-outdent"></span>
+    </button>
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+      <dialog id="pst-primary-sidebar-modal" tabindex="-1"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../user-guide.html">
+    Usage
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../developer-intro.html">
+    For Developers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../contributing.html">
+    Contributing
+  </a>
+</li>
+
+
+<li class="nav-item current active">
+  <a class="nav-link nav-internal" href="../api_index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/photon-mosaic/photon-mosaic" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://neuroinformatics.zulipchat.com/#narrow/channel/500681-photon-mosaic" title="Zulip (chat)" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-solid fa-comments fa-lg" aria-hidden="true"></i><span class="visually-hidden">Zulip (chat)</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+    <div class="sidebar-primary-items__start sidebar-primary__section">
+        <div class="sidebar-primary-item pst-sidebar-collapse"><button type="button" id="pst-collapse-sidebar-button" aria-expanded="true" aria-controls="pst-primary-sidebar">
+  <svg class="pst-icon" role="img" aria-hidden="true" focusable="false" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <path fill="currentColor" d="M3 15.5C2.36232 15.5 1.74874 15.2564 1.28478 14.8189C0.820828 14.3815 0.541576 13.7832 0.504167 13.1467L0.5 13L0.5 3C0.499965 2.36232 0.743605 1.74874 1.18107 1.28478C1.61854 0.820828 2.21676 0.541576 2.85333 0.504167L3 0.5L13 0.5C13.6377 0.499965 14.2513 0.743605 14.7152 1.18107C15.1792 1.61854 15.4584 2.21676 15.4958 2.85333L15.5 3L15.5 13C15.5 13.6377 15.2564 14.2513 14.8189 14.7152C14.3815 15.1792 13.7832 15.4584 13.1467 15.4958L13 15.5L3 15.5ZM3 13.8333L10.5 13.8333L10.5 2.16667L3 2.16667C2.79589 2.16669 2.59889 2.24163 2.44636 2.37726C2.29383 2.5129 2.19638 2.69979 2.1725 2.9025L2.16667 3L2.16667 13C2.16669 13.2041 2.24163 13.4011 2.37726 13.5536C2.5129 13.7062 2.69979 13.8036 2.9025 13.8275L3 13.8333ZM6.65583 10.325L6.5775 10.2558L4.91083 8.58917C4.76735 8.44567 4.68116 8.25476 4.66843 8.05223C4.65569 7.84971 4.71729 7.6495 4.84167 7.48917L4.91083 7.41083L6.5775 5.74417C6.72747 5.59471 6.9287 5.50794 7.14032 5.50148C7.35194 5.49502 7.55809 5.56935 7.7169 5.70937C7.8757 5.8494 7.97525 6.04463 7.99533 6.25539C8.01541 6.46616 7.95451 6.67667 7.825 6.84417L7.75583 6.9225L6.67917 8L7.75583 9.0775C7.89931 9.22099 7.98551 9.41191 7.99824 9.61443C8.01097 9.81695 7.94938 10.0172 7.825 10.1775L7.75583 10.2558C7.61234 10.3993 7.42142 10.4855 7.2189 10.4982C7.01638 10.511 6.81617 10.4494 6.65583 10.325Z"/>
+  </svg>
+  <span class="pst-collapse-sidebar-label">Collapse Sidebar</span>
+  <span class="pst-expand-sidebar-label">Expand Sidebar</span>
+</button></div>
+        <div class="sidebar-primary-item">
+
+<nav class="bd-docs-nav bd-links"
+     aria-label="Section Navigation">
+  <p class="bd-links__title" role="heading" aria-level="1">Section Navigation</p>
+  <div class="bd-toc-item navbar-nav"><ul class="current nav bd-sidenav">
+<li class="toctree-l1 has-children"><a class="reference internal" href="core.html">Core</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.baseimaging.html">photon_mosaic.core.baseimaging</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.baserois.html">photon_mosaic.core.baserois</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.binaryimaging.html">photon_mosaic.core.binaryimaging</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.binaryrois.html">photon_mosaic.core.binaryrois</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.core_tools.html">photon_mosaic.core.core_tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.generators.html">photon_mosaic.core.generators</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.imaging_ops.html">photon_mosaic.core.imaging_ops</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.imaging_tools.html">photon_mosaic.core.imaging_tools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.loading.html">photon_mosaic.core.loading</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.motion.html">photon_mosaic.core.motion</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.numpyimaging.html">photon_mosaic.core.numpyimaging</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.roianalyzer.html">photon_mosaic.core.roianalyzer</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.roianalyzer_core_extensions.html">photon_mosaic.core.roianalyzer_core_extensions</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.selectplanes.html">photon_mosaic.core.selectplanes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.selectrois.html">photon_mosaic.core.selectrois</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.testingtools.html">photon_mosaic.core.testingtools</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.zarrimaging.html">photon_mosaic.core.zarrimaging</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.core.zarrrois.html">photon_mosaic.core.zarrrois</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="extractors.html">Extractors</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.extractors.roiextractors.html">photon_mosaic.extractors.roiextractors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.extractors.suite2prois.html">photon_mosaic.extractors.suite2prois</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 current active has-children"><a class="reference internal" href="preprocessing.html">Preprocessing</a><details open="open"><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.preprocessing.basepreprocessor.html">photon_mosaic.preprocessing.basepreprocessor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.preprocessing.registration.html">photon_mosaic.preprocessing.registration</a></li>
+<li class="toctree-l2 current active"><a aria-current="page" class="current reference internal" href="#">photon_mosaic.preprocessing.suite2p_registration</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="sample_data.html">Sample Data</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.sample_data.suite2p_sample_data.html">photon_mosaic.sample_data.suite2p_sample_data</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="segmentation.html">Segmentation</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.segmentation.basesegmentation.html">photon_mosaic.segmentation.basesegmentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.segmentation.run_segmentation.html">photon_mosaic.segmentation.run_segmentation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.segmentation.suite2p_segmentation.html">photon_mosaic.segmentation.suite2p_segmentation</a></li>
+</ul>
+</details></li>
+<li class="toctree-l1 has-children"><a class="reference internal" href="widgets.html">Widgets</a><details><summary><span class="toctree-toggle" role="presentation"><i class="fa-solid fa-chevron-down"></i></span></summary><ul>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.widgets.rois.html">photon_mosaic.widgets.rois</a></li>
+<li class="toctree-l2"><a class="reference internal" href="photon_mosaic.widgets.series.html">photon_mosaic.widgets.series</a></li>
+</ul>
+</details></li>
+</ul>
+</div>
+</nav></div>
+    </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-house"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../api_index.html" class="nav-link">API Reference</a></li>
+    
+    
+    <li class="breadcrumb-item"><a href="preprocessing.html" class="nav-link">Preprocessing</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">photon_mosaic.preprocessing.suite2p_registration</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <section id="module-photon_mosaic.preprocessing.suite2p_registration">
+<span id="photon-mosaic-preprocessing-suite2p-registration"></span><h1>photon_mosaic.preprocessing.suite2p_registration<a class="headerlink" href="#module-photon_mosaic.preprocessing.suite2p_registration" title="Link to this heading">#</a></h1>
+<p class="rubric">Classes</p>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.preprocessing.suite2p_registration.RegisterSuite2PImaging" title="photon_mosaic.preprocessing.suite2p_registration.RegisterSuite2PImaging"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RegisterSuite2PImaging</span></code></a>(imaging, motion[, method])</p></td>
+<td><p>Apply pre-computed Suite2P motion correction on-the-fly.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.preprocessing.suite2p_registration.RegisterSuite2PImagingEpoch" title="photon_mosaic.preprocessing.suite2p_registration.RegisterSuite2PImagingEpoch"><code class="xref py py-obj docutils literal notranslate"><span class="pre">RegisterSuite2PImagingEpoch</span></code></a>(...)</p></td>
+<td><p>Epoch-level preprocessor that applies stored Suite2P displacements.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2PMotion" title="photon_mosaic.preprocessing.suite2p_registration.Suite2PMotion"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Suite2PMotion</span></code></a>(imaging, displacements, ops[, ...])</p></td>
+<td><p>Motion artifacts produced by Suite2P registration.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings" title="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings</span></code></a>([...])</p></td>
+<td><p>Settings for Suite2P motion correction.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<dl class="py class">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">photon_mosaic.preprocessing.suite2p_registration.</span></span><span class="sig-name descname"><span class="pre">Suite2pRegistrationSettings</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">_case_sensitive</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_nested_model_default_partial_update</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_env_prefix</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_env_prefix_target</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_env_file</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">PosixPath('.')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_env_file_encoding</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_env_file_depth</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_env_ignore_empty</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_env_nested_delimiter</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_env_nested_max_split</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_env_parse_none_str</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_env_parse_enums</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_cli_prog_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_cli_parse_args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_cli_settings_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_cli_parse_none_str</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_cli_hide_none_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_cli_avoid_json</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_cli_enforce_required</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_cli_use_class_docs_for_groups</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_cli_show_env_vars</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_cli_exit_on_error</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_cli_prefix</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_cli_flag_prefix_char</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_cli_implicit_flags</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_cli_ignore_unknown_args</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_cli_kebab_case</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_cli_shortcuts</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_secrets_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">_build_sources</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">*</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">debug</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">tmp_dir</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">PosixPath('/scratch')</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">500</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">device</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'cpu'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nonrigid</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_nonrigid_shift</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">bounds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">data_type</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'h5'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">do_registration</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">align_by_chan</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">maxregshift</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">force_refImg</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">block_size</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">&lt;factory&gt;</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">snr_thresh</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.2</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">outlier_detrend_window</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">3.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">outlier_maxregshift</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.05</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">clip_negative</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_reference_iterations</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">8</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">auto_remove_empty_frames</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trim_frames_start</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trim_frames_end</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">do_optimize_motion_params</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smooth_sigma_time</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smooth_sigma</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1.15</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">use_ave_image_as_reference</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">movie_lower_quantile</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">movie_upper_quantile</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.999</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preview_frame_bin_seconds</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">preview_playback_factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">10.0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">n_batches</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">20</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smooth_sigma_min</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0.65</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smooth_sigma_max</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">2.15</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smooth_sigma_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">4</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smooth_sigma_time_min</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smooth_sigma_time_max</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">6</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">smooth_sigma_time_steps</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">7</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/preprocessing/suite2p_registration.html#Suite2pRegistrationSettings"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings" title="Link to this definition">#</a></dt>
+<dd><p>Settings for Suite2P motion correction.</p>
+<p>Adds the Suite2P specific parameters on top of the shared
+<a class="reference internal" href="photon_mosaic.preprocessing.registration.html#photon_mosaic.preprocessing.registration.RegistrationSettings" title="photon_mosaic.preprocessing.registration.RegistrationSettings"><code class="xref py py-class docutils literal notranslate"><span class="pre">photon_mosaic.preprocessing.registration.RegistrationSettings</span></code></a>
+(<code class="docutils literal notranslate"><span class="pre">debug</span></code>, <code class="docutils literal notranslate"><span class="pre">tmp_dir</span></code>, <code class="docutils literal notranslate"><span class="pre">batch_size</span></code>, <code class="docutils literal notranslate"><span class="pre">device</span></code>).
+Values can be provided via constructor, environment variables, or .env file.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.data_type">
+<span class="sig-name descname"><span class="pre">data_type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.data_type" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.do_registration">
+<span class="sig-name descname"><span class="pre">do_registration</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.do_registration" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.align_by_chan">
+<span class="sig-name descname"><span class="pre">align_by_chan</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.align_by_chan" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.maxregshift">
+<span class="sig-name descname"><span class="pre">maxregshift</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.maxregshift" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.force_refImg">
+<span class="sig-name descname"><span class="pre">force_refImg</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.force_refImg" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.block_size">
+<span class="sig-name descname"><span class="pre">block_size</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.block_size" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.snr_thresh">
+<span class="sig-name descname"><span class="pre">snr_thresh</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.snr_thresh" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.outlier_detrend_window">
+<span class="sig-name descname"><span class="pre">outlier_detrend_window</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.outlier_detrend_window" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.outlier_maxregshift">
+<span class="sig-name descname"><span class="pre">outlier_maxregshift</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.outlier_maxregshift" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.clip_negative">
+<span class="sig-name descname"><span class="pre">clip_negative</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.clip_negative" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.max_reference_iterations">
+<span class="sig-name descname"><span class="pre">max_reference_iterations</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.max_reference_iterations" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.auto_remove_empty_frames">
+<span class="sig-name descname"><span class="pre">auto_remove_empty_frames</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.auto_remove_empty_frames" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.trim_frames_start">
+<span class="sig-name descname"><span class="pre">trim_frames_start</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.trim_frames_start" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.trim_frames_end">
+<span class="sig-name descname"><span class="pre">trim_frames_end</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.trim_frames_end" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.do_optimize_motion_params">
+<span class="sig-name descname"><span class="pre">do_optimize_motion_params</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.do_optimize_motion_params" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_time">
+<span class="sig-name descname"><span class="pre">smooth_sigma_time</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_time" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma">
+<span class="sig-name descname"><span class="pre">smooth_sigma</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.use_ave_image_as_reference">
+<span class="sig-name descname"><span class="pre">use_ave_image_as_reference</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.use_ave_image_as_reference" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.movie_lower_quantile">
+<span class="sig-name descname"><span class="pre">movie_lower_quantile</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.movie_lower_quantile" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.movie_upper_quantile">
+<span class="sig-name descname"><span class="pre">movie_upper_quantile</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.movie_upper_quantile" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.preview_frame_bin_seconds">
+<span class="sig-name descname"><span class="pre">preview_frame_bin_seconds</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.preview_frame_bin_seconds" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.preview_playback_factor">
+<span class="sig-name descname"><span class="pre">preview_playback_factor</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.preview_playback_factor" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.n_batches">
+<span class="sig-name descname"><span class="pre">n_batches</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.n_batches" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_min">
+<span class="sig-name descname"><span class="pre">smooth_sigma_min</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_min" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_max">
+<span class="sig-name descname"><span class="pre">smooth_sigma_max</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_max" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_steps">
+<span class="sig-name descname"><span class="pre">smooth_sigma_steps</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_steps" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_time_min">
+<span class="sig-name descname"><span class="pre">smooth_sigma_time_min</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_time_min" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_time_max">
+<span class="sig-name descname"><span class="pre">smooth_sigma_time_max</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">float</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_time_max" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_time_steps">
+<span class="sig-name descname"><span class="pre">smooth_sigma_time_steps</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_time_steps" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.model_config">
+<span class="sig-name descname"><span class="pre">model_config</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">{'arbitrary_types_allowed':</span> <span class="pre">True,</span> <span class="pre">'case_sensitive':</span> <span class="pre">False,</span> <span class="pre">'cli_avoid_json':</span> <span class="pre">False,</span> <span class="pre">'cli_enforce_required':</span> <span class="pre">False,</span> <span class="pre">'cli_exit_on_error':</span> <span class="pre">True,</span> <span class="pre">'cli_flag_prefix_char':</span> <span class="pre">'-',</span> <span class="pre">'cli_hide_none_type':</span> <span class="pre">False,</span> <span class="pre">'cli_ignore_unknown_args':</span> <span class="pre">False,</span> <span class="pre">'cli_implicit_flags':</span> <span class="pre">False,</span> <span class="pre">'cli_kebab_case':</span> <span class="pre">False,</span> <span class="pre">'cli_parse_args':</span> <span class="pre">None,</span> <span class="pre">'cli_parse_none_str':</span> <span class="pre">None,</span> <span class="pre">'cli_prefix':</span> <span class="pre">'',</span> <span class="pre">'cli_prog_name':</span> <span class="pre">None,</span> <span class="pre">'cli_shortcuts':</span> <span class="pre">None,</span> <span class="pre">'cli_show_env_vars':</span> <span class="pre">False,</span> <span class="pre">'cli_use_class_docs_for_groups':</span> <span class="pre">False,</span> <span class="pre">'enable_decoding':</span> <span class="pre">True,</span> <span class="pre">'env_file':</span> <span class="pre">'.env',</span> <span class="pre">'env_file_depth':</span> <span class="pre">0,</span> <span class="pre">'env_file_encoding':</span> <span class="pre">None,</span> <span class="pre">'env_ignore_empty':</span> <span class="pre">False,</span> <span class="pre">'env_nested_delimiter':</span> <span class="pre">None,</span> <span class="pre">'env_nested_max_split':</span> <span class="pre">None,</span> <span class="pre">'env_parse_enums':</span> <span class="pre">None,</span> <span class="pre">'env_parse_none_str':</span> <span class="pre">None,</span> <span class="pre">'env_prefix':</span> <span class="pre">'SUITE2P_REGISTRATION_',</span> <span class="pre">'env_prefix_target':</span> <span class="pre">'variable',</span> <span class="pre">'extra':</span> <span class="pre">'forbid',</span> <span class="pre">'json_file':</span> <span class="pre">None,</span> <span class="pre">'json_file_encoding':</span> <span class="pre">None,</span> <span class="pre">'nested_model_default_partial_update':</span> <span class="pre">False,</span> <span class="pre">'protected_namespaces':</span> <span class="pre">('model_validate',</span> <span class="pre">'model_dump',</span> <span class="pre">'settings_cached',</span> <span class="pre">'settings_clear_cache',</span> <span class="pre">'settings_customise_sources'),</span> <span class="pre">'secrets_case_sensitive':</span> <span class="pre">None,</span> <span class="pre">'secrets_dir':</span> <span class="pre">None,</span> <span class="pre">'secrets_dir_max_size':</span> <span class="pre">None,</span> <span class="pre">'secrets_dir_missing':</span> <span class="pre">None,</span> <span class="pre">'secrets_nested_delimiter':</span> <span class="pre">None,</span> <span class="pre">'secrets_nested_subdir':</span> <span class="pre">None,</span> <span class="pre">'secrets_prefix':</span> <span class="pre">None,</span> <span class="pre">'toml_file':</span> <span class="pre">None,</span> <span class="pre">'validate_default':</span> <span class="pre">True,</span> <span class="pre">'yaml_config_section':</span> <span class="pre">None,</span> <span class="pre">'yaml_file':</span> <span class="pre">None,</span> <span class="pre">'yaml_file_encoding':</span> <span class="pre">None}</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.model_config" title="Link to this definition">#</a></dt>
+<dd><p>Configuration for the model, should be a dictionary conforming to [<cite>ConfigDict</cite>][pydantic.config.ConfigDict].</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2PMotion">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">photon_mosaic.preprocessing.suite2p_registration.</span></span><span class="sig-name descname"><span class="pre">Suite2PMotion</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">imaging</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">displacements</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ops</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">reference</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">nonrigid_offsets</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">blocks</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">yranges</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">xranges</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">corrected_badframes</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">metadata</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/preprocessing/suite2p_registration.html#Suite2PMotion"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2PMotion" title="Link to this definition">#</a></dt>
+<dd><p>Motion artifacts produced by Suite2P registration.</p>
+<p>Adds Suite2P-specific fields (<code class="docutils literal notranslate"><span class="pre">ops</span></code>, block coordinates, non-rigid offsets)
+on top of the algorithm-agnostic <code class="xref py py-class docutils literal notranslate"><span class="pre">Motion</span></code> container.</p>
+<p class="rubric">Methods</p>
+<div class="pst-scrollable-table-container"><table class="autosummary longtable table">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2PMotion.settings_class" title="photon_mosaic.preprocessing.suite2p_registration.Suite2PMotion.settings_class"><code class="xref py py-obj docutils literal notranslate"><span class="pre">settings_class</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</div>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2PMotion.method_name">
+<span class="sig-name descname"><span class="pre">method_name</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'suite2p'</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2PMotion.method_name" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.Suite2PMotion.settings_class">
+<span class="sig-name descname"><span class="pre">settings_class</span></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2PMotion.settings_class" title="Link to this definition">#</a></dt>
+<dd><p>alias of <a class="reference internal" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings" title="photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings"><code class="xref py py-class docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings</span></code></a></p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.RegisterSuite2PImaging">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">photon_mosaic.preprocessing.suite2p_registration.</span></span><span class="sig-name descname"><span class="pre">RegisterSuite2PImaging</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">imaging</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">motion</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">'suite2p'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/preprocessing/suite2p_registration.html#RegisterSuite2PImaging"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.RegisterSuite2PImaging" title="Link to this definition">#</a></dt>
+<dd><p>Apply pre-computed Suite2P motion correction on-the-fly.</p>
+<p>Thin alias of <a class="reference internal" href="photon_mosaic.preprocessing.registration.html#photon_mosaic.preprocessing.registration.RegisterImaging" title="photon_mosaic.preprocessing.registration.RegisterImaging"><code class="xref py py-class docutils literal notranslate"><span class="pre">photon_mosaic.preprocessing.registration.RegisterImaging</span></code></a>,
+kept for discoverability and backwards compatibility; the generic class
+already dispatches on <code class="docutils literal notranslate"><span class="pre">method</span></code>.</p>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.RegisterSuite2PImagingEpoch">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">photon_mosaic.preprocessing.suite2p_registration.</span></span><span class="sig-name descname"><span class="pre">RegisterSuite2PImagingEpoch</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">parent_imaging_epoch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">motion</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">epoch_index</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/photon_mosaic/preprocessing/suite2p_registration.html#RegisterSuite2PImagingEpoch"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.RegisterSuite2PImagingEpoch" title="Link to this definition">#</a></dt>
+<dd><p>Epoch-level preprocessor that applies stored Suite2P displacements.</p>
+<p>Frame bounds, plane selection and output allocation come from
+<a class="reference internal" href="photon_mosaic.preprocessing.registration.html#photon_mosaic.preprocessing.registration.RegisterImagingEpoch" title="photon_mosaic.preprocessing.registration.RegisterImagingEpoch"><code class="xref py py-class docutils literal notranslate"><span class="pre">RegisterImagingEpoch</span></code></a>; this class
+only shifts one plane’s frames with Suite2P’s <code class="docutils literal notranslate"><span class="pre">shift_frames</span></code>.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="photon_mosaic.preprocessing.suite2p_registration.RegisterSuite2PImagingEpoch.motion">
+<span class="sig-name descname"><span class="pre">motion</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2PMotion" title="photon_mosaic.preprocessing.suite2p_registration.Suite2PMotion"><span class="pre">Suite2PMotion</span></a></span><a class="headerlink" href="#photon_mosaic.preprocessing.suite2p_registration.RegisterSuite2PImagingEpoch.motion" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+    <a class="left-prev"
+       href="photon_mosaic.preprocessing.registration.html"
+       title="previous page">
+      <i class="fa-solid fa-angle-left"></i>
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">previous</p>
+        <p class="prev-next-title">photon_mosaic.preprocessing.registration</p>
+      </div>
+    </a>
+    <a class="right-next"
+       href="sample_data.html"
+       title="next page">
+      <div class="prev-next-info">
+        <p class="prev-next-subtitle">next</p>
+        <p class="prev-next-title">Sample Data</p>
+      </div>
+      <i class="fa-solid fa-angle-right"></i>
+    </a>
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+                <dialog id="pst-secondary-sidebar-modal" tabindex="-1"></dialog>
+                <div id="pst-secondary-sidebar" class="bd-sidebar-secondary bd-toc"><div class="sidebar-secondary-items sidebar-secondary__inner">
+
+
+  <div class="sidebar-secondary-item">
+<div
+    id="pst-page-navigation-heading-2"
+    class="page-toc tocsection onthispage">
+    <i class="fa-solid fa-list"></i> On this page
+  </div>
+  <nav id="pst-page-toc-nav" class="page-toc" aria-labelledby="pst-page-navigation-heading-2">
+    <ul class="pst-show_toc_level nav section-nav flex-column">
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.data_type"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.data_type</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.do_registration"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.do_registration</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.align_by_chan"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.align_by_chan</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.maxregshift"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.maxregshift</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.force_refImg"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.force_refImg</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.block_size"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.block_size</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.snr_thresh"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.snr_thresh</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.outlier_detrend_window"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.outlier_detrend_window</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.outlier_maxregshift"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.outlier_maxregshift</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.clip_negative"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.clip_negative</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.max_reference_iterations"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.max_reference_iterations</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.auto_remove_empty_frames"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.auto_remove_empty_frames</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.trim_frames_start"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.trim_frames_start</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.trim_frames_end"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.trim_frames_end</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.do_optimize_motion_params"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.do_optimize_motion_params</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_time"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.smooth_sigma_time</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.smooth_sigma</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.use_ave_image_as_reference"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.use_ave_image_as_reference</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.movie_lower_quantile"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.movie_lower_quantile</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.movie_upper_quantile"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.movie_upper_quantile</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.preview_frame_bin_seconds"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.preview_frame_bin_seconds</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.preview_playback_factor"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.preview_playback_factor</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.n_batches"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.n_batches</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_min"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.smooth_sigma_min</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_max"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.smooth_sigma_max</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_steps"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.smooth_sigma_steps</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_time_min"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.smooth_sigma_time_min</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_time_max"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.smooth_sigma_time_max</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.smooth_sigma_time_steps"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.smooth_sigma_time_steps</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings.model_config"><code class="docutils literal notranslate"><span class="pre">Suite2pRegistrationSettings.model_config</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2PMotion"><code class="docutils literal notranslate"><span class="pre">Suite2PMotion</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2PMotion.method_name"><code class="docutils literal notranslate"><span class="pre">Suite2PMotion.method_name</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.Suite2PMotion.settings_class"><code class="docutils literal notranslate"><span class="pre">Suite2PMotion.settings_class</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.RegisterSuite2PImaging"><code class="docutils literal notranslate"><span class="pre">RegisterSuite2PImaging</span></code></a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.RegisterSuite2PImagingEpoch"><code class="docutils literal notranslate"><span class="pre">RegisterSuite2PImagingEpoch</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#photon_mosaic.preprocessing.suite2p_registration.RegisterSuite2PImagingEpoch.motion"><code class="docutils literal notranslate"><span class="pre">RegisterSuite2PImagingEpoch.motion</span></code></a></li>
+</ul>
+</li>
+</ul>
+  </nav></div>
+
+</div></div>
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8"></script>
+<script defer src="../_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item"><p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+    <br/>
+    </p>
+    <p class="theme-version">
+    Built with the
+    <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a>
+    0.24.0.
+    </p></div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item"><div class="things-in-a-row">
+    <a href="https://neuroinformatics.dev/">
+        <img src="../_static/light-logo-niu.png" alt="NIU" class="only-light img-sponsor"/>
+        <img src="../_static/dark-logo-niu.png" alt="NIU" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.sainsburywellcome.org/web/">
+        <img src="../_static/light-logo-swc.png" alt="SWC" class="only-light img-sponsor"/>
+        <img src="../_static/dark-logo-swc.png" alt="SWC" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://https://alleninstitute.org/neural-dynamics">
+        <img src="../_static/light-logo-aind.png" alt="AIND" class="only-light img-sponsor"/>
+        <img src="../_static/dark-logo-aind.png" alt="AIND" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.sainsburywellcome.org/web/">
+        <img src="../_static/logo-ibl.png" alt="IBL" class="only-light img-sponsor"/>
+        <img src="../_static/logo-ibl.png" alt="IBL" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.ucl.ac.uk/">
+        <img src="../_static/light-logo-ucl.png" alt="UCL" class="only-light img-sponsor"/>
+        <img src="../_static/dark-logo-ucl.png" alt="UCL" class="only-dark img-sponsor"/>
+    </a>
+</div></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

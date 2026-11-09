@@ -1,0 +1,17 @@
+.. _target-api:
+
+API Reference
+=============
+
+This section contains automatically generated documentation for the
+`photon-mosaic` package.
+
+.. toctree::
+   :maxdepth: 1
+
+   api/core
+   api/extractors
+   api/preprocessing
+   api/sample_data
+   api/segmentation
+   api/widgets

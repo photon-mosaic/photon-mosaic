@@ -1,0 +1,8 @@
+Sample Data
+===========
+
+.. autosummary::
+   :toctree: .
+   :nosignatures:
+
+   photon_mosaic.sample_data.suite2p_sample_data

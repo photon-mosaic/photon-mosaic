@@ -1,0 +1,12 @@
+﻿photon\_mosaic.sample\_data.suite2p\_sample\_data
+=================================================
+
+.. automodule:: photon_mosaic.sample_data.suite2p_sample_data
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      download_suite2p_google_drive
+   

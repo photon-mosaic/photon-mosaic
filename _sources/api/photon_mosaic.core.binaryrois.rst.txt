@@ -1,0 +1,13 @@
+﻿photon\_mosaic.core.binaryrois
+==============================
+
+.. automodule:: photon_mosaic.core.binaryrois
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      BinaryFolderRois
+      BinaryRois
+   

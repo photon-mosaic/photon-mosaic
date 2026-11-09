@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>photon_mosaic.core.imaging_ops &#8212; photon-mosaic</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../_static/styles/theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx_autodoc_typehints.css?v=057ac668" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery.css?v=c83e6b79" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css?v=b4aaff1f" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=75c7c72ae941e8b558d8"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8" />
+
+    <script src="../../../_static/documentation_options.js?v=d45e8c67"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/sg-tags.js?v=d80f6fa4"></script>
+    <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/photon_mosaic/core/imaging_ops';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="canonical" href="https://api.photon-mosaic.org/_modules/photon_mosaic/core/imaging_ops.html" />
+    <link rel="icon" href="../../../_static/logo.png"/>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="../../../_static/searchtools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <script src="../../../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation" aria-expanded="false" aria-controls="pst-primary-sidebar-modal">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../../_static/logo.png" class="logo__image only-light" alt=""/>
+    <img src="../../../_static/logo.png" class="logo__image only-dark pst-js-only" alt=""/>
+  
+  
+    <p class="title logo__title">photon-mosaic v0.0.1</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user-guide.html">
+    Usage
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../developer-intro.html">
+    For Developers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../contributing.html">
+    Contributing
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../api_index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/photon-mosaic/photon-mosaic" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://neuroinformatics.zulipchat.com/#narrow/channel/500681-photon-mosaic" title="Zulip (chat)" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-solid fa-comments fa-lg" aria-hidden="true"></i><span class="visually-hidden">Zulip (chat)</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal" tabindex="-1"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user-guide.html">
+    Usage
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../developer-intro.html">
+    For Developers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../contributing.html">
+    Contributing
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../api_index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/photon-mosaic/photon-mosaic" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://neuroinformatics.zulipchat.com/#narrow/channel/500681-photon-mosaic" title="Zulip (chat)" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-solid fa-comments fa-lg" aria-hidden="true"></i><span class="visually-hidden">Zulip (chat)</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-house"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">photon_mosaic.core.imaging_ops</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for photon_mosaic.core.imaging_ops</h1><div class="highlight"><pre>
+<span></span><span class="sd">"""Operations that derive one imaging object from another.</span>
+
+<span class="sd">Every public callable here takes imaging object(s) and hands back a new lazy</span>
+<span class="sd">proxy: selecting or subdividing epochs, cutting out a frame range, or joining</span>
+<span class="sd">objects along the plane axis. Nothing copies pixels — the proxies pull from</span>
+<span class="sd">their parents on read.</span>
+<span class="sd">"""</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Sequence</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">numpy.typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">DTypeLike</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.baseimaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseImaging</span><span class="p">,</span> <span class="n">BaseImagingEpoch</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_normalize_epoch_indices</span><span class="p">(</span><span class="n">epoch_indices</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="n">num_epochs</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Normalize and validate epoch indices requested by the user."""</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">epoch_indices</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="n">normalized_epoch_indices</span> <span class="o">=</span> <span class="p">[</span><span class="n">epoch_indices</span><span class="p">]</span>
+    <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">epoch_indices</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+        <span class="n">normalized_epoch_indices</span> <span class="o">=</span> <span class="n">epoch_indices</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"epoch_indices must be an int or a list of ints"</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">normalized_epoch_indices</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"epoch_indices must contain at least one index"</span><span class="p">)</span>
+
+    <span class="k">for</span> <span class="n">epoch_index</span> <span class="ow">in</span> <span class="n">normalized_epoch_indices</span><span class="p">:</span>
+        <span class="c1"># isinstance(True, int) returns True, so we need the second check here</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">epoch_index</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">epoch_index</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"All epoch indices must be ints"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">epoch_index</span> <span class="o">&lt;</span> <span class="n">num_epochs</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Epoch index </span><span class="si">{</span><span class="n">epoch_index</span><span class="si">}</span><span class="s2"> out of range for imaging with </span><span class="si">{</span><span class="n">num_epochs</span><span class="si">}</span><span class="s2"> epochs"</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="n">normalized_epoch_indices</span>
+
+
+<div class="viewcode-block" id="SelectEpochImaging">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.imaging_ops.html#photon_mosaic.core.imaging_ops.SelectEpochImaging">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SelectEpochImaging</span><span class="p">(</span><span class="n">BaseImaging</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Proxy imaging object exposing only selected epochs from a parent imaging."""</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">imaging</span><span class="p">:</span> <span class="n">BaseImaging</span><span class="p">,</span> <span class="n">epoch_indices</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]):</span>
+        <span class="n">normalized_epoch_indices</span> <span class="o">=</span> <span class="n">_normalize_epoch_indices</span><span class="p">(</span><span class="n">epoch_indices</span><span class="p">,</span> <span class="n">imaging</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">())</span>
+
+        <span class="n">BaseImaging</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">sampling_frequency</span><span class="o">=</span><span class="n">imaging</span><span class="o">.</span><span class="n">sampling_frequency</span><span class="p">,</span>
+            <span class="n">shape</span><span class="o">=</span><span class="n">imaging</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">imaging</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">(),</span>
+            <span class="n">plane_ids</span><span class="o">=</span><span class="n">imaging</span><span class="o">.</span><span class="n">plane_ids</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+        <span class="p">)</span>
+        <span class="n">imaging</span><span class="o">.</span><span class="n">copy_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_selected_epoch_indices</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">epoch_index</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">normalized_epoch_indices</span><span class="p">):</span>
+            <span class="n">imaging_epoch</span> <span class="o">=</span> <span class="n">imaging</span><span class="o">.</span><span class="n">epochs</span><span class="p">[</span><span class="n">epoch_index</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add_epoch</span><span class="p">(</span><span class="n">imaging_epoch</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_selected_epoch_indices</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">epoch_index</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_parent</span> <span class="o">=</span> <span class="n">imaging</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_kwargs</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">"imaging"</span><span class="p">:</span> <span class="n">imaging</span><span class="p">,</span>
+            <span class="s2">"epoch_indices"</span><span class="p">:</span> <span class="n">normalized_epoch_indices</span><span class="p">,</span>
+        <span class="p">}</span>
+
+<div class="viewcode-block" id="SelectEpochImaging.get_series">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.imaging_ops.html#photon_mosaic.core.imaging_ops.SelectEpochImaging.get_series">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_series</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">start_frame</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">end_frame</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">plane_ids</span><span class="p">:</span> <span class="nb">list</span> <span class="o">|</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">epoch_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="c1"># parent may want to do further operations to the series before returning</span>
+        <span class="c1"># so we explicitly delegate to them rather than relying on BaseImaging.</span>
+        <span class="c1"># We also remap selected epoch indices relative to the parent</span>
+        <span class="k">if</span> <span class="n">epoch_index</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">selected_epoch_index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_selected_epoch_indices</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">selected_epoch_index</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_selected_epoch_indices</span><span class="p">[</span><span class="n">epoch_index</span><span class="p">]</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parent</span><span class="o">.</span><span class="n">get_series</span><span class="p">(</span>
+            <span class="n">start_frame</span><span class="o">=</span><span class="n">start_frame</span><span class="p">,</span>
+            <span class="n">end_frame</span><span class="o">=</span><span class="n">end_frame</span><span class="p">,</span>
+            <span class="n">plane_ids</span><span class="o">=</span><span class="n">plane_ids</span><span class="p">,</span>
+            <span class="n">epoch_index</span><span class="o">=</span><span class="n">selected_epoch_index</span><span class="p">,</span>
+        <span class="p">)</span></div>
+</div>
+
+
+
+<div class="viewcode-block" id="split_epochs">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.imaging_ops.html#photon_mosaic.core.imaging_ops.split_epochs">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">split_epochs</span><span class="p">(</span><span class="n">imaging</span><span class="p">:</span> <span class="n">BaseImaging</span><span class="p">,</span> <span class="n">epoch_indices</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">SelectEpochImaging</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return a proxy imaging object with only the requested epochs."""</span>
+    <span class="k">return</span> <span class="n">SelectEpochImaging</span><span class="p">(</span><span class="n">imaging</span><span class="o">=</span><span class="n">imaging</span><span class="p">,</span> <span class="n">epoch_indices</span><span class="o">=</span><span class="n">epoch_indices</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="split_imaging_by_epochs">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.imaging_ops.html#photon_mosaic.core.imaging_ops.split_imaging_by_epochs">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">split_imaging_by_epochs</span><span class="p">(</span><span class="n">imaging</span><span class="p">:</span> <span class="n">BaseImaging</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">SelectEpochImaging</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Return a list of proxy imaging objects, each containing a single epoch."""</span>
+    <span class="k">return</span> <span class="p">[</span><span class="n">SelectEpochImaging</span><span class="p">(</span><span class="n">imaging</span><span class="o">=</span><span class="n">imaging</span><span class="p">,</span> <span class="n">epoch_indices</span><span class="o">=</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">imaging</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">())]</span></div>
+
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_FrameRangeEpoch</span><span class="p">(</span><span class="n">BaseImagingEpoch</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Lazy view over a contiguous frame range of a parent epoch."""</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent_epoch</span><span class="p">:</span> <span class="n">BaseImagingEpoch</span><span class="p">,</span> <span class="n">start_frame</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">end_frame</span><span class="p">:</span> <span class="nb">int</span><span class="p">):</span>
+        <span class="n">t_start</span> <span class="o">=</span> <span class="n">parent_epoch</span><span class="o">.</span><span class="n">_t_start</span> <span class="k">if</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">parent_epoch</span><span class="p">,</span> <span class="s2">"_t_start"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mf">0.0</span>
+        <span class="n">sampling_frequency</span> <span class="o">=</span> <span class="n">parent_epoch</span><span class="o">.</span><span class="n">_sampling_frequency</span>
+        <span class="n">BaseImagingEpoch</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>  <span class="c1"># type: ignore[call-arg]</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">sampling_frequency</span><span class="o">=</span><span class="n">sampling_frequency</span><span class="p">,</span>
+            <span class="n">t_start</span><span class="o">=</span><span class="n">t_start</span> <span class="o">+</span> <span class="n">start_frame</span> <span class="o">/</span> <span class="n">sampling_frequency</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_parent_epoch</span> <span class="o">=</span> <span class="n">parent_epoch</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_start</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">start_frame</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_end</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">end_frame</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_num_samples</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_end</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_start</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_series</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start_frame</span><span class="p">,</span> <span class="n">end_frame</span><span class="p">,</span> <span class="n">plane_indices</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parent_epoch</span><span class="o">.</span><span class="n">get_series</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_start</span> <span class="o">+</span> <span class="n">start_frame</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_start</span> <span class="o">+</span> <span class="n">end_frame</span><span class="p">,</span>
+            <span class="n">plane_indices</span><span class="p">,</span>
+        <span class="p">)</span>
+
+
+<div class="viewcode-block" id="SplitEpochAtFramesImaging">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.imaging_ops.html#photon_mosaic.core.imaging_ops.SplitEpochAtFramesImaging">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">SplitEpochAtFramesImaging</span><span class="p">(</span><span class="n">BaseImaging</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Imaging proxy that subdivides one epoch of a parent into several sub-epochs.</span>
+
+<span class="sd">    The frame boundaries are interpreted in the same way as ``np.split``: the</span>
+<span class="sd">    boundaries split the parent epoch into ``len(boundaries) + 1`` contiguous</span>
+<span class="sd">    pieces, each exposed as its own epoch on the returned object. Pixels are</span>
+<span class="sd">    pulled lazily from the parent — no data is copied.</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">imaging</span><span class="p">:</span> <span class="n">BaseImaging</span><span class="p">,</span> <span class="n">epoch_index</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">frame_boundaries</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">]):</span>
+        <span class="n">num_epochs</span> <span class="o">=</span> <span class="n">imaging</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">()</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">epoch_index</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">epoch_index</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"epoch_index must be an int"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">epoch_index</span> <span class="o">&lt;</span> <span class="n">num_epochs</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Epoch index </span><span class="si">{</span><span class="n">epoch_index</span><span class="si">}</span><span class="s2"> out of range for imaging with </span><span class="si">{</span><span class="n">num_epochs</span><span class="si">}</span><span class="s2"> epochs"</span><span class="p">)</span>
+
+        <span class="n">parent_epoch</span> <span class="o">=</span> <span class="n">imaging</span><span class="o">.</span><span class="n">epochs</span><span class="p">[</span><span class="n">epoch_index</span><span class="p">]</span>
+        <span class="n">n_samples</span> <span class="o">=</span> <span class="n">parent_epoch</span><span class="o">.</span><span class="n">get_num_samples</span><span class="p">()</span>
+
+        <span class="n">boundaries</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="nb">map</span><span class="p">(</span><span class="nb">int</span><span class="p">,</span> <span class="n">frame_boundaries</span><span class="p">))</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">b</span> <span class="o">&lt;=</span> <span class="mi">0</span> <span class="ow">or</span> <span class="n">b</span> <span class="o">&gt;=</span> <span class="n">n_samples</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">boundaries</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"frame_boundaries must be strictly between 0 and </span><span class="si">{</span><span class="n">n_samples</span><span class="si">}</span><span class="s2">; got </span><span class="si">{</span><span class="n">boundaries</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">boundaries</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">&gt;=</span> <span class="n">boundaries</span><span class="p">[</span><span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">boundaries</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"frame_boundaries must be strictly increasing; got </span><span class="si">{</span><span class="n">boundaries</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+        <span class="n">BaseImaging</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">sampling_frequency</span><span class="o">=</span><span class="n">imaging</span><span class="o">.</span><span class="n">sampling_frequency</span><span class="p">,</span>
+            <span class="n">shape</span><span class="o">=</span><span class="n">imaging</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">imaging</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">(),</span>
+            <span class="n">plane_ids</span><span class="o">=</span><span class="n">imaging</span><span class="o">.</span><span class="n">plane_ids</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+        <span class="p">)</span>
+        <span class="n">imaging</span><span class="o">.</span><span class="n">copy_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+
+        <span class="n">edges</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="o">*</span><span class="n">boundaries</span><span class="p">,</span> <span class="n">n_samples</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">edges</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">edges</span><span class="p">[</span><span class="mi">1</span><span class="p">:]):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add_epoch</span><span class="p">(</span><span class="n">_FrameRangeEpoch</span><span class="p">(</span><span class="n">parent_epoch</span><span class="p">,</span> <span class="n">lo</span><span class="p">,</span> <span class="n">hi</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_parent</span> <span class="o">=</span> <span class="n">imaging</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_kwargs</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">"imaging"</span><span class="p">:</span> <span class="n">imaging</span><span class="p">,</span>
+            <span class="s2">"epoch_index"</span><span class="p">:</span> <span class="n">epoch_index</span><span class="p">,</span>
+            <span class="s2">"frame_boundaries"</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">boundaries</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span>
+        <span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="split_epoch_at_frames">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.imaging_ops.html#photon_mosaic.core.imaging_ops.split_epoch_at_frames">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">split_epoch_at_frames</span><span class="p">(</span>
+    <span class="n">imaging</span><span class="p">:</span> <span class="n">BaseImaging</span><span class="p">,</span>
+    <span class="n">epoch_index</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="n">frame_boundaries</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">SplitEpochAtFramesImaging</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Split one epoch of ``imaging`` into contiguous sub-epochs at the given frame boundaries.</span>
+
+<span class="sd">    Convenience wrapper for :class:`SplitEpochAtFramesImaging`. Useful when an</span>
+<span class="sd">    extractor exposes recorded files as a single concatenated epoch (e.g.</span>
+<span class="sd">    suite2p's per-plane ``data.bin`` plus ``ops['frames_per_file']``) and you</span>
+<span class="sd">    want each underlying file as its own epoch.</span>
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="n">SplitEpochAtFramesImaging</span><span class="p">(</span><span class="n">imaging</span><span class="o">=</span><span class="n">imaging</span><span class="p">,</span> <span class="n">epoch_index</span><span class="o">=</span><span class="n">epoch_index</span><span class="p">,</span> <span class="n">frame_boundaries</span><span class="o">=</span><span class="n">frame_boundaries</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="FrameSliceImaging">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.imaging_ops.html#photon_mosaic.core.imaging_ops.FrameSliceImaging">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">FrameSliceImaging</span><span class="p">(</span><span class="n">BaseImaging</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Imaging proxy exposing one contiguous frame range of a parent epoch.</span>
+
+<span class="sd">    The imaging counterpart of SpikeInterface's ``FrameSliceRecording``: the way</span>
+<span class="sd">    to cut a short stub out of a long video, whether for a test fixture, a quick</span>
+<span class="sd">    look, or to hand something small to code that would choke on the whole</span>
+<span class="sd">    recording. Pixels are pulled lazily from the parent.</span>
+
+<span class="sd">    The result has exactly one epoch. ``t_start`` stays on the parent's</span>
+<span class="sd">    timeline rather than being re-referenced to zero, so the stub keeps its</span>
+<span class="sd">    place in the original recording.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    parent_imaging : BaseImaging</span>
+<span class="sd">        The imaging object to slice.</span>
+<span class="sd">    start_frame : int | None, default: None</span>
+<span class="sd">        First included frame, or 0 if None.</span>
+<span class="sd">    end_frame : int | None, default: None</span>
+<span class="sd">        End frame, excluded as in ordinary python slicing; the parent epoch's</span>
+<span class="sd">        frame count if None.</span>
+<span class="sd">    epoch_index : int | None, default: None</span>
+<span class="sd">        Which epoch of the parent to slice. If None and the parent has a single</span>
+<span class="sd">        epoch it defaults to that one; a multi-epoch parent must name its epoch,</span>
+<span class="sd">        as it must for :meth:`BaseImaging.get_series`. SpikeInterface refuses a</span>
+<span class="sd">        multi-segment parent outright; naming the epoch keeps that capability</span>
+<span class="sd">        without letting an unnamed one be picked silently (see issue #129).</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">parent_imaging</span><span class="p">:</span> <span class="n">BaseImaging</span><span class="p">,</span>
+        <span class="n">start_frame</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">end_frame</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">epoch_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">num_epochs</span> <span class="o">=</span> <span class="n">parent_imaging</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">epoch_index</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">num_epochs</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"epoch_index must be provided for multi-epoch imaging data."</span><span class="p">)</span>
+            <span class="n">epoch_index</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">epoch_index</span><span class="p">,</span> <span class="nb">int</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">epoch_index</span><span class="p">,</span> <span class="nb">bool</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"epoch_index must be an int"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">epoch_index</span> <span class="o">&lt;</span> <span class="n">num_epochs</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Epoch index </span><span class="si">{</span><span class="n">epoch_index</span><span class="si">}</span><span class="s2"> out of range for imaging with </span><span class="si">{</span><span class="n">num_epochs</span><span class="si">}</span><span class="s2"> epochs"</span><span class="p">)</span>
+
+        <span class="n">parent_epoch</span> <span class="o">=</span> <span class="n">parent_imaging</span><span class="o">.</span><span class="n">epochs</span><span class="p">[</span><span class="n">epoch_index</span><span class="p">]</span>
+        <span class="n">parent_size</span> <span class="o">=</span> <span class="n">parent_epoch</span><span class="o">.</span><span class="n">get_num_samples</span><span class="p">()</span>
+
+        <span class="n">start_frame</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">if</span> <span class="n">start_frame</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">start_frame</span><span class="p">)</span>
+        <span class="n">end_frame</span> <span class="o">=</span> <span class="n">parent_size</span> <span class="k">if</span> <span class="n">end_frame</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="nb">int</span><span class="p">(</span><span class="n">end_frame</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">start_frame</span> <span class="o">&lt;</span> <span class="n">parent_size</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"start_frame must be within [0, </span><span class="si">{</span><span class="n">parent_size</span><span class="si">}</span><span class="s2">); got </span><span class="si">{</span><span class="n">start_frame</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;</span> <span class="n">end_frame</span> <span class="o">&lt;=</span> <span class="n">parent_size</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"end_frame must be within (0, </span><span class="si">{</span><span class="n">parent_size</span><span class="si">}</span><span class="s2">]; got </span><span class="si">{</span><span class="n">end_frame</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">end_frame</span> <span class="o">&lt;=</span> <span class="n">start_frame</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"start_frame must be smaller than end_frame; got </span><span class="si">{</span><span class="n">start_frame</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">end_frame</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+
+        <span class="n">BaseImaging</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">sampling_frequency</span><span class="o">=</span><span class="n">parent_imaging</span><span class="o">.</span><span class="n">sampling_frequency</span><span class="p">,</span>
+            <span class="n">shape</span><span class="o">=</span><span class="n">parent_imaging</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">parent_imaging</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">(),</span>
+            <span class="n">plane_ids</span><span class="o">=</span><span class="n">parent_imaging</span><span class="o">.</span><span class="n">plane_ids</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+        <span class="p">)</span>
+        <span class="n">parent_imaging</span><span class="o">.</span><span class="n">copy_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">add_epoch</span><span class="p">(</span><span class="n">_FrameRangeEpoch</span><span class="p">(</span><span class="n">parent_epoch</span><span class="p">,</span> <span class="n">start_frame</span><span class="p">,</span> <span class="n">end_frame</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_parent</span> <span class="o">=</span> <span class="n">parent_imaging</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_kwargs</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">"parent_imaging"</span><span class="p">:</span> <span class="n">parent_imaging</span><span class="p">,</span>
+            <span class="s2">"start_frame"</span><span class="p">:</span> <span class="n">start_frame</span><span class="p">,</span>
+            <span class="s2">"end_frame"</span><span class="p">:</span> <span class="n">end_frame</span><span class="p">,</span>
+            <span class="s2">"epoch_index"</span><span class="p">:</span> <span class="n">epoch_index</span><span class="p">,</span>
+        <span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="frame_slice">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.imaging_ops.html#photon_mosaic.core.imaging_ops.frame_slice">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">frame_slice</span><span class="p">(</span>
+    <span class="n">parent_imaging</span><span class="p">:</span> <span class="n">BaseImaging</span><span class="p">,</span>
+    <span class="n">start_frame</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">end_frame</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">epoch_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FrameSliceImaging</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return a single-epoch proxy over ``[start_frame, end_frame)`` of one parent epoch.</span>
+
+<span class="sd">    Convenience wrapper for :class:`FrameSliceImaging`.</span>
+<span class="sd">    """</span>
+    <span class="k">return</span> <span class="n">FrameSliceImaging</span><span class="p">(</span>
+        <span class="n">parent_imaging</span><span class="o">=</span><span class="n">parent_imaging</span><span class="p">,</span>
+        <span class="n">start_frame</span><span class="o">=</span><span class="n">start_frame</span><span class="p">,</span>
+        <span class="n">end_frame</span><span class="o">=</span><span class="n">end_frame</span><span class="p">,</span>
+        <span class="n">epoch_index</span><span class="o">=</span><span class="n">epoch_index</span><span class="p">,</span>
+    <span class="p">)</span></div>
+
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_ConcatenatedEpoch</span><span class="p">(</span><span class="n">BaseImagingEpoch</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Lazy epoch joining several parent epochs end to end along time."""</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent_epochs</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">BaseImagingEpoch</span><span class="p">],</span> <span class="n">shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">dtype</span><span class="p">:</span> <span class="n">DTypeLike</span><span class="p">):</span>
+        <span class="n">first</span> <span class="o">=</span> <span class="n">parent_epochs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">BaseImagingEpoch</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>  <span class="c1"># type: ignore[call-arg]</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">sampling_frequency</span><span class="o">=</span><span class="n">first</span><span class="o">.</span><span class="n">_sampling_frequency</span><span class="p">,</span>
+            <span class="n">t_start</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="s2">"_t_start"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_parent_epochs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">parent_epochs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sizes</span> <span class="o">=</span> <span class="p">[</span><span class="n">e</span><span class="o">.</span><span class="n">get_num_samples</span><span class="p">()</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parent_epochs</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_offsets</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_sizes</span><span class="p">])</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_shape</span> <span class="o">=</span> <span class="n">shape</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_dtype</span> <span class="o">=</span> <span class="n">dtype</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_num_samples</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_offsets</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_series</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start_frame</span><span class="p">,</span> <span class="n">end_frame</span><span class="p">,</span> <span class="n">plane_indices</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">assert</span> <span class="n">start_frame</span> <span class="o">&lt;</span> <span class="n">end_frame</span><span class="p">,</span> <span class="sa">f</span><span class="s2">"start_frame </span><span class="si">{</span><span class="n">start_frame</span><span class="si">}</span><span class="s2"> must be &lt; end_frame </span><span class="si">{</span><span class="n">end_frame</span><span class="si">}</span><span class="s2">"</span>
+
+        <span class="c1"># _offsets is sorted, so bisect to the parent epochs overlapping the request.</span>
+        <span class="n">first</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">searchsorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_offsets</span><span class="p">,</span> <span class="n">start_frame</span><span class="p">,</span> <span class="n">side</span><span class="o">=</span><span class="s2">"right"</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="n">last</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">searchsorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_offsets</span><span class="p">,</span> <span class="n">end_frame</span><span class="p">,</span> <span class="n">side</span><span class="o">=</span><span class="s2">"left"</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">last</span> <span class="o">-</span> <span class="n">first</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>  <span class="c1"># request inside one epoch: no copy</span>
+            <span class="n">offset</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_offsets</span><span class="p">[</span><span class="n">first</span><span class="p">]</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parent_epochs</span><span class="p">[</span><span class="n">first</span><span class="p">]</span><span class="o">.</span><span class="n">get_series</span><span class="p">(</span><span class="n">start_frame</span> <span class="o">-</span> <span class="n">offset</span><span class="p">,</span> <span class="n">end_frame</span> <span class="o">-</span> <span class="n">offset</span><span class="p">,</span> <span class="n">plane_indices</span><span class="p">)</span>
+
+        <span class="c1"># One probe frame gives the spatial shape and dtype shared by all epochs.</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">end_frame</span> <span class="o">-</span> <span class="n">start_frame</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_shape</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_dtype</span><span class="p">)</span>
+
+        <span class="n">pos</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">last</span><span class="p">):</span>
+            <span class="c1"># Requested frames clipped to parent epoch i, in that epoch's own numbering.</span>
+            <span class="n">lo</span> <span class="o">=</span> <span class="nb">max</span><span class="p">(</span><span class="n">start_frame</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_offsets</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="mi">0</span><span class="p">)</span>
+            <span class="n">hi</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">end_frame</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_offsets</span><span class="p">[</span><span class="n">i</span><span class="p">],</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sizes</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+            <span class="n">out</span><span class="p">[</span><span class="n">pos</span> <span class="p">:</span> <span class="n">pos</span> <span class="o">+</span> <span class="n">hi</span> <span class="o">-</span> <span class="n">lo</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parent_epochs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">get_series</span><span class="p">(</span><span class="n">lo</span><span class="p">,</span> <span class="n">hi</span><span class="p">,</span> <span class="n">plane_indices</span><span class="p">)</span>
+            <span class="n">pos</span> <span class="o">+=</span> <span class="n">hi</span> <span class="o">-</span> <span class="n">lo</span>
+        <span class="k">return</span> <span class="n">out</span>
+
+
+<div class="viewcode-block" id="ConcatenateImaging">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.imaging_ops.html#photon_mosaic.core.imaging_ops.ConcatenateImaging">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">ConcatenateImaging</span><span class="p">(</span><span class="n">BaseImaging</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Imaging proxy joining all epochs of one or several input imaging objects into one epoch along time.</span>
+
+<span class="sd">    Epoch data is accessed lazily in input order; ``t_start`` is the first epoch's from the first input.</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">imagings</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">BaseImaging</span><span class="p">]</span> <span class="o">|</span> <span class="n">BaseImaging</span><span class="p">):</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">imagings</span><span class="p">,</span> <span class="n">BaseImaging</span><span class="p">):</span>
+            <span class="n">imagings</span> <span class="o">=</span> <span class="p">[</span><span class="n">imagings</span><span class="p">]</span>
+        <span class="k">elif</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">imagings</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"imagings must be a BaseImaging or a list of BaseImaging objects"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">imagings</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"concatenate_epochs requires at least one imaging object"</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">input_index</span><span class="p">,</span> <span class="n">imaging</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">imagings</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">imaging</span><span class="p">,</span> <span class="n">BaseImaging</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Input </span><span class="si">{</span><span class="n">input_index</span><span class="si">}</span><span class="s2"> is not a BaseImaging (got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">imaging</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
+
+        <span class="n">imagings</span> <span class="o">=</span> <span class="n">imagings</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>  <span class="c1"># shallow copy, in case modified after call</span>
+        <span class="n">reference</span> <span class="o">=</span> <span class="n">imagings</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">input_index</span><span class="p">,</span> <span class="n">imaging</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">imagings</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">start</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">imaging</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">reference</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Input </span><span class="si">{</span><span class="n">input_index</span><span class="si">}</span><span class="s2"> shape </span><span class="si">{</span><span class="n">imaging</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> disagrees with input 0 (</span><span class="si">{</span><span class="n">reference</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">)"</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="n">imaging</span><span class="o">.</span><span class="n">sampling_frequency</span> <span class="o">!=</span> <span class="n">reference</span><span class="o">.</span><span class="n">sampling_frequency</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Input </span><span class="si">{</span><span class="n">input_index</span><span class="si">}</span><span class="s2"> sampling frequency </span><span class="si">{</span><span class="n">imaging</span><span class="o">.</span><span class="n">sampling_frequency</span><span class="si">}</span><span class="s2"> disagrees with input 0 "</span>
+                    <span class="sa">f</span><span class="s2">"(</span><span class="si">{</span><span class="n">reference</span><span class="o">.</span><span class="n">sampling_frequency</span><span class="si">}</span><span class="s2">)"</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">imaging</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">())</span> <span class="o">!=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">reference</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">()):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Input </span><span class="si">{</span><span class="n">input_index</span><span class="si">}</span><span class="s2"> dtype </span><span class="si">{</span><span class="n">imaging</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">()</span><span class="si">}</span><span class="s2"> disagrees with input 0 (</span><span class="si">{</span><span class="n">reference</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">()</span><span class="si">}</span><span class="s2">)"</span>
+                <span class="p">)</span>
+        <span class="n">shape</span> <span class="o">=</span> <span class="n">reference</span><span class="o">.</span><span class="n">shape</span>
+        <span class="n">dtype</span> <span class="o">=</span> <span class="n">reference</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">()</span>
+
+        <span class="n">BaseImaging</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">sampling_frequency</span><span class="o">=</span><span class="n">reference</span><span class="o">.</span><span class="n">sampling_frequency</span><span class="p">,</span>
+            <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">,</span>
+            <span class="n">plane_ids</span><span class="o">=</span><span class="n">reference</span><span class="o">.</span><span class="n">plane_ids</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+        <span class="p">)</span>
+        <span class="n">reference</span><span class="o">.</span><span class="n">copy_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="n">parent_epochs</span> <span class="o">=</span> <span class="p">[</span><span class="n">epoch</span> <span class="k">for</span> <span class="n">imaging</span> <span class="ow">in</span> <span class="n">imagings</span> <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="n">imaging</span><span class="o">.</span><span class="n">epochs</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">add_epoch</span><span class="p">(</span><span class="n">_ConcatenatedEpoch</span><span class="p">(</span><span class="n">parent_epochs</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="n">shape</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"imagings"</span><span class="p">:</span> <span class="n">imagings</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="concatenate_epochs">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.imaging_ops.html#photon_mosaic.core.imaging_ops.concatenate_epochs">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">concatenate_epochs</span><span class="p">(</span><span class="n">imagings</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">BaseImaging</span><span class="p">]</span> <span class="o">|</span> <span class="n">BaseImaging</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ConcatenateImaging</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return a single-epoch proxy joining all input epochs in order."""</span>
+    <span class="k">return</span> <span class="n">ConcatenateImaging</span><span class="p">(</span><span class="n">imagings</span><span class="o">=</span><span class="n">imagings</span><span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="AppendImaging">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.imaging_ops.html#photon_mosaic.core.imaging_ops.AppendImaging">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">AppendImaging</span><span class="p">(</span><span class="n">BaseImaging</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Imaging proxy whose epochs are those of each input, in list order.</span>
+
+<span class="sd">    Inputs must share shape, sampling frequency and dtype. Nothing is copied.</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">imagings</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">BaseImaging</span><span class="p">]):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">imagings</span><span class="p">,</span> <span class="nb">list</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">"imagings must be a list of BaseImaging objects"</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">imagings</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"append_imaging requires at least two imaging objects"</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">input_index</span><span class="p">,</span> <span class="n">imaging</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">imagings</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">imaging</span><span class="p">,</span> <span class="n">BaseImaging</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Input </span><span class="si">{</span><span class="n">input_index</span><span class="si">}</span><span class="s2"> is not a BaseImaging (got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">imaging</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
+
+        <span class="n">imagings</span> <span class="o">=</span> <span class="n">imagings</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>  <span class="c1"># shallow copy, in case modified after call</span>
+        <span class="n">reference</span> <span class="o">=</span> <span class="n">imagings</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">input_index</span><span class="p">,</span> <span class="n">imaging</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">imagings</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">start</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">imaging</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span> <span class="o">!=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">reference</span><span class="o">.</span><span class="n">shape</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Input </span><span class="si">{</span><span class="n">input_index</span><span class="si">}</span><span class="s2"> shape </span><span class="si">{</span><span class="n">imaging</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> disagrees with input 0 (</span><span class="si">{</span><span class="n">reference</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">)"</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="n">imaging</span><span class="o">.</span><span class="n">sampling_frequency</span> <span class="o">!=</span> <span class="n">reference</span><span class="o">.</span><span class="n">sampling_frequency</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Input </span><span class="si">{</span><span class="n">input_index</span><span class="si">}</span><span class="s2"> sampling frequency </span><span class="si">{</span><span class="n">imaging</span><span class="o">.</span><span class="n">sampling_frequency</span><span class="si">}</span><span class="s2"> disagrees with input 0 "</span>
+                    <span class="sa">f</span><span class="s2">"(</span><span class="si">{</span><span class="n">reference</span><span class="o">.</span><span class="n">sampling_frequency</span><span class="si">}</span><span class="s2">)"</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">imaging</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">())</span> <span class="o">!=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">reference</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">()):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Input </span><span class="si">{</span><span class="n">input_index</span><span class="si">}</span><span class="s2"> dtype </span><span class="si">{</span><span class="n">imaging</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">()</span><span class="si">}</span><span class="s2"> disagrees with input 0 (</span><span class="si">{</span><span class="n">reference</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">()</span><span class="si">}</span><span class="s2">)"</span>
+                <span class="p">)</span>
+
+        <span class="n">BaseImaging</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">sampling_frequency</span><span class="o">=</span><span class="n">reference</span><span class="o">.</span><span class="n">sampling_frequency</span><span class="p">,</span>
+            <span class="n">shape</span><span class="o">=</span><span class="n">reference</span><span class="o">.</span><span class="n">shape</span><span class="p">,</span>
+            <span class="n">dtype</span><span class="o">=</span><span class="n">reference</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">(),</span>
+            <span class="n">plane_ids</span><span class="o">=</span><span class="n">reference</span><span class="o">.</span><span class="n">plane_ids</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+        <span class="p">)</span>
+        <span class="n">reference</span><span class="o">.</span><span class="n">copy_metadata</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">imaging</span> <span class="ow">in</span> <span class="n">imagings</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">epoch</span> <span class="ow">in</span> <span class="n">imaging</span><span class="o">.</span><span class="n">epochs</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">add_epoch</span><span class="p">(</span><span class="n">epoch</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"imagings"</span><span class="p">:</span> <span class="n">imagings</span><span class="p">}</span></div>
+
+
+
+<div class="viewcode-block" id="append_imaging">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.imaging_ops.html#photon_mosaic.core.imaging_ops.append_imaging">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">append_imaging</span><span class="p">(</span><span class="n">imagings</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">BaseImaging</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">AppendImaging</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Return a proxy with the epochs of each imaging object in list order."""</span>
+    <span class="k">return</span> <span class="n">AppendImaging</span><span class="p">(</span><span class="n">imagings</span><span class="o">=</span><span class="n">imagings</span><span class="p">)</span></div>
+
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">_StackedPlanesEpoch</span><span class="p">(</span><span class="n">BaseImagingEpoch</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Lazy epoch whose planes are gathered from several parent epochs.</span>
+
+<span class="sd">    Each parent epoch contributes a contiguous block of planes; on read the</span>
+<span class="sd">    blocks are joined along the plane axis into</span>
+<span class="sd">    ``(num_samples, H, W, sum_of_planes)``. Only the parents holding requested</span>
+<span class="sd">    planes are read.</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">parent_epochs</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">BaseImagingEpoch</span><span class="p">],</span>
+        <span class="n">height</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">width</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">planes_per_parent</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
+        <span class="n">dtype</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">first</span> <span class="o">=</span> <span class="n">parent_epochs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">BaseImagingEpoch</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>  <span class="c1"># type: ignore[call-arg]</span>
+            <span class="bp">self</span><span class="p">,</span>
+            <span class="n">sampling_frequency</span><span class="o">=</span><span class="n">first</span><span class="o">.</span><span class="n">_sampling_frequency</span><span class="p">,</span>
+            <span class="n">t_start</span><span class="o">=</span><span class="nb">getattr</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="s2">"t_start"</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_parent_epochs</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">parent_epochs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_height</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">height</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_width</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">width</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_planes_per_parent</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="k">for</span> <span class="n">n</span> <span class="ow">in</span> <span class="n">planes_per_parent</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_num_planes</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_planes_per_parent</span><span class="p">))</span>
+        <span class="c1"># Global index of each parent's first plane, so a requested global plane</span>
+        <span class="c1"># index resolves to (parent, local index) without reading anything.</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_parent_offsets</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">cumsum</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">_planes_per_parent</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]])</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_num_samples</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parent_epochs</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">get_num_samples</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_series</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">start_frame</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">end_frame</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">plane_indices</span><span class="p">:</span> <span class="nb">slice</span> <span class="o">|</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+        <span class="n">requested</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_resolve_plane_indices</span><span class="p">(</span><span class="n">plane_indices</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">requested</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">((</span><span class="n">end_frame</span> <span class="o">-</span> <span class="n">start_frame</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_height</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_width</span><span class="p">,</span> <span class="mi">0</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_dtype</span><span class="p">)</span>
+
+        <span class="c1"># Group the requested planes by the parent holding them, so each parent</span>
+        <span class="c1"># is read at most once and parents holding none are not read at all.</span>
+        <span class="n">local_by_parent</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">global_index</span> <span class="ow">in</span> <span class="n">requested</span><span class="p">:</span>
+            <span class="n">parent</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">searchsorted</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_parent_offsets</span><span class="p">,</span> <span class="n">global_index</span><span class="p">,</span> <span class="n">side</span><span class="o">=</span><span class="s2">"right"</span><span class="p">)</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span>
+            <span class="n">local_by_parent</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="p">[])</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">global_index</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parent_offsets</span><span class="p">[</span><span class="n">parent</span><span class="p">])</span>
+
+        <span class="n">by_parent</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">local_by_parent</span><span class="o">.</span><span class="n">items</span><span class="p">())</span>
+        <span class="n">parts</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_parent_epochs</span><span class="p">[</span><span class="n">parent</span><span class="p">]</span><span class="o">.</span><span class="n">get_series</span><span class="p">(</span><span class="n">start_frame</span><span class="p">,</span> <span class="n">end_frame</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parent_selection</span><span class="p">(</span><span class="n">parent</span><span class="p">,</span> <span class="n">local</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">parent</span><span class="p">,</span> <span class="n">local</span> <span class="ow">in</span> <span class="n">by_parent</span>
+        <span class="p">]</span>
+        <span class="n">stacked</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">parts</span><span class="p">,</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span> <span class="k">else</span> <span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="c1"># ``stacked`` is in parent order; restore the order the caller asked for.</span>
+        <span class="n">gathered</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">_parent_offsets</span><span class="p">[</span><span class="n">parent</span><span class="p">]</span> <span class="o">+</span> <span class="n">local</span> <span class="k">for</span> <span class="n">parent</span><span class="p">,</span> <span class="n">locals_</span> <span class="ow">in</span> <span class="n">by_parent</span> <span class="k">for</span> <span class="n">local</span> <span class="ow">in</span> <span class="n">locals_</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">gathered</span> <span class="o">==</span> <span class="n">requested</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">stacked</span>
+        <span class="n">position</span> <span class="o">=</span> <span class="p">{</span><span class="n">global_index</span><span class="p">:</span> <span class="n">i</span> <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">global_index</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">gathered</span><span class="p">)}</span>
+        <span class="k">return</span> <span class="n">stacked</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">[</span><span class="n">position</span><span class="p">[</span><span class="n">global_index</span><span class="p">]</span> <span class="k">for</span> <span class="n">global_index</span> <span class="ow">in</span> <span class="n">requested</span><span class="p">]]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_parent_selection</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">parent</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">local</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">slice</span> <span class="o">|</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Pick how to ask ``parent`` for ``local``.</span>
+
+<span class="sd">        A parent asked for all of its planes in order gets a slice, so it can</span>
+<span class="sd">        hand back a view instead of an advanced-indexing copy — the whole-volume</span>
+<span class="sd">        read is the common case and should stay as cheap as it was.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="n">local</span> <span class="o">==</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_planes_per_parent</span><span class="p">[</span><span class="n">parent</span><span class="p">])):</span>
+            <span class="k">return</span> <span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">local</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_resolve_plane_indices</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">plane_indices</span><span class="p">:</span> <span class="nb">slice</span> <span class="o">|</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Normalise ``plane_indices`` to an explicit list of global plane indices.</span>
+
+<span class="sd">        Negative indices count from the last plane, as they do on the sibling</span>
+<span class="sd">        epochs that index a numpy array directly.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="n">plane_indices</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_num_planes</span><span class="p">))</span>
+        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">plane_indices</span><span class="p">,</span> <span class="nb">slice</span><span class="p">):</span>
+            <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="nb">range</span><span class="p">(</span><span class="o">*</span><span class="n">plane_indices</span><span class="o">.</span><span class="n">indices</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_num_planes</span><span class="p">)))</span>
+        <span class="n">candidates</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">atleast_1d</span><span class="p">(</span><span class="n">plane_indices</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">candidates</span><span class="o">.</span><span class="n">dtype</span> <span class="o">==</span> <span class="nb">bool</span><span class="p">:</span>
+            <span class="c1"># A boolean mask selects planes, it does not name them by index.</span>
+            <span class="n">candidates</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">flatnonzero</span><span class="p">(</span><span class="n">candidates</span><span class="p">)</span>
+        <span class="n">indices</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">raw</span> <span class="ow">in</span> <span class="n">candidates</span><span class="p">:</span>
+            <span class="n">index</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">index</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="n">index</span> <span class="o">+=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_num_planes</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">index</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_num_planes</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Plane index </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span><span class="si">}</span><span class="s2"> out of range for </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_num_planes</span><span class="si">}</span><span class="s2"> planes"</span><span class="p">)</span>
+            <span class="n">indices</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">index</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">indices</span>
+
+
+<div class="viewcode-block" id="StackPlanesImaging">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.imaging_ops.html#photon_mosaic.core.imaging_ops.StackPlanesImaging">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">StackPlanesImaging</span><span class="p">(</span><span class="n">BaseImaging</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Imaging proxy that stacks several imaging objects along the plane axis.</span>
+
+<span class="sd">    All inputs must share the same epoch structure (number of epochs and the</span>
+<span class="sd">    per-epoch frame counts), the same ``(height, width)``, sampling frequency</span>
+<span class="sd">    and dtype. The resulting object has ``sum(num_planes)`` planes and pulls</span>
+<span class="sd">    pixels lazily from the inputs — no data is copied.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    imagings : sequence of BaseImaging</span>
+<span class="sd">        Two or more imaging objects covering the same field of view at the</span>
+<span class="sd">        same timestamps, each providing one or more planes.</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">imagings</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">BaseImaging</span><span class="p">]):</span>
+        <span class="n">imagings</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">imagings</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">imagings</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"stack_planes requires at least two imaging objects"</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">im</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">imagings</span><span class="p">):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">im</span><span class="p">,</span> <span class="n">BaseImaging</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Input </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2"> is not a BaseImaging (got </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">im</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
+
+        <span class="n">ref</span> <span class="o">=</span> <span class="n">imagings</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">num_epochs</span> <span class="o">=</span> <span class="n">ref</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">()</span>
+        <span class="n">height</span><span class="p">,</span> <span class="n">width</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">ref</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">ref</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="n">fs</span> <span class="o">=</span> <span class="n">ref</span><span class="o">.</span><span class="n">sampling_frequency</span>
+        <span class="n">dtype</span> <span class="o">=</span> <span class="n">ref</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">()</span>
+        <span class="n">ref_samples</span> <span class="o">=</span> <span class="p">[</span><span class="n">ref</span><span class="o">.</span><span class="n">epochs</span><span class="p">[</span><span class="n">e</span><span class="p">]</span><span class="o">.</span><span class="n">get_num_samples</span><span class="p">()</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_epochs</span><span class="p">)]</span>
+
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">im</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">imagings</span><span class="p">[</span><span class="mi">1</span><span class="p">:],</span> <span class="n">start</span><span class="o">=</span><span class="mi">1</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">im</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">()</span> <span class="o">!=</span> <span class="n">num_epochs</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Input </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2"> has </span><span class="si">{</span><span class="n">im</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">()</span><span class="si">}</span><span class="s2"> epochs but input 0 has </span><span class="si">{</span><span class="n">num_epochs</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span>
+            <span class="k">if</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">im</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">im</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span> <span class="o">!=</span> <span class="p">(</span><span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">"Input </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2"> has frame shape (</span><span class="si">{</span><span class="n">im</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">im</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2">) "</span> <span class="sa">f</span><span class="s2">"but input 0 has (</span><span class="si">{</span><span class="n">height</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="n">width</span><span class="si">}</span><span class="s2">)"</span>
+                <span class="p">)</span>
+            <span class="k">if</span> <span class="n">im</span><span class="o">.</span><span class="n">sampling_frequency</span> <span class="o">!=</span> <span class="n">fs</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Input </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2"> sampling frequency </span><span class="si">{</span><span class="n">im</span><span class="o">.</span><span class="n">sampling_frequency</span><span class="si">}</span><span class="s2"> disagrees with input 0 (</span><span class="si">{</span><span class="n">fs</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">im</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">())</span> <span class="o">!=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">):</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Input </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2"> dtype </span><span class="si">{</span><span class="n">im</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">()</span><span class="si">}</span><span class="s2"> disagrees with input 0 (</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
+            <span class="n">samples</span> <span class="o">=</span> <span class="p">[</span><span class="n">im</span><span class="o">.</span><span class="n">epochs</span><span class="p">[</span><span class="n">e</span><span class="p">]</span><span class="o">.</span><span class="n">get_num_samples</span><span class="p">()</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_epochs</span><span class="p">)]</span>
+            <span class="k">if</span> <span class="n">samples</span> <span class="o">!=</span> <span class="n">ref_samples</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Input </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2"> per-epoch frame counts </span><span class="si">{</span><span class="n">samples</span><span class="si">}</span><span class="s2"> disagree with input 0 (</span><span class="si">{</span><span class="n">ref_samples</span><span class="si">}</span><span class="s2">)"</span><span class="p">)</span>
+
+        <span class="n">planes_per_parent</span> <span class="o">=</span> <span class="p">[</span><span class="nb">int</span><span class="p">(</span><span class="n">im</span><span class="o">.</span><span class="n">num_planes</span><span class="p">)</span> <span class="k">for</span> <span class="n">im</span> <span class="ow">in</span> <span class="n">imagings</span><span class="p">]</span>
+        <span class="n">total_planes</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">planes_per_parent</span><span class="p">)</span>
+        <span class="n">BaseImaging</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">sampling_frequency</span><span class="o">=</span><span class="n">fs</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">total_planes</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+
+        <span class="k">for</span> <span class="n">epoch_index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_epochs</span><span class="p">):</span>
+            <span class="n">parent_epochs</span> <span class="o">=</span> <span class="p">[</span><span class="n">im</span><span class="o">.</span><span class="n">epochs</span><span class="p">[</span><span class="n">epoch_index</span><span class="p">]</span> <span class="k">for</span> <span class="n">im</span> <span class="ow">in</span> <span class="n">imagings</span><span class="p">]</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">add_epoch</span><span class="p">(</span><span class="n">_StackedPlanesEpoch</span><span class="p">(</span><span class="n">parent_epochs</span><span class="p">,</span> <span class="n">height</span><span class="p">,</span> <span class="n">width</span><span class="p">,</span> <span class="n">planes_per_parent</span><span class="p">,</span> <span class="n">dtype</span><span class="p">))</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_parents</span> <span class="o">=</span> <span class="n">imagings</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_kwargs</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"imagings"</span><span class="p">:</span> <span class="n">imagings</span><span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"Stacked planes (</span><span class="si">{</span><span class="n">total_planes</span><span class="si">}</span><span class="s2"> planes from </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">imagings</span><span class="p">)</span><span class="si">}</span><span class="s2"> objects)"</span></div>
+
+
+
+<div class="viewcode-block" id="stack_planes">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.imaging_ops.html#photon_mosaic.core.imaging_ops.stack_planes">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">stack_planes</span><span class="p">(</span><span class="o">*</span><span class="n">imagings</span><span class="p">:</span> <span class="n">BaseImaging</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StackPlanesImaging</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Stack imaging objects along the plane axis into one multi-plane volume.</span>
+
+<span class="sd">    Accepts the objects either as separate arguments (``stack_planes(a, b)``)</span>
+<span class="sd">    or as a single sequence (``stack_planes([a, b])``).</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    *imagings : BaseImaging</span>
+<span class="sd">        Two or more imaging objects of the same FOV / timestamps; see</span>
+<span class="sd">        :class:`StackPlanesImaging`.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    StackPlanesImaging</span>
+<span class="sd">        A lazy multi-plane view over the inputs.</span>
+<span class="sd">    """</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">imagings</span><span class="p">)</span> <span class="o">==</span> <span class="mi">1</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">imagings</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="p">(</span><span class="nb">list</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)):</span>
+        <span class="n">items</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">BaseImaging</span><span class="p">]</span> <span class="o">=</span> <span class="n">imagings</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">items</span> <span class="o">=</span> <span class="n">imagings</span>
+    <span class="k">return</span> <span class="n">StackPlanesImaging</span><span class="p">(</span><span class="n">items</span><span class="p">)</span></div>
+
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item"><p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+    <br/>
+    </p>
+    <p class="theme-version">
+    Built with the
+    <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a>
+    0.24.0.
+    </p></div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item"><div class="things-in-a-row">
+    <a href="https://neuroinformatics.dev/">
+        <img src="../../../_static/light-logo-niu.png" alt="NIU" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-niu.png" alt="NIU" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.sainsburywellcome.org/web/">
+        <img src="../../../_static/light-logo-swc.png" alt="SWC" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-swc.png" alt="SWC" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://https://alleninstitute.org/neural-dynamics">
+        <img src="../../../_static/light-logo-aind.png" alt="AIND" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-aind.png" alt="AIND" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.sainsburywellcome.org/web/">
+        <img src="../../../_static/logo-ibl.png" alt="IBL" class="only-light img-sponsor"/>
+        <img src="../../../_static/logo-ibl.png" alt="IBL" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.ucl.ac.uk/">
+        <img src="../../../_static/light-logo-ucl.png" alt="UCL" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-ucl.png" alt="UCL" class="only-dark img-sponsor"/>
+    </a>
+</div></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

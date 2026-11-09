@@ -1,0 +1,18 @@
+﻿photon\_mosaic.core.zarrrois
+============================
+
+.. automodule:: photon_mosaic.core.zarrrois
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      add_rois_to_zarr_group
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      ZarrRois
+   

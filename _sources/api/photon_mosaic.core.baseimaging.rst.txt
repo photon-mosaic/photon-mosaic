@@ -1,0 +1,13 @@
+﻿photon\_mosaic.core.baseimaging
+===============================
+
+.. automodule:: photon_mosaic.core.baseimaging
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      BaseImaging
+      BaseImagingEpoch
+   

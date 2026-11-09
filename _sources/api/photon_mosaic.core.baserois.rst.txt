@@ -1,0 +1,12 @@
+﻿photon\_mosaic.core.baserois
+============================
+
+.. automodule:: photon_mosaic.core.baserois
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      BaseRois
+   

@@ -1,0 +1,10 @@
+Preprocessing
+=============
+
+.. autosummary::
+   :toctree: .
+   :nosignatures:
+
+   photon_mosaic.preprocessing.basepreprocessor
+   photon_mosaic.preprocessing.registration
+   photon_mosaic.preprocessing.suite2p_registration

@@ -1,0 +1,20 @@
+﻿photon\_mosaic.segmentation.basesegmentation
+============================================
+
+.. automodule:: photon_mosaic.segmentation.basesegmentation
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      get_available_segmentation_methods
+      get_segmentation_class
+      register_segmentation_class
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      BaseSegmentation
+   

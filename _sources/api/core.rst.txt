@@ -1,0 +1,25 @@
+Core
+====
+
+.. autosummary::
+   :toctree: .
+   :nosignatures:
+
+   photon_mosaic.core.baseimaging
+   photon_mosaic.core.baserois
+   photon_mosaic.core.binaryimaging
+   photon_mosaic.core.binaryrois
+   photon_mosaic.core.core_tools
+   photon_mosaic.core.generators
+   photon_mosaic.core.imaging_ops
+   photon_mosaic.core.imaging_tools
+   photon_mosaic.core.loading
+   photon_mosaic.core.motion
+   photon_mosaic.core.numpyimaging
+   photon_mosaic.core.roianalyzer
+   photon_mosaic.core.roianalyzer_core_extensions
+   photon_mosaic.core.selectplanes
+   photon_mosaic.core.selectrois
+   photon_mosaic.core.testingtools
+   photon_mosaic.core.zarrimaging
+   photon_mosaic.core.zarrrois

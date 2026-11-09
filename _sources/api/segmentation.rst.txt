@@ -1,0 +1,10 @@
+Segmentation
+============
+
+.. autosummary::
+   :toctree: .
+   :nosignatures:
+
+   photon_mosaic.segmentation.basesegmentation
+   photon_mosaic.segmentation.run_segmentation
+   photon_mosaic.segmentation.suite2p_segmentation

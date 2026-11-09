@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>photon_mosaic.core.baseimaging &#8212; photon-mosaic</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../_static/styles/theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx_autodoc_typehints.css?v=057ac668" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery.css?v=c83e6b79" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css?v=b4aaff1f" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=75c7c72ae941e8b558d8"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8" />
+
+    <script src="../../../_static/documentation_options.js?v=d45e8c67"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/sg-tags.js?v=d80f6fa4"></script>
+    <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/photon_mosaic/core/baseimaging';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="canonical" href="https://api.photon-mosaic.org/_modules/photon_mosaic/core/baseimaging.html" />
+    <link rel="icon" href="../../../_static/logo.png"/>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="../../../_static/searchtools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <script src="../../../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation" aria-expanded="false" aria-controls="pst-primary-sidebar-modal">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../../_static/logo.png" class="logo__image only-light" alt=""/>
+    <img src="../../../_static/logo.png" class="logo__image only-dark pst-js-only" alt=""/>
+  
+  
+    <p class="title logo__title">photon-mosaic v0.0.1</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user-guide.html">
+    Usage
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../developer-intro.html">
+    For Developers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../contributing.html">
+    Contributing
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../api_index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/photon-mosaic/photon-mosaic" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://neuroinformatics.zulipchat.com/#narrow/channel/500681-photon-mosaic" title="Zulip (chat)" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-solid fa-comments fa-lg" aria-hidden="true"></i><span class="visually-hidden">Zulip (chat)</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal" tabindex="-1"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user-guide.html">
+    Usage
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../developer-intro.html">
+    For Developers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../contributing.html">
+    Contributing
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../api_index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/photon-mosaic/photon-mosaic" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://neuroinformatics.zulipchat.com/#narrow/channel/500681-photon-mosaic" title="Zulip (chat)" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-solid fa-comments fa-lg" aria-hidden="true"></i><span class="visually-hidden">Zulip (chat)</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-house"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">photon_mosaic.core.baseimaging</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for photon_mosaic.core.baseimaging</h1><div class="highlight"><pre>
+<span></span><span class="kn">from</span><span class="w"> </span><span class="nn">math</span><span class="w"> </span><span class="kn">import</span> <span class="n">prod</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">numpy.typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">ArrayLike</span><span class="p">,</span> <span class="n">DTypeLike</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">spikeinterface.core.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseExtractor</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">spikeinterface.core.core_tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">convert_bytes_to_str</span><span class="p">,</span> <span class="n">convert_seconds_to_str</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">spikeinterface.core.job_tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">split_job_kwargs</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">spikeinterface.core.time_series</span><span class="w"> </span><span class="kn">import</span> <span class="n">TimeSeries</span><span class="p">,</span> <span class="n">TimeSeriesSegment</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">spikeinterface.core.time_series_tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_chunks</span>
+
+
+<div class="viewcode-block" id="BaseImaging">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">BaseImaging</span><span class="p">(</span><span class="n">BaseExtractor</span><span class="p">,</span> <span class="n">TimeSeries</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Base class for imaging extractors.</span>
+
+<span class="sd">    The class inherits from `BaseExtractor` and `TimeSeries` to provide common functionality</span>
+<span class="sd">    for imaging data handling.</span>
+
+<span class="sd">    Each `BaseImaging` instance is associated to a single "channel".</span>
+<span class="sd">    The `_main_ids` attribute is used here for multi-plane imaging objects.</span>
+<span class="sd">    """</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">sampling_frequency</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+        <span class="n">shape</span><span class="p">:</span> <span class="nb">tuple</span> <span class="o">|</span> <span class="nb">list</span> <span class="o">|</span> <span class="n">ArrayLike</span><span class="p">,</span>
+        <span class="n">dtype</span><span class="p">:</span> <span class="n">DTypeLike</span><span class="p">,</span>
+        <span class="n">plane_ids</span><span class="p">:</span> <span class="n">ArrayLike</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="c1"># Should we allow users to provide 2D shape (H, W) for single plane imaging?</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">shape</span> <span class="o">=</span> <span class="p">(</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">],</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">==</span> <span class="mi">3</span><span class="p">,</span> <span class="s2">"Shape must be a tuple/list/array of length 3 (height, width, planes)"</span>
+        <span class="n">num_planes</span> <span class="o">=</span> <span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">plane_ids</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">plane_ids</span> <span class="o">=</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">num_planes</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">plane_ids</span><span class="p">)</span> <span class="o">==</span> <span class="n">num_planes</span><span class="p">,</span> <span class="s2">"Number of plane_ids must match the number of planes in the shape"</span>
+        <span class="n">BaseExtractor</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">plane_ids</span><span class="p">)</span>
+        <span class="n">TimeSeries</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sampling_frequency</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">sampling_frequency</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_shape</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>  <span class="c1"># Image is intended as a volume (H, W, planes)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_average_image</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">assert</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">"dtype must be specified"</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_dtype</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_repr_header</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">display_name</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Generate text representation of the BaseImaging object."""</span>
+        <span class="n">num_frames</span> <span class="o">=</span> <span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">get_num_frames</span><span class="p">(</span><span class="n">epoch_index</span><span class="o">=</span><span class="n">i</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">())]</span>
+        <span class="n">shape</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_shape</span>
+        <span class="n">dtype</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">()</span>
+        <span class="n">sf_hz</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">sampling_frequency</span>
+
+        <span class="c1"># Format sampling frequency</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">sf_hz</span><span class="o">.</span><span class="n">is_integer</span><span class="p">():</span>
+            <span class="n">sampling_frequency_repr</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">sf_hz</span><span class="si">:</span><span class="s2">f</span><span class="si">}</span><span class="s2"> Hz"</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">sampling_frequency_repr</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">sf_hz</span><span class="si">:</span><span class="s2">0.1f</span><span class="si">}</span><span class="s2"> Hz"</span>
+
+        <span class="c1"># Calculate duration</span>
+        <span class="n">durations</span> <span class="o">=</span> <span class="p">[</span><span class="n">ns</span> <span class="o">/</span> <span class="n">sf_hz</span> <span class="k">for</span> <span class="n">ns</span> <span class="ow">in</span> <span class="n">num_frames</span><span class="p">]</span>
+        <span class="n">duration_repr</span> <span class="o">=</span> <span class="p">[</span><span class="n">convert_seconds_to_str</span><span class="p">(</span><span class="n">duration</span><span class="p">)</span> <span class="k">for</span> <span class="n">duration</span> <span class="ow">in</span> <span class="n">durations</span><span class="p">]</span>
+
+        <span class="c1"># Calculate memory size using product of all dimensions in image_size</span>
+        <span class="n">memory_sizes</span> <span class="o">=</span> <span class="p">[</span><span class="n">ns</span> <span class="o">*</span> <span class="n">prod</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span> <span class="o">*</span> <span class="n">dtype</span><span class="o">.</span><span class="n">itemsize</span> <span class="k">for</span> <span class="n">ns</span> <span class="ow">in</span> <span class="n">num_frames</span><span class="p">]</span>
+        <span class="n">memory_repr</span> <span class="o">=</span> <span class="p">[</span><span class="n">convert_bytes_to_str</span><span class="p">(</span><span class="n">memory_size</span><span class="p">)</span> <span class="k">for</span> <span class="n">memory_size</span> <span class="ow">in</span> <span class="n">memory_sizes</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">()</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">num_frames</span> <span class="o">=</span> <span class="n">num_frames</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">duration_repr</span> <span class="o">=</span> <span class="n">duration_repr</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+            <span class="n">memory_repr</span> <span class="o">=</span> <span class="n">memory_repr</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+        <span class="k">if</span> <span class="n">display_name</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">!=</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> (</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">)"</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="vm">__class__</span><span class="o">.</span><span class="vm">__name__</span>
+
+        <span class="c1"># Format shape string based on whether data is volumetric or not</span>
+        <span class="n">shape_repr</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2"> rows x </span><span class="si">{</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="si">}</span><span class="s2"> columns "</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">:</span><span class="se">\n</span><span class="s2">"</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">sampling_frequency_repr</span><span class="si">}</span><span class="s2"> - "</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">()</span><span class="si">}</span><span class="s2"> epochs - "</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">shape_repr</span><span class="si">}</span><span class="s2"> - "</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">duration_repr</span><span class="si">}</span><span class="s2"> - "</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">dtype</span><span class="si">}</span><span class="s2"> dtype - "</span>
+            <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">memory_repr</span><span class="si">}</span><span class="s2">"</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__repr__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_repr_header</span><span class="p">()</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_repr_html_</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">display_name</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+        <span class="n">common_style</span> <span class="o">=</span> <span class="s2">"margin-left: 10px;"</span>
+        <span class="n">border_style</span> <span class="o">=</span> <span class="s2">"border:1px solid #ddd; padding:10px;"</span>
+
+        <span class="n">html_header</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"&lt;div style='</span><span class="si">{</span><span class="n">border_style</span><span class="si">}</span><span class="s2">'&gt;&lt;strong&gt;</span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_repr_header</span><span class="p">(</span><span class="n">display_name</span><span class="p">)</span><span class="si">}</span><span class="s2">&lt;/strong&gt;&lt;/div&gt;"</span>
+
+        <span class="n">html_epochs</span> <span class="o">=</span> <span class="s2">""</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">()</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">html_epochs</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">"&lt;details style='</span><span class="si">{</span><span class="n">common_style</span><span class="si">}</span><span class="s2">'&gt;  &lt;summary&gt;&lt;strong&gt;Epochs&lt;/strong&gt;&lt;/summary&gt;&lt;ol&gt;"</span>
+            <span class="k">for</span> <span class="n">epoch_index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">()):</span>
+                <span class="n">samples</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_num_samples</span><span class="p">(</span><span class="n">epoch_index</span><span class="p">)</span>
+                <span class="n">duration</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_duration</span><span class="p">(</span><span class="n">epoch_index</span><span class="p">)</span>
+                <span class="n">memory_size</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_memory_size</span><span class="p">(</span><span class="n">epoch_index</span><span class="p">)</span>
+                <span class="n">samples_str</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"</span><span class="si">{</span><span class="n">samples</span><span class="si">:</span><span class="s2">,</span><span class="si">}</span><span class="s2">"</span>
+                <span class="n">duration_str</span> <span class="o">=</span> <span class="n">convert_seconds_to_str</span><span class="p">(</span><span class="n">duration</span><span class="p">)</span>
+                <span class="n">memory_size_str</span> <span class="o">=</span> <span class="n">convert_bytes_to_str</span><span class="p">(</span><span class="n">memory_size</span><span class="p">)</span>
+                <span class="n">html_epochs</span> <span class="o">+=</span> <span class="sa">f</span><span class="s2">"&lt;li&gt; Samples: </span><span class="si">{</span><span class="n">samples_str</span><span class="si">}</span><span class="s2">, Duration: </span><span class="si">{</span><span class="n">duration_str</span><span class="si">}</span><span class="s2">, Memory: </span><span class="si">{</span><span class="n">memory_size_str</span><span class="si">}</span><span class="s2">&lt;/li&gt;"</span>
+
+            <span class="n">html_epochs</span> <span class="o">+=</span> <span class="s2">"&lt;/ol&gt;&lt;/details&gt;"</span>
+
+        <span class="n">html_extra</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_common_repr_html</span><span class="p">(</span><span class="n">common_style</span><span class="p">)</span>
+        <span class="c1"># remove properties from html_extra</span>
+        <span class="k">if</span> <span class="s2">"&lt;summary&gt;&lt;strong&gt;Properties&lt;/strong&gt;&lt;/summary&gt;"</span> <span class="ow">in</span> <span class="n">html_extra</span><span class="p">:</span>
+            <span class="c1"># Find the Properties section specifically</span>
+            <span class="n">properties_start</span> <span class="o">=</span> <span class="n">html_extra</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">"&lt;summary&gt;&lt;strong&gt;Properties&lt;/strong&gt;&lt;/summary&gt;"</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">properties_start</span> <span class="o">!=</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+                <span class="c1"># Find the start of the details tag containing Properties</span>
+                <span class="n">details_start</span> <span class="o">=</span> <span class="n">html_extra</span><span class="o">.</span><span class="n">rfind</span><span class="p">(</span><span class="s2">"&lt;details"</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="n">properties_start</span><span class="p">)</span>
+                <span class="c1"># Find the end of that details section</span>
+                <span class="n">details_end</span> <span class="o">=</span> <span class="n">html_extra</span><span class="o">.</span><span class="n">find</span><span class="p">(</span><span class="s2">"&lt;/details&gt;"</span><span class="p">,</span> <span class="n">properties_start</span><span class="p">)</span> <span class="o">+</span> <span class="nb">len</span><span class="p">(</span><span class="s2">"&lt;/details&gt;"</span><span class="p">)</span>
+                <span class="n">html_extra</span> <span class="o">=</span> <span class="n">html_extra</span><span class="p">[:</span><span class="n">details_start</span><span class="p">]</span> <span class="o">+</span> <span class="n">html_extra</span><span class="p">[</span><span class="n">details_end</span><span class="p">:]</span>
+        <span class="n">html_repr</span> <span class="o">=</span> <span class="n">html_header</span> <span class="o">+</span> <span class="n">html_epochs</span> <span class="o">+</span> <span class="n">html_extra</span>
+        <span class="k">return</span> <span class="n">html_repr</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">shape</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Get the shape of the images (height, width).</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        tuple</span>
+<span class="sd">            The shape of the images as (height, width).</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_shape</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">plane_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Get the plane IDs associated with the imaging data.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        list</span>
+<span class="sd">            A list of plane IDs.</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_main_ids</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">sampling_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Get the sampling frequency of the imaging object.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        float</span>
+<span class="sd">            The sampling frequency in Hz.</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sampling_frequency</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">num_planes</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Get the number of planes in the imaging data.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        int</span>
+<span class="sd">            The number of planes.</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plane_ids</span><span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">epochs</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Get the epochs (segments) of the imaging data.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        list</span>
+<span class="sd">            A list of epochs (segments) in the imaging data.</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">segments</span>
+
+<div class="viewcode-block" id="BaseImaging.add_epoch">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging.add_epoch">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">add_epoch</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">epoch</span><span class="p">:</span> <span class="s2">"BaseImagingEpoch"</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""Add an epoch (segment) to the imaging data.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        epoch : BaseImagingEpoch</span>
+<span class="sd">            The epoch (segment) to add to the imaging data.</span>
+<span class="sd">        """</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">add_segment</span><span class="p">(</span><span class="n">epoch</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="BaseImaging.get_sampling_frequency">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging.get_sampling_frequency">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_sampling_frequency</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sampling_frequency</span></div>
+
+
+<div class="viewcode-block" id="BaseImaging.get_sample_size_in_bytes">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging.get_sample_size_in_bytes">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_sample_size_in_bytes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_num_pixels</span><span class="p">()</span> <span class="o">*</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_dtype</span><span class="p">()</span> <span class="k">if</span> <span class="n">dtype</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">dtype</span><span class="p">)</span><span class="o">.</span><span class="n">itemsize</span></div>
+
+
+<div class="viewcode-block" id="BaseImaging.get_shape">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging.get_shape">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_shape</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">segment_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Get the shape of the imaging data as (num_samples, height, width, planes).</span>
+<span class="sd">        Used internally for SpikeInterface chunk processing.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        segment_index : int | None</span>
+<span class="sd">            The index of the imaging segment. If None and there is only one segment, it defaults to 0.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        tuple</span>
+<span class="sd">            The shape of the imaging data as (num_samples, height, width, planes).</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="n">segment_index</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">()</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">segment_index</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"segment_index must be provided for multi-segment imaging data."</span><span class="p">)</span>
+        <span class="n">num_samples</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_num_samples</span><span class="p">(</span><span class="n">segment_index</span><span class="o">=</span><span class="n">segment_index</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="p">(</span><span class="n">num_samples</span><span class="p">,</span> <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="BaseImaging.get_data">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging.get_data">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start_frame</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">end_frame</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">segment_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Internal function to return data for SpikeInterface chunk processing.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        start_frame : int</span>
+<span class="sd">            The starting frame index (inclusive).</span>
+<span class="sd">        end_frame : int</span>
+<span class="sd">            The ending frame index (exclusive).</span>
+<span class="sd">        segment_index : int | None, optional</span>
+<span class="sd">            The index of the imaging segment. If None and there is only one segment, it defaults to 0.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        np.ndarray</span>
+<span class="sd">            The requested series of frames as a NumPy array, with shape (num_samples, height, width, planes).</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_series</span><span class="p">(</span><span class="n">start_frame</span><span class="o">=</span><span class="n">start_frame</span><span class="p">,</span> <span class="n">end_frame</span><span class="o">=</span><span class="n">end_frame</span><span class="p">,</span> <span class="n">epoch_index</span><span class="o">=</span><span class="n">segment_index</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="BaseImaging.get_num_samples">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging.get_num_samples">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_num_samples</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">segment_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Get the number of samples (frames) in the imaging segment.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        segment_index : int | None</span>
+<span class="sd">            The index of the imaging segment. If None and there is only one segment, it defaults to 0.</span>
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        int</span>
+<span class="sd">            The number of samples (frames) in the segment.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="n">segment_index</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">()</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">segment_index</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"segment_index must be provided for multi-segment imaging data."</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">segments</span><span class="p">[</span><span class="n">segment_index</span><span class="p">]</span><span class="o">.</span><span class="n">get_num_samples</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="BaseImaging.get_num_frames">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging.get_num_frames">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_num_frames</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">epoch_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Get the total number of frames in the imaging data.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        int</span>
+<span class="sd">            The total number of frames.</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_num_samples</span><span class="p">(</span><span class="n">segment_index</span><span class="o">=</span><span class="n">epoch_index</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="BaseImaging.get_total_frames">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging.get_total_frames">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_total_frames</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Get the total number of frames across all segments.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        int</span>
+<span class="sd">            The total number of frames across all segments.</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_total_samples</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="BaseImaging.get_num_epochs">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging.get_num_epochs">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_num_epochs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Get the number of imaging epochs.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        int</span>
+<span class="sd">            The number of imaging epochs.</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">segments</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="BaseImaging.get_dtype">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging.get_dtype">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_dtype</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">DTypeLike</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Get the data type of the video.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        dtype: dtype</span>
+<span class="sd">            Dtype passed to the constructor.</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_dtype</span></div>
+
+
+<div class="viewcode-block" id="BaseImaging.get_num_pixels">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging.get_num_pixels">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_num_pixels</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Get the number of pixels in the image.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        int</span>
+<span class="sd">            Number of pixels in the image.</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">shape</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="BaseImaging.get_num_planes">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging.get_num_planes">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_num_planes</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Get the number of planes in the imaging data.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        int</span>
+<span class="sd">            The number of planes.</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">plane_ids</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="BaseImaging.get_series">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging.get_series">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_series</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">start_frame</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">end_frame</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">plane_ids</span><span class="p">:</span> <span class="nb">list</span> <span class="o">|</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">epoch_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Get a series of frames from the imaging data.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        start_frame : int</span>
+<span class="sd">            The starting frame index (inclusive).</span>
+<span class="sd">        end_frame : int</span>
+<span class="sd">            The ending frame index (exclusive).</span>
+<span class="sd">        plane_ids : list | np.ndarray | None</span>
+<span class="sd">            The list of plane IDs to include. If None, all planes are included.</span>
+<span class="sd">        epoch_index : int | None</span>
+<span class="sd">            The index of the imaging segment. If None and there is only one segment, it defaults to 0.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        np.ndarray</span>
+<span class="sd">            The requested series of frames as a NumPy array.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="n">epoch_index</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">()</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">epoch_index</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"epoch_index must be provided for multi-segment imaging data."</span><span class="p">)</span>
+        <span class="n">start_frame</span> <span class="o">=</span> <span class="n">start_frame</span> <span class="k">if</span> <span class="n">start_frame</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="mi">0</span>
+        <span class="n">end_frame</span> <span class="o">=</span> <span class="n">end_frame</span> <span class="k">if</span> <span class="n">end_frame</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_num_frames</span><span class="p">(</span><span class="n">epoch_index</span><span class="o">=</span><span class="n">epoch_index</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">plane_ids</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">plane_indices</span> <span class="o">=</span> <span class="nb">slice</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_num_planes</span><span class="p">())</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">plane_indices</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ids_to_indices</span><span class="p">(</span><span class="n">plane_ids</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">epochs</span><span class="p">[</span><span class="n">epoch_index</span><span class="p">]</span><span class="o">.</span><span class="n">get_series</span><span class="p">(</span><span class="n">start_frame</span><span class="p">,</span> <span class="n">end_frame</span><span class="p">,</span> <span class="n">plane_indices</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="BaseImaging.get_average_image">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging.get_average_image">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_average_image</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">num_chunks</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">20</span><span class="p">,</span>
+        <span class="n">chunk_duration</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"1s"</span><span class="p">,</span>
+        <span class="n">chunk_size</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">recompute</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Compute the average image across all frames in the imaging data.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        num_chunks : int, default: 20</span>
+<span class="sd">            The number of chunks to use for computing the average image. The data will be divided into</span>
+<span class="sd">            this many chunks, and the average will be computed across the chunks to save memory.</span>
+<span class="sd">        chunk_duration : str, default: "1s"</span>
+<span class="sd">            The duration of each chunk, specified as a string (e.g., "1s" for 1 second, "500ms" for 500 milliseconds).</span>
+<span class="sd">        chunk_size : int | None, default: None</span>
+<span class="sd">            The number of frames in each chunk. If specified, this will override the chunk_duration.</span>
+<span class="sd">        recompute : bool, default: False</span>
+<span class="sd">            If True, forces recomputation of the average image even if it has been computed before.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        np.ndarray</span>
+<span class="sd">            The average image (height, width, num_planes)computed across sampled frames in the imaging data.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_average_image</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="ow">not</span> <span class="n">recompute</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_average_image</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">data</span> <span class="o">=</span> <span class="n">get_chunks</span><span class="p">(</span>
+                <span class="bp">self</span><span class="p">,</span>
+                <span class="n">num_chunks_per_segment</span><span class="o">=</span><span class="n">num_chunks</span><span class="p">,</span>
+                <span class="n">chunk_duration</span><span class="o">=</span><span class="n">chunk_duration</span><span class="p">,</span>
+                <span class="n">chunk_size</span><span class="o">=</span><span class="n">chunk_size</span><span class="p">,</span>
+                <span class="n">concatenated</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_average_image</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_average_image</span></div>
+
+
+<div class="viewcode-block" id="BaseImaging.is_binary_compatible">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging.is_binary_compatible">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">is_binary_compatible</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Checks if the imaging object is "binary" compatible.</span>
+<span class="sd">        To be used before calling `imaging.get_binary_description()`</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        bool</span>
+<span class="sd">            True if the underlying imaging object is binary</span>
+<span class="sd">        """</span>
+        <span class="c1"># has to be changed in subclass if yes</span>
+        <span class="k">return</span> <span class="kc">False</span></div>
+
+
+<div class="viewcode-block" id="BaseImaging.get_binary_description">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging.get_binary_description">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_binary_description</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>  <span class="c1"># pragma: no cover</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        When `imaging.is_binary_compatible()` is True</span>
+<span class="sd">        this returns a dictionary describing the binary format.</span>
+<span class="sd">        """</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_binary_compatible</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span>
+        <span class="k">return</span> <span class="p">{}</span></div>
+
+
+<div class="viewcode-block" id="BaseImaging.save">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImaging.save">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">save</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">format</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"binary"</span><span class="p">,</span> <span class="n">verbose</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span> <span class="o">**</span><span class="n">save_kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Save a `BaseImaging` object to a specified format:</span>
+
+<span class="sd">        * "binary"</span>
+<span class="sd">        * "zarr"</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        format : str, default: "binary"</span>
+<span class="sd">            The format to save the imaging in. Options are:</span>
+
+<span class="sd">            - "binary": Saves the imaging in binary format.</span>
+<span class="sd">            - "zarr": Saves the imaging in Zarr format.</span>
+<span class="sd">        verbose : bool, default: False</span>
+<span class="sd">            If True, prints additional information during the save process.</span>
+<span class="sd">        **save_kwargs : dict</span>
+<span class="sd">            Additional keyword arguments specific to the chosen format.</span>
+<span class="sd">            All formats support job_kwargs for parallel processing</span>
+<span class="sd">            (see `si.get_global_job_kwargs()` for default values).</span>
+
+<span class="sd">            * "binary" format:</span>
+<span class="sd">                - folder : str or Path</span>
+<span class="sd">                    The folder where the binary files will be saved.</span>
+<span class="sd">                - overwrite : bool, default: False</span>
+<span class="sd">                    If True, existing files in the folder will be overwritten.</span>
+<span class="sd">                - dtype : str, optional</span>
+<span class="sd">                    The data type to use for saving the imaging. If not provided, the imaging's dtype</span>
+<span class="sd">                    will be used.</span>
+<span class="sd">            * "zarr" format:</span>
+<span class="sd">                - folder : str or Path</span>
+<span class="sd">                    The folder where the Zarr files will be saved.</span>
+<span class="sd">                - overwrite: bool, default: False</span>
+<span class="sd">                    If True, the folder is removed if it already exists</span>
+<span class="sd">                - storage_options: dict or None, default: None</span>
+<span class="sd">                    Storage options for zarr `store`. E.g., if "s3://" or "gcs://" they can</span>
+<span class="sd">                    provide authentication methods, etc.</span>
+<span class="sd">                    For cloud storage locations, this should not be None (in case of default values, use an empty dict)</span>
+<span class="sd">                - dtype: np.dtype or None, default: None</span>
+<span class="sd">                    The dtype to use for the video datasets. If None, the imaging's dtype is used</span>
+<span class="sd">                - compressor: numcodecs.Codec or None, default: None</span>
+<span class="sd">                    Global compressor. If None, Blosc-zstd, level 5, with bit shuffle is used</span>
+<span class="sd">                - filters: list[numcodecs.Codec] or None, default: None</span>
+<span class="sd">                    Global filters for zarr (global)</span>
+<span class="sd">                - compressor_by_dataset: dict or None, default: None</span>
+<span class="sd">                    Optional compressor per dataset:</span>
+
+<span class="sd">                        - videos</span>
+<span class="sd">                        - times</span>
+
+<span class="sd">                    If None, the global compressor is used</span>
+<span class="sd">                - filters_by_dataset: dict or None, default: None</span>
+<span class="sd">                    Optional filters per dataset:</span>
+
+<span class="sd">                        - videos</span>
+<span class="sd">                        - times</span>
+
+<span class="sd">                    If None, the global filters are used</span>
+<span class="sd">                - extra_chunks: dict or None, default: None</span>
+<span class="sd">                    Extra chunk specification passed to the zarr writer</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Baseimaging</span>
+<span class="sd">            The saved imaging object in the specified format.</span>
+<span class="sd">        """</span>
+        <span class="n">kwargs</span><span class="p">,</span> <span class="n">job_kwargs</span> <span class="o">=</span> <span class="n">split_job_kwargs</span><span class="p">(</span><span class="n">save_kwargs</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="nb">format</span> <span class="o">==</span> <span class="s2">"binary"</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s2">"folder"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Missing folder in imaging.save(folder='...')"</span><span class="p">)</span>
+
+            <span class="kn">from</span><span class="w"> </span><span class="nn">.binaryimaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">BinaryFolderImaging</span>
+
+            <span class="n">folder</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"folder"</span><span class="p">)</span>
+            <span class="n">cached</span> <span class="o">=</span> <span class="n">BinaryFolderImaging</span><span class="o">.</span><span class="n">write_imaging</span><span class="p">(</span>
+                <span class="bp">self</span><span class="p">,</span> <span class="n">folder_path</span><span class="o">=</span><span class="n">folder</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span> <span class="o">**</span><span class="n">job_kwargs</span>
+            <span class="p">)</span>
+        <span class="k">elif</span> <span class="nb">format</span> <span class="o">==</span> <span class="s2">"zarr"</span><span class="p">:</span>
+            <span class="k">if</span> <span class="s2">"folder"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"Missing folder in imaging.save(folder='...')"</span><span class="p">)</span>
+            <span class="n">folder_path</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"folder"</span><span class="p">)</span>
+
+            <span class="kn">from</span><span class="w"> </span><span class="nn">.zarrimaging</span><span class="w"> </span><span class="kn">import</span> <span class="n">ZarrImaging</span>
+
+            <span class="n">cached</span> <span class="o">=</span> <span class="n">ZarrImaging</span><span class="o">.</span><span class="n">write_imaging</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">folder_path</span><span class="o">=</span><span class="n">folder_path</span><span class="p">,</span> <span class="n">verbose</span><span class="o">=</span><span class="n">verbose</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span> <span class="o">**</span><span class="n">job_kwargs</span><span class="p">)</span>
+
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"format </span><span class="si">{</span><span class="nb">format</span><span class="si">}</span><span class="s2"> not supported"</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">cached</span></div>
+
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_extra_metadata_to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dump_dict</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_extra_metadata_to_dict</span><span class="p">(</span><span class="n">dump_dict</span><span class="p">)</span>
+
+        <span class="c1"># Add times_kwargs if the recording has been modified in memory (e.g. by set_times / shift_times / reset_times)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_time_info_modified</span><span class="p">:</span>
+            <span class="n">dump_dict</span><span class="p">[</span><span class="s2">"times_kwargs"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">segment_index</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_num_segments</span><span class="p">()):</span>
+                <span class="n">times_kwargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">segments</span><span class="p">[</span><span class="n">segment_index</span><span class="p">]</span><span class="o">.</span><span class="n">get_times_kwargs</span><span class="p">()</span>
+                <span class="n">dump_dict</span><span class="p">[</span><span class="s2">"times_kwargs"</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">times_kwargs</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_extra_metadata_from_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">dump_dict</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_extra_metadata_from_dict</span><span class="p">(</span><span class="n">dump_dict</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="s2">"times_kwargs"</span> <span class="ow">in</span> <span class="n">dump_dict</span><span class="p">:</span>
+            <span class="c1"># When serializing, dump timestamps information because this could have been</span>
+            <span class="c1"># set in memory</span>
+            <span class="n">times_kwargs_list</span> <span class="o">=</span> <span class="n">dump_dict</span><span class="p">[</span><span class="s2">"times_kwargs"</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">segment_index</span><span class="p">,</span> <span class="n">times_kwargs</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">times_kwargs_list</span><span class="p">):</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">segments</span><span class="p">[</span><span class="n">segment_index</span><span class="p">]</span><span class="o">.</span><span class="n">_sampling_frequency</span> <span class="o">=</span> <span class="n">times_kwargs</span><span class="p">[</span><span class="s2">"sampling_frequency"</span><span class="p">]</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">segments</span><span class="p">[</span><span class="n">segment_index</span><span class="p">]</span><span class="o">.</span><span class="n">_t_start</span> <span class="o">=</span> <span class="n">times_kwargs</span><span class="p">[</span><span class="s2">"t_start"</span><span class="p">]</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">segments</span><span class="p">[</span><span class="n">segment_index</span><span class="p">]</span><span class="o">.</span><span class="n">_time_vector</span> <span class="o">=</span> <span class="n">times_kwargs</span><span class="p">[</span><span class="s2">"time_vector"</span><span class="p">]</span></div>
+
+
+
+<div class="viewcode-block" id="BaseImagingEpoch">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImagingEpoch">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">BaseImagingEpoch</span><span class="p">(</span><span class="n">TimeSeriesSegment</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""</span>
+<span class="sd">    Abstract class representing a video epoch.</span>
+<span class="sd">    """</span>
+
+<div class="viewcode-block" id="BaseImagingEpoch.get_series">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImagingEpoch.get_series">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_series</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">start_frame</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">end_frame</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">plane_indices</span><span class="p">:</span> <span class="nb">slice</span> <span class="o">|</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>  <span class="c1"># pragma: no cover</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        Return the raw series, optionally for a subset of samples</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        start_frame : int | None, default: None</span>
+<span class="sd">            start sample index, or zero if None</span>
+<span class="sd">        end_frame : int | None, default: None</span>
+<span class="sd">            end_sample, or number of samples if None</span>
+<span class="sd">        plane_indices : slice | list[int] | None, default: None</span>
+<span class="sd">            List of plane indices to include, or all planes if None</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        series : np.ndarray</span>
+<span class="sd">            Array of series, num_samples x height x width</span>
+<span class="sd">        """</span>
+        <span class="c1"># must be implemented in subclass</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span></div>
+
+
+<div class="viewcode-block" id="BaseImagingEpoch.get_data">
+<a class="viewcode-back" href="../../../api/photon_mosaic.core.baseimaging.html#photon_mosaic.core.baseimaging.BaseImagingEpoch.get_data">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_data</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start_frame</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">end_frame</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">indices</span><span class="p">:</span> <span class="nb">list</span> <span class="o">|</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""</span>
+<span class="sd">        General retrieval function for time series objects</span>
+<span class="sd">        """</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">get_series</span><span class="p">(</span><span class="n">start_frame</span><span class="o">=</span><span class="n">start_frame</span><span class="p">,</span> <span class="n">end_frame</span><span class="o">=</span><span class="n">end_frame</span><span class="p">,</span> <span class="n">plane_indices</span><span class="o">=</span><span class="n">indices</span><span class="p">)</span></div>
+</div>
+
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item"><p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+    <br/>
+    </p>
+    <p class="theme-version">
+    Built with the
+    <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a>
+    0.24.0.
+    </p></div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item"><div class="things-in-a-row">
+    <a href="https://neuroinformatics.dev/">
+        <img src="../../../_static/light-logo-niu.png" alt="NIU" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-niu.png" alt="NIU" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.sainsburywellcome.org/web/">
+        <img src="../../../_static/light-logo-swc.png" alt="SWC" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-swc.png" alt="SWC" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://https://alleninstitute.org/neural-dynamics">
+        <img src="../../../_static/light-logo-aind.png" alt="AIND" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-aind.png" alt="AIND" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.sainsburywellcome.org/web/">
+        <img src="../../../_static/logo-ibl.png" alt="IBL" class="only-light img-sponsor"/>
+        <img src="../../../_static/logo-ibl.png" alt="IBL" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.ucl.ac.uk/">
+        <img src="../../../_static/light-logo-ucl.png" alt="UCL" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-ucl.png" alt="UCL" class="only-dark img-sponsor"/>
+    </a>
+</div></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

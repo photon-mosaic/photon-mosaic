@@ -1,0 +1,9 @@
+Extractors
+==========
+
+.. autosummary::
+   :toctree: .
+   :nosignatures:
+
+   photon_mosaic.extractors.roiextractors
+   photon_mosaic.extractors.suite2prois

@@ -1,0 +1,21 @@
+﻿photon\_mosaic.core.generators
+==============================
+
+.. automodule:: photon_mosaic.core.generators
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      generate_fluorescence
+      generate_imaging_with_rois
+      generate_random_imaging
+      generate_rois
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      FluorescenceData
+   

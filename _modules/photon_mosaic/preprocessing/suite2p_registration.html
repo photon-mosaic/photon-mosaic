@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+
+
+<html lang="en" data-content_root="../../../" >
+
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>photon_mosaic.preprocessing.suite2p_registration &#8212; photon-mosaic</title>
+  
+  
+  
+  <script data-cfasync="false">
+    document.documentElement.dataset.mode = localStorage.getItem("mode") || "";
+    document.documentElement.dataset.theme = localStorage.getItem("theme") || "";
+  </script>
+  <!--
+    this give us a css class that will be invisible only if js is disabled
+  -->
+  <noscript>
+    <style>
+      .pst-js-only { display: none !important; }
+
+    </style>
+  </noscript>
+  
+  <!-- Loaded before other Sphinx assets -->
+  <link href="../../../_static/styles/theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+<link href="../../../_static/styles/pydata-sphinx-theme.css?digest=75c7c72ae941e8b558d8" rel="stylesheet" />
+
+    <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=8f2a1f02" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx_autodoc_typehints.css?v=057ac668" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery.css?v=c83e6b79" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-binder.css?v=f4aeca0c" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-dataframe.css?v=2082cf3c" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sg_gallery-rendered-html.css?v=1277b6f3" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/sphinx-design.min.css?v=95c83b7e" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/css/custom.css?v=b4aaff1f" />
+  
+  <!-- So that users can add custom icons -->
+  <script defer src="../../../_static/scripts/fontawesome.js?digest=75c7c72ae941e8b558d8"></script>
+  <!-- Pre-loaded scripts that we'll load fully later -->
+  <link rel="preload" as="script" href="../../../_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8" />
+<link rel="preload" as="script" href="../../../_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8" />
+
+    <script src="../../../_static/documentation_options.js?v=d45e8c67"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/sg-tags.js?v=d80f6fa4"></script>
+    <script src="../../../_static/design-tabs.js?v=f930bc37"></script>
+    <script>DOCUMENTATION_OPTIONS.pagename = '_modules/photon_mosaic/preprocessing/suite2p_registration';</script>
+    <script>DOCUMENTATION_OPTIONS.search_as_you_type = false;</script>
+    <link rel="canonical" href="https://api.photon-mosaic.org/_modules/photon_mosaic/preprocessing/suite2p_registration.html" />
+    <link rel="icon" href="../../../_static/logo.png"/>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="docsearch:language" content="en"/>
+  <meta name="docsearch:version" content="" />
+  
+    
+    <script src="../../../_static/searchtools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <script src="../../../searchindex.js"></script>
+  
+  </head>
+  <body data-default-mode="">
+  
+  
+  <div id="pst-skip-link" class="skip-link d-print-none"><a href="#main-content">Skip to main content</a></div>
+
+  
+  <div id="pst-scroll-pixel-helper"></div>
+  
+  <button type="button" class="btn rounded-pill" id="pst-back-to-top">
+    <i class="fa-solid fa-arrow-up"></i>Back to top</button>
+  
+  
+  
+  
+  <dialog id="pst-search-dialog">
+    
+<form class="bd-search d-flex align-items-center"
+      action="../../../search.html"
+      method="get">
+  <i class="fa-solid fa-magnifying-glass"></i>
+  <input type="search"
+         class="form-control"
+         name="q"
+         placeholder="Search the docs ..."
+         aria-label="Search the docs ..."
+         autocomplete="off"
+         autocorrect="off"
+         autocapitalize="off"
+         spellcheck="false"/>
+  <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd>K</kbd></span>
+</form>
+  </dialog>
+
+  <div class="pst-async-banner-revealer d-none">
+  <aside id="bd-header-version-warning" class="d-none d-print-none" aria-label="Version warning"></aside>
+</div>
+
+  
+    <header id="pst-header" class="bd-header navbar navbar-expand-lg bd-navbar d-print-none">
+<div class="bd-header__inner bd-page-width">
+  <button type="button" class="pst-navbar-icon sidebar-toggle primary-toggle" aria-label="Site navigation" aria-expanded="false" aria-controls="pst-primary-sidebar-modal">
+    <span class="fa-solid fa-bars"></span>
+  </button>
+  
+  
+  <div class="col-lg-3 navbar-header-items__start">
+    
+      <div class="navbar-item">
+
+  
+    
+  
+
+<a class="navbar-brand logo" href="../../../index.html">
+  
+  
+  
+  
+  
+    
+    
+      
+    
+    
+    <img src="../../../_static/logo.png" class="logo__image only-light" alt=""/>
+    <img src="../../../_static/logo.png" class="logo__image only-dark pst-js-only" alt=""/>
+  
+  
+    <p class="title logo__title">photon-mosaic v0.0.1</p>
+  
+</a></div>
+    
+  </div>
+  
+  <div class="col-lg-9 navbar-header-items">
+    
+    <div class="me-auto navbar-header-items__center">
+      
+        <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user-guide.html">
+    Usage
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../developer-intro.html">
+    For Developers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../contributing.html">
+    Contributing
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../api_index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+      
+    </div>
+    
+    
+    <div class="navbar-header-items__end">
+      
+        <div class="navbar-item navbar-persistent--container">
+          
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+        </div>
+      
+      
+        <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+      
+        <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/photon-mosaic/photon-mosaic" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://neuroinformatics.zulipchat.com/#narrow/channel/500681-photon-mosaic" title="Zulip (chat)" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-solid fa-comments fa-lg" aria-hidden="true"></i><span class="visually-hidden">Zulip (chat)</span></a>
+        </li>
+</ul></div>
+      
+    </div>
+    
+  </div>
+  
+  
+    <div class="navbar-persistent--mobile">
+
+<button type="button" class="btn search-button-field search-button__button pst-js-only" title="Search" aria-label="Search" data-bs-placement="bottom" data-bs-toggle="tooltip">
+ <i class="fa-solid fa-magnifying-glass"></i>
+ <span class="search-button__default-text">Search</span>
+ <span class="search-button__kbd-shortcut"><kbd class="kbd-shortcut__modifier">Ctrl</kbd>+<kbd class="kbd-shortcut__modifier">K</kbd></span>
+</button>
+    </div>
+  
+
+  
+</div>
+
+    </header>
+  
+
+  <div class="bd-container">
+    <div class="bd-container__inner bd-page-width">
+      
+      
+      
+        
+      
+      <dialog id="pst-primary-sidebar-modal" tabindex="-1"></dialog>
+      <div id="pst-primary-sidebar" class="bd-sidebar-primary bd-sidebar hide-on-wide">
+        
+
+  
+  <div class="sidebar-header-items sidebar-primary__section">
+    
+    
+      <div class="sidebar-header-items__center">
+        
+          
+          
+            <div class="navbar-item">
+<nav>
+  <ul class="bd-navbar-elements navbar-nav">
+    
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../user-guide.html">
+    Usage
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../examples/index.html">
+    Examples
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../developer-intro.html">
+    For Developers
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../contributing.html">
+    Contributing
+  </a>
+</li>
+
+
+<li class="nav-item ">
+  <a class="nav-link nav-internal" href="../../../api_index.html">
+    API Reference
+  </a>
+</li>
+
+  </ul>
+</nav></div>
+          
+        
+      </div>
+    
+    
+    
+      <div class="sidebar-header-items__end">
+        
+          <div class="navbar-item">
+
+<div class="theme-switch-container dropdown pst-js-only" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Color mode">
+  <button type="button" class="btn btn-sm nav-link pst-navbar-icon theme-switch-button dropdown-toggle" aria-label="Color mode" data-bs-toggle="dropdown">
+    <i class="theme-switch fa-solid fa-sun fa-lg" data-mode="light" title="Light"></i>
+    <i class="theme-switch fa-solid fa-moon fa-lg" data-mode="dark" title="Dark"></i>
+    <i class="theme-switch fa-solid fa-circle-half-stroke fa-lg" data-mode="auto" title="System Settings"></i>
+  </button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="auto"><i class="fa-solid fa-circle-half-stroke fa-lg me-1"></i>System Settings</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="light"><i class="fa-solid fa-sun fa-lg me-1"></i>Light</button></li>
+    <li><button type="button" class="dropdown-item d-flex align-items-center theme-change-button" data-mode="dark"><i class="fa-solid fa-moon fa-lg me-1"></i>Dark</button></li>
+  </ul>
+</div></div>
+        
+          <div class="navbar-item"><ul class="navbar-icon-links"
+    aria-label="Icon Links">
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://github.com/photon-mosaic/photon-mosaic" title="GitHub" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-brands fa-github fa-lg" aria-hidden="true"></i><span class="visually-hidden">GitHub</span></a>
+        </li>
+        <li class="nav-item">
+          
+          
+          
+          
+          
+          
+          
+          
+          <a href="https://neuroinformatics.zulipchat.com/#narrow/channel/500681-photon-mosaic" title="Zulip (chat)" class="nav-link pst-navbar-icon" rel="noopener" target="_blank" data-bs-toggle="tooltip" data-bs-placement="bottom"><i class="fa-solid fa-comments fa-lg" aria-hidden="true"></i><span class="visually-hidden">Zulip (chat)</span></a>
+        </li>
+</ul></div>
+        
+      </div>
+    
+  </div>
+  
+  
+  <div class="sidebar-primary-items__end sidebar-primary__section">
+      <div class="sidebar-primary-item">
+<div id="ethical-ad-placement"
+      class="flat"
+      data-ea-publisher="readthedocs"
+      data-ea-type="readthedocs-sidebar"
+      data-ea-manual="true">
+</div></div>
+  </div>
+
+
+      </div>
+      
+      <main id="main-content" class="bd-main" role="main">
+        
+        
+          <div class="bd-content">
+            <div class="bd-article-container">
+              
+              <div class="bd-header-article d-print-none">
+<div class="header-article-items header-article__inner">
+  
+    <div class="header-article-items__start">
+      
+        <div class="header-article-item">
+
+<nav aria-label="Breadcrumb" class="d-print-none">
+  <ul class="bd-breadcrumbs">
+    
+    <li class="breadcrumb-item breadcrumb-home">
+      <a href="../../../index.html" class="nav-link" aria-label="Home">
+        <i class="fa-solid fa-house"></i>
+      </a>
+    </li>
+    
+    <li class="breadcrumb-item"><a href="../../index.html" class="nav-link">Module code</a></li>
+    
+    <li class="breadcrumb-item active" aria-current="page"><span class="ellipsis">photon_mosaic.preprocessing.suite2p_registration</span></li>
+  </ul>
+</nav>
+</div>
+      
+    </div>
+  
+  
+</div>
+</div>
+              
+              
+              
+                
+<div id="searchbox"></div>
+                <article class="bd-article">
+                  
+  <h1>Source code for photon_mosaic.preprocessing.suite2p_registration</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">logging</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">math</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Sequence</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">numpy.typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">NDArray</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">pydantic</span><span class="w"> </span><span class="kn">import</span> <span class="n">ConfigDict</span><span class="p">,</span> <span class="n">Field</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">photon_mosaic.core</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">BaseImaging</span><span class="p">,</span>
+    <span class="n">Motion</span><span class="p">,</span>
+    <span class="n">register_motion_class</span><span class="p">,</span>
+    <span class="n">register_registration_class</span><span class="p">,</span>
+    <span class="n">split_epoch_at_frames</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">photon_mosaic.core.selectplanes</span><span class="w"> </span><span class="kn">import</span> <span class="n">select_planes</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.registration</span><span class="w"> </span><span class="kn">import</span> <span class="n">RegisterImaging</span><span class="p">,</span> <span class="n">RegisterImagingEpoch</span><span class="p">,</span> <span class="n">RegistrationSettings</span>
+
+
+<div class="viewcode-block" id="Suite2pRegistrationSettings">
+<a class="viewcode-back" href="../../../api/photon_mosaic.preprocessing.suite2p_registration.html#photon_mosaic.preprocessing.suite2p_registration.Suite2pRegistrationSettings">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Suite2pRegistrationSettings</span><span class="p">(</span><span class="n">RegistrationSettings</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Settings for Suite2P motion correction.</span>
+
+<span class="sd">    Adds the Suite2P specific parameters on top of the shared</span>
+<span class="sd">    :class:`photon_mosaic.preprocessing.registration.RegistrationSettings`</span>
+<span class="sd">    (``debug``, ``tmp_dir``, ``batch_size``, ``device``).</span>
+<span class="sd">    Values can be provided via constructor, environment variables, or .env file.</span>
+<span class="sd">    """</span>
+
+    <span class="n">data_type</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="s2">"h5"</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Processing h5 (default) or TIFF timeseries"</span><span class="p">)</span>
+    <span class="n">do_registration</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"whether to register data (2 forces re-registration)"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">align_by_chan</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"when multi-channel, you can align by non-functional channel (1-based)"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">maxregshift</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"max allowed registration shift, as a fraction of "</span>
+        <span class="s2">"frame max(width and height). This will be ignored if force_refImg is set to True"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">force_refImg</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Force the use of an external reference image"</span><span class="p">)</span>
+    <span class="n">block_size</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="k">lambda</span><span class="p">:</span> <span class="p">[</span><span class="mi">128</span><span class="p">,</span> <span class="mi">128</span><span class="p">],</span> <span class="n">description</span><span class="o">=</span><span class="s2">"Block size for non-rigid registration."</span><span class="p">)</span>
+    <span class="n">snr_thresh</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mf">1.2</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"if any nonrigid block is below this threshold, it gets smoothed "</span>
+        <span class="s2">"until above this threshold. 1.0 results in no smoothing"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">outlier_detrend_window</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mf">3.0</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"For outlier rejection in the xoff/yoff outputs of suite2p, the offsets are first de-trended "</span>
+        <span class="s2">"with a median filter of this duration [seconds]. "</span>
+        <span class="s2">"This value is ~30 or 90 samples in size for 11 and 31 Hz sampling rates respectively."</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">outlier_maxregshift</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mf">0.05</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Units [fraction FOV dim]. After median-filter detrending, outliers more than this value are "</span>
+        <span class="s2">"clipped to this value in x and y offset, independently. "</span>
+        <span class="s2">"This is similar to Suite2P's internal maxregshift, but allows for low-frequency drift. "</span>
+        <span class="s2">"Default value of 0.05 is typically clipping outliers to "</span>
+        <span class="s2">"512 * 0.05 = 25 pixels above or below the median trend."</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">clip_negative</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Whether or not to clip negative pixel values in output. Because the pixel values "</span>
+        <span class="s2">"in the raw movies are set by the current coming off a photomultiplier tube, there can "</span>
+        <span class="s2">"be pixels with negative values (current has a sign), possibly due to noise in the rig. "</span>
+        <span class="s2">"Some segmentation algorithms cannot handle negative values in the movie, so we have this "</span>
+        <span class="s2">"option to artificially set those pixels to zero."</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">max_reference_iterations</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">8</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Maximum number of iterations for creating a reference image"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">auto_remove_empty_frames</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Automatically detect empty noise frames at the start and end of the movie. "</span>
+        <span class="s2">"Overrides values set in "</span>
+        <span class="s2">"trim_frames_start and trim_frames_end. Some movies arrive with otherwise quality data but contain a set of "</span>
+        <span class="s2">"frames that are empty and contain pure noise. When processed, these frames tend to receive "</span>
+        <span class="s2">"large random shifts that throw off motion border calculation. Turning on this setting automatically "</span>
+        <span class="s2">"detects these frames before processing and removes them from reference image creation, automated smoothing "</span>
+        <span class="s2">"parameter searches, and finally the motion border calculation. The frames are still written however any "</span>
+        <span class="s2">"shift estimated is removed and their shift is set to 0 to avoid large motion borders."</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">trim_frames_start</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Number of frames to remove from the start of the movie if known. "</span>
+        <span class="s2">"Removes frames from motion border calculation "</span>
+        <span class="s2">"and resets the frame shifts found. Frames are still written to motion correction. Raises an error if "</span>
+        <span class="s2">"auto_remove_empty_frames is set and trim_frames_start &gt; 0"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">trim_frames_end</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Number of frames to remove from the end of the movie if known. "</span>
+        <span class="s2">"Removes frames from motion border calculation "</span>
+        <span class="s2">"and resets the frame shifts found. Frames are still written to motion correction. Raises an error if "</span>
+        <span class="s2">"auto_remove_empty_frames is set and trim_frames_start &gt; 0"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">do_optimize_motion_params</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Do a search for best parameters of smooth_sigma and smooth_sigma_time. "</span>
+        <span class="s2">"Adds significant runtime cost to "</span>
+        <span class="s2">"motion correction and should only be run once per experiment with the resulting parameters being stored "</span>
+        <span class="s2">"for later use."</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">smooth_sigma_time</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"gaussian smoothing in time. Must be 0: suite2p 1.x crashes for values &gt; 0 "</span>
+        <span class="s2">"(https://github.com/MouseLand/suite2p/issues/1271)."</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">smooth_sigma</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mf">1.15</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"~1 good for 2P recordings, recommend 3-5 for 1P recordings. "</span>
+        <span class="s2">"If do_optimize_motion_params is set, this will be overridden"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">use_ave_image_as_reference</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Only available if `do_optimize_motion_params` is set. "</span>
+        <span class="s2">"After the a best set of smoothing parameters is found, "</span>
+        <span class="s2">"use the resulting average image as the reference for the full registration. This can be used as two step "</span>
+        <span class="s2">"registration by setting by setting smooth_sigma_min=smooth_sigma_max and "</span>
+        <span class="s2">"smooth_sigma_time_min=smooth_sigma_time_max and steps=1."</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="c1"># Additional parameters that were hardcoded in the original code</span>
+    <span class="n">movie_lower_quantile</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mf">0.1</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Lower quantile threshold for avg projection histogram adjustment of movie"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">movie_upper_quantile</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mf">0.999</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Upper quantile threshold for avg projection histogram adjustment of movie"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">preview_frame_bin_seconds</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Before creating the webm, the movies will be averaged into bins of this many seconds"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">preview_playback_factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mf">10.0</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"The preview movie will playback at this factor times real-time"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">n_batches</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">20</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Number of batches to load from the movie for smoothing parameter testing. "</span>
+        <span class="s2">"Batches are evenly spaced throughout the movie."</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">smooth_sigma_min</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mf">0.65</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Minimum value of the parameter search for smooth_sigma"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">smooth_sigma_max</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mf">2.15</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Maximum value of the parameter search for smooth_sigma"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">smooth_sigma_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">4</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Number of steps to grid between smooth_sigma and smooth_sigma_max"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">smooth_sigma_time_min</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Minimum value of the parameter search for smooth_sigma_time"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">smooth_sigma_time_max</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">6</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Maximum value of the parameter search for smooth_sigma_time"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">smooth_sigma_time_steps</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="mi">7</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Number of steps to grid between smooth_sigma and smooth_sigma_time_max. "</span>
+        <span class="s2">"Large values will add significant time to motion correction"</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">env_prefix</span><span class="o">=</span><span class="s2">"SUITE2P_REGISTRATION_"</span><span class="p">,</span> <span class="n">case_sensitive</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">env_file</span><span class="o">=</span><span class="s2">".env"</span><span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_compute_reference_wrapper</span><span class="p">(</span>
+    <span class="n">f_align_in</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">,</span>
+    <span class="n">settings</span><span class="p">:</span> <span class="nb">dict</span><span class="p">,</span>
+    <span class="n">refImg</span><span class="p">:</span> <span class="n">NDArray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">device</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="nb">int</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">"""Compute the reference image for a single plane using Suite2p's algorithm.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    f_align_in : NDArray</span>
+<span class="sd">        Frames shaped ``(n_frames, Ly, Lx)``.</span>
+<span class="sd">    settings : dict</span>
+<span class="sd">        Suite2p settings dict (merged with suite2p defaults).</span>
+<span class="sd">    refImg : NDArray | None, optional</span>
+<span class="sd">        Pre-computed reference image. If provided, skips computation.</span>
+<span class="sd">    device : torch.device | None, optional</span>
+<span class="sd">        Torch device to use. Defaults to CPU.</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    refImg : NDArray</span>
+<span class="sd">        Reference image shaped ``(Ly, Lx)``.</span>
+<span class="sd">    bidiphase : int</span>
+<span class="sd">        Bidirectional phase offset in pixels.</span>
+<span class="sd">    """</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">suite2p.registration.bidiphase</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">bidi</span>
+    <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">suite2p.registration.register</span><span class="w"> </span><span class="kn">import</span> <span class="n">compute_reference</span>
+
+    <span class="k">if</span> <span class="n">device</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">device</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">"cpu"</span><span class="p">)</span>
+
+    <span class="n">n_frames</span> <span class="o">=</span> <span class="n">f_align_in</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">compute_bidi</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"do_bidiphase"</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span> <span class="ow">and</span> <span class="n">settings</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"bidiphase"</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span>
+
+    <span class="k">if</span> <span class="n">refImg</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">compute_bidi</span><span class="p">:</span>
+        <span class="n">ix_frames</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">n_frames</span><span class="p">,</span> <span class="mi">1</span> <span class="o">+</span> <span class="nb">min</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"nimg_init"</span><span class="p">,</span> <span class="mi">200</span><span class="p">),</span> <span class="n">n_frames</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+        <span class="n">frames</span> <span class="o">=</span> <span class="n">f_align_in</span><span class="p">[</span><span class="n">ix_frames</span><span class="p">]</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+    <span class="k">if</span> <span class="n">compute_bidi</span><span class="p">:</span>
+        <span class="n">bidiphase</span> <span class="o">=</span> <span class="n">bidi</span><span class="o">.</span><span class="n">compute</span><span class="p">(</span><span class="n">frames</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Estimated bidiphase offset from data: </span><span class="si">%d</span><span class="s2"> pixels"</span> <span class="o">%</span> <span class="n">bidiphase</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">bidiphase</span> <span class="o">=</span> <span class="n">settings</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"bidiphase"</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">bidiphase</span> <span class="o">!=</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">refImg</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">frames</span> <span class="o">=</span> <span class="n">bidi</span><span class="o">.</span><span class="n">shift</span><span class="p">(</span><span class="n">frames</span><span class="p">,</span> <span class="n">bidiphase</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">refImg</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">t0</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="n">refImg</span> <span class="o">=</span> <span class="n">compute_reference</span><span class="p">(</span><span class="n">frames</span><span class="p">,</span> <span class="n">settings</span><span class="o">=</span><span class="n">settings</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">logging</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="s2">"Reference frame computed in </span><span class="si">%0.2f</span><span class="s2"> sec."</span> <span class="o">%</span> <span class="p">(</span><span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">t0</span><span class="p">))</span>
+
+    <span class="k">return</span> <span class="n">refImg</span><span class="p">,</span> <span class="n">bidiphase</span>
+
+
+<div class="viewcode-block" id="Suite2PMotion">
+<a class="viewcode-back" href="../../../api/photon_mosaic.preprocessing.suite2p_registration.html#photon_mosaic.preprocessing.suite2p_registration.Suite2PMotion">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">Suite2PMotion</span><span class="p">(</span><span class="n">Motion</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Motion artifacts produced by Suite2P registration.</span>
+
+<span class="sd">    Adds Suite2P-specific fields (``ops``, block coordinates, non-rigid offsets)</span>
+<span class="sd">    on top of the algorithm-agnostic :class:`Motion` container.</span>
+<span class="sd">    """</span>
+
+    <span class="n">method_name</span> <span class="o">=</span> <span class="s2">"suite2p"</span>
+    <span class="n">settings_class</span> <span class="o">=</span> <span class="n">Suite2pRegistrationSettings</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">imaging</span><span class="p">:</span> <span class="n">BaseImaging</span><span class="p">,</span>
+        <span class="n">displacements</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">[</span><span class="n">Any</span><span class="p">]]],</span>
+        <span class="n">ops</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span>
+        <span class="n">reference</span><span class="p">:</span> <span class="n">Any</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">nonrigid_offsets</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">[</span><span class="n">Any</span><span class="p">]],</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">[</span><span class="n">Any</span><span class="p">]]]]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span>
+        <span class="o">|</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">[</span><span class="n">Any</span><span class="p">]],</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">[</span><span class="n">Any</span><span class="p">]]]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]]</span>
+        <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">blocks</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">yranges</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">xranges</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">Sequence</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">corrected_badframes</span><span class="p">:</span> <span class="n">Sequence</span><span class="p">[</span><span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">bool_</span><span class="p">]]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">metadata</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Store Suite2P registration outputs.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        imaging, displacements, reference, yranges, xranges, metadata</span>
+<span class="sd">            See :class:`photon_mosaic.core.motion.Motion`.</span>
+<span class="sd">        corrected_badframes : Sequence | None, optional</span>
+<span class="sd">            Per-epoch bad-frame mask (see :class:`photon_mosaic.core.motion.Motion`).</span>
+<span class="sd">            For Suite2P this is the union of any caller-supplied ``badframes``</span>
+<span class="sd">            with frames whose registration shift exceeded ``maxregshift``,</span>
+<span class="sd">            then combined across planes (a frame flagged on any plane is</span>
+<span class="sd">            flagged for the whole volume).</span>
+<span class="sd">        ops : dict[str, Any]</span>
+<span class="sd">            Suite2P options used during registration.</span>
+<span class="sd">        nonrigid_offsets : Sequence | None, optional</span>
+<span class="sd">            Per-epoch, per-plane non-rigid offsets.</span>
+<span class="sd">            Structure: ``[epoch][plane] -&gt; (yoff1, xoff1)`` each ``(n_frames, n_blocks)``.</span>
+<span class="sd">        blocks : Sequence | None, optional</span>
+<span class="sd">            Suite2P block definitions when non-rigid registration is enabled.</span>
+<span class="sd">        """</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="n">imaging</span><span class="o">=</span><span class="n">imaging</span><span class="p">,</span>
+            <span class="n">displacements</span><span class="o">=</span><span class="n">displacements</span><span class="p">,</span>
+            <span class="n">reference</span><span class="o">=</span><span class="n">reference</span><span class="p">,</span>
+            <span class="n">yranges</span><span class="o">=</span><span class="n">yranges</span><span class="p">,</span>
+            <span class="n">xranges</span><span class="o">=</span><span class="n">xranges</span><span class="p">,</span>
+            <span class="n">corrected_badframes</span><span class="o">=</span><span class="n">corrected_badframes</span><span class="p">,</span>
+            <span class="n">metadata</span><span class="o">=</span><span class="n">metadata</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">ops</span> <span class="o">=</span> <span class="n">ops</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">nonrigid_offsets</span> <span class="o">=</span> <span class="n">nonrigid_offsets</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">blocks</span> <span class="o">=</span> <span class="n">blocks</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_to_dict_kwargs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Add the Suite2P-specific fields to :meth:`Motion._to_dict_kwargs`."""</span>
+
+        <span class="n">kwargs</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_to_dict_kwargs</span><span class="p">()</span>
+        <span class="n">blocks</span> <span class="o">=</span> <span class="kc">None</span> <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">blocks</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">[</span><span class="n">_compact_blocks</span><span class="p">(</span><span class="n">b</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">blocks</span><span class="p">]</span>
+        <span class="n">kwargs</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">ops</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">ops</span><span class="p">,</span> <span class="n">nonrigid_offsets</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">nonrigid_offsets</span><span class="p">,</span> <span class="n">blocks</span><span class="o">=</span><span class="n">blocks</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">kwargs</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_from_dict_kwargs</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">"""Rebuild the upsampling matrix dropped by :meth:`_to_dict_kwargs`."""</span>
+
+        <span class="n">kwargs</span> <span class="o">=</span> <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="n">_from_dict_kwargs</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"blocks"</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="s2">"blocks"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">_expand_blocks</span><span class="p">(</span><span class="n">b</span><span class="p">)</span> <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">"blocks"</span><span class="p">]]</span>
+        <span class="k">return</span> <span class="n">kwargs</span>
+
+    <span class="nd">@classmethod</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_compute</span><span class="p">(</span>
+        <span class="bp">cls</span><span class="p">,</span>
+        <span class="n">imaging</span><span class="p">:</span> <span class="n">BaseImaging</span><span class="p">,</span>
+        <span class="o">*</span><span class="p">,</span>
+        <span class="n">settings</span><span class="p">:</span> <span class="n">Suite2pRegistrationSettings</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">badframes</span><span class="p">:</span> <span class="n">NDArray</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">params</span><span class="p">:</span> <span class="n">Any</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"Suite2PMotion"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Pre-compute Suite2P displacements for all planes and epochs.</span>
+
+<span class="sd">        Computes the reference image and per-frame rigid (and optionally nonrigid)</span>
+<span class="sd">        shifts without applying them to the data. Shifts are stored in the returned</span>
+<span class="sd">        ``Motion`` object and applied lazily by ``RegisterSuite2PImagingEpoch``.</span>
+
+<span class="sd">        Called through :meth:`photon_mosaic.core.Motion.compute` (or its</span>
+<span class="sd">        ``compute_motion`` alias), which resolves ``settings`` before calling this.</span>
+
+<span class="sd">        Parameters</span>
+<span class="sd">        ----------</span>
+<span class="sd">        imaging : BaseImaging</span>
+<span class="sd">            Imaging object containing one or more epochs/planes to be registered.</span>
+<span class="sd">        settings : Suite2pRegistrationSettings | None, optional</span>
+<span class="sd">            Registration settings; ``None`` uses the defaults.</span>
+<span class="sd">        badframes : NDArray | None, optional</span>
+<span class="sd">            Boolean array of shape ``(n_frames,)`` marking frames to exclude from</span>
+<span class="sd">            reference image computation.</span>
+<span class="sd">        **params : Any</span>
+<span class="sd">            Extra Suite2P options applied on top of ``settings``.</span>
+
+<span class="sd">        Returns</span>
+<span class="sd">        -------</span>
+<span class="sd">        Suite2PMotion</span>
+<span class="sd">            Motion container with per-epoch displacements and Suite2P-specific</span>
+<span class="sd">            fields (``ops``, ``blocks``, ``nonrigid_offsets``).</span>
+<span class="sd">        """</span>
+        <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">suite2p.registration.register</span><span class="w"> </span><span class="kn">import</span> <span class="n">compute_crop</span><span class="p">,</span> <span class="n">default_settings</span><span class="p">,</span> <span class="n">register_frames</span>
+
+        <span class="c1"># Merge suite2p defaults -&gt; our settings -&gt; caller overrides</span>
+        <span class="n">ops</span> <span class="o">=</span> <span class="n">default_settings</span><span class="p">()[</span><span class="s2">"registration"</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">settings</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">settings</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">settings_class</span><span class="p">()</span>
+        <span class="n">ops</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">"maxregshiftNR"</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>  <span class="c1"># suite2p's name for max_nonrigid_shift; ours is used throughout</span>
+        <span class="n">ops</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">settings</span><span class="o">.</span><span class="n">model_dump</span><span class="p">())</span>
+        <span class="k">if</span> <span class="s2">"maxregshiftNR"</span> <span class="ow">in</span> <span class="n">params</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"'maxregshiftNR' is now 'max_nonrigid_shift'."</span><span class="p">)</span>
+        <span class="n">ops</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">params</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">ops</span><span class="p">[</span><span class="s2">"smooth_sigma_time"</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"smooth_sigma_time &gt; 0 crashes suite2p 1.x registration."</span><span class="p">)</span>
+        <span class="n">bounds</span> <span class="o">=</span> <span class="n">ops</span><span class="p">[</span><span class="s2">"bounds"</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">ops</span><span class="p">[</span><span class="s2">"nonrigid"</span><span class="p">]:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">"'bounds' (an estimation crop) is supported by the suite2p backend for rigid registration only: "</span>
+                <span class="s2">"its non-rigid block geometry is defined on the frame the shifts are applied to."</span>
+            <span class="p">)</span>
+        <span class="n">rows</span><span class="p">,</span> <span class="n">cols</span> <span class="o">=</span> <span class="p">(</span><span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">),</span> <span class="nb">slice</span><span class="p">(</span><span class="kc">None</span><span class="p">))</span> <span class="k">if</span> <span class="n">bounds</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="p">(</span><span class="nb">slice</span><span class="p">(</span><span class="o">*</span><span class="n">bounds</span><span class="p">[</span><span class="mi">0</span><span class="p">]),</span> <span class="nb">slice</span><span class="p">(</span><span class="o">*</span><span class="n">bounds</span><span class="p">[</span><span class="mi">1</span><span class="p">]))</span>
+
+        <span class="n">device</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="n">ops</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"device"</span><span class="p">,</span> <span class="s2">"cpu"</span><span class="p">))</span>
+
+        <span class="n">n_planes</span> <span class="o">=</span> <span class="n">imaging</span><span class="o">.</span><span class="n">num_planes</span>
+        <span class="n">n_epochs</span> <span class="o">=</span> <span class="n">imaging</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">()</span>
+
+        <span class="c1"># Reference images and bidiphase offsets computed once per plane from epoch 0</span>
+        <span class="n">refImgs</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">NDArray</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="n">n_planes</span>
+        <span class="n">bidiphases</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">n_planes</span>
+        <span class="c1"># Block definitions are the same for all epochs (geometry doesn't change)</span>
+        <span class="n">all_blocks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+
+        <span class="n">all_displacements</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">NDArray</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">all_nonrigid_offsets</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">list</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">all_yranges</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">all_xranges</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">all_corrected_badframes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">NDArray</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+        <span class="k">for</span> <span class="n">epoch_idx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_epochs</span><span class="p">):</span>
+            <span class="n">n_frames</span> <span class="o">=</span> <span class="n">imaging</span><span class="o">.</span><span class="n">get_num_samples</span><span class="p">(</span><span class="n">segment_index</span><span class="o">=</span><span class="n">epoch_idx</span><span class="p">)</span>
+            <span class="n">Ly</span><span class="p">,</span> <span class="n">Lx</span> <span class="o">=</span> <span class="n">imaging</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">imaging</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+            <span class="n">badframes0</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">n_frames</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)</span> <span class="k">if</span> <span class="n">badframes</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">badframes</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+
+            <span class="n">epoch_yoff</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">NDArray</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">epoch_xoff</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">NDArray</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">epoch_corrXY</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">NDArray</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">epoch_nr</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="n">NDArray</span><span class="p">,</span> <span class="n">NDArray</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">epoch_blocks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+
+            <span class="c1"># sub-epochs of batch_size frames: each is read whole, so one batch is in memory at a time</span>
+            <span class="n">batch_size</span> <span class="o">=</span> <span class="n">ops</span><span class="p">[</span><span class="s2">"batch_size"</span><span class="p">]</span>
+            <span class="n">batched</span> <span class="o">=</span> <span class="n">split_epoch_at_frames</span><span class="p">(</span><span class="n">imaging</span><span class="p">,</span> <span class="n">epoch_idx</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">n_frames</span><span class="p">,</span> <span class="n">batch_size</span><span class="p">))</span>
+
+            <span class="k">for</span> <span class="n">p</span><span class="p">,</span> <span class="n">plane_id</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">imaging</span><span class="o">.</span><span class="n">plane_ids</span><span class="p">):</span>
+                <span class="c1"># Reference once, from the first epoch: read only the nimg_init evenly spaced frames suite2p</span>
+                <span class="c1"># samples (the wrapper then uses all of them)</span>
+                <span class="k">if</span> <span class="n">epoch_idx</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="n">picks</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">n_frames</span><span class="p">,</span> <span class="mi">1</span> <span class="o">+</span> <span class="nb">min</span><span class="p">(</span><span class="n">ops</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"nimg_init"</span><span class="p">,</span> <span class="mi">200</span><span class="p">),</span> <span class="n">n_frames</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">int</span><span class="p">)[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span>
+                    <span class="n">plane</span> <span class="o">=</span> <span class="n">select_planes</span><span class="p">(</span><span class="n">imaging</span><span class="p">,</span> <span class="p">[</span><span class="n">plane_id</span><span class="p">])</span>
+                    <span class="n">sample</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">([</span><span class="n">plane</span><span class="o">.</span><span class="n">get_series</span><span class="p">(</span><span class="n">i</span><span class="p">,</span> <span class="n">i</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">epoch_index</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">picks</span><span class="p">])</span>
+                    <span class="n">sample</span> <span class="o">=</span> <span class="n">sample</span><span class="p">[:,</span> <span class="n">rows</span><span class="p">,</span> <span class="n">cols</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">)</span>
+                    <span class="n">refImgs</span><span class="p">[</span><span class="n">p</span><span class="p">],</span> <span class="n">bidiphases</span><span class="p">[</span><span class="n">p</span><span class="p">]</span> <span class="o">=</span> <span class="n">_compute_reference_wrapper</span><span class="p">(</span><span class="n">sample</span><span class="p">,</span> <span class="n">ops</span><span class="p">,</span> <span class="n">refImg</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">)</span>
+
+                <span class="c1"># Compute shifts without applying them, one sub-epoch (= one suite2p batch) per call.</span>
+                <span class="c1"># Only the offsets are kept per batch: the other returns include a mean image per call.</span>
+                <span class="c1"># Select the plane after splitting: selection is applied by get_series, not by the epochs.</span>
+                <span class="n">plane_batches</span> <span class="o">=</span> <span class="n">select_planes</span><span class="p">(</span><span class="n">batched</span><span class="p">,</span> <span class="p">[</span><span class="n">plane_id</span><span class="p">])</span>
+                <span class="n">batch_offsets</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="k">for</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">plane_batches</span><span class="o">.</span><span class="n">get_num_epochs</span><span class="p">()):</span>
+                    <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">offsets</span><span class="p">,</span> <span class="n">blocks</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">register_frames</span><span class="p">(</span>
+                        <span class="n">plane_batches</span><span class="o">.</span><span class="n">get_series</span><span class="p">(</span><span class="n">epoch_index</span><span class="o">=</span><span class="n">b</span><span class="p">)[:,</span> <span class="n">rows</span><span class="p">,</span> <span class="n">cols</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">),</span>
+                        <span class="n">refImg</span><span class="o">=</span><span class="n">refImgs</span><span class="p">[</span><span class="n">p</span><span class="p">],</span>
+                        <span class="n">f_align_out</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                        <span class="n">batch_size</span><span class="o">=</span><span class="n">batch_size</span><span class="p">,</span>
+                        <span class="n">bidiphase</span><span class="o">=</span><span class="n">bidiphases</span><span class="p">[</span><span class="n">p</span><span class="p">],</span>
+                        <span class="n">norm_frames</span><span class="o">=</span><span class="n">ops</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"norm_frames"</span><span class="p">,</span> <span class="kc">True</span><span class="p">),</span>
+                        <span class="n">smooth_sigma</span><span class="o">=</span><span class="n">ops</span><span class="p">[</span><span class="s2">"smooth_sigma"</span><span class="p">],</span>
+                        <span class="n">spatial_taper</span><span class="o">=</span><span class="n">ops</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"spatial_taper"</span><span class="p">,</span> <span class="mf">3.45</span><span class="p">),</span>
+                        <span class="n">block_size</span><span class="o">=</span><span class="n">ops</span><span class="p">[</span><span class="s2">"block_size"</span><span class="p">],</span>
+                        <span class="n">nonrigid</span><span class="o">=</span><span class="n">ops</span><span class="p">[</span><span class="s2">"nonrigid"</span><span class="p">],</span>
+                        <span class="n">maxregshift</span><span class="o">=</span><span class="n">ops</span><span class="p">[</span><span class="s2">"maxregshift"</span><span class="p">],</span>
+                        <span class="n">smooth_sigma_time</span><span class="o">=</span><span class="n">ops</span><span class="p">[</span><span class="s2">"smooth_sigma_time"</span><span class="p">],</span>
+                        <span class="n">snr_thresh</span><span class="o">=</span><span class="n">ops</span><span class="p">[</span><span class="s2">"snr_thresh"</span><span class="p">],</span>
+                        <span class="n">maxregshiftNR</span><span class="o">=</span><span class="n">ops</span><span class="p">[</span><span class="s2">"max_nonrigid_shift"</span><span class="p">],</span>
+                        <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+                        <span class="n">apply_shifts</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+                    <span class="p">)</span>
+                    <span class="n">batch_offsets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">offsets</span><span class="p">)</span>
+                <span class="c1"># suite2p's eight offset arrays, concatenated across batches as register_frames does internally</span>
+                <span class="n">yoff</span><span class="p">,</span> <span class="n">xoff</span><span class="p">,</span> <span class="n">corrXY</span><span class="p">,</span> <span class="n">yoff1</span><span class="p">,</span> <span class="n">xoff1</span><span class="p">,</span> <span class="n">corrXY1</span><span class="p">,</span> <span class="n">zest</span><span class="p">,</span> <span class="n">cmax_all</span> <span class="o">=</span> <span class="p">[</span>
+                    <span class="kc">None</span> <span class="k">if</span> <span class="n">parts</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="ow">is</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">np</span><span class="o">.</span><span class="n">concatenate</span><span class="p">(</span><span class="n">parts</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="k">for</span> <span class="n">parts</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="o">*</span><span class="n">batch_offsets</span><span class="p">)</span>
+                <span class="p">]</span>
+
+                <span class="n">epoch_yoff</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">yoff</span><span class="p">)</span>
+                <span class="n">epoch_xoff</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">xoff</span><span class="p">)</span>
+                <span class="n">epoch_corrXY</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">corrXY</span><span class="p">)</span>
+                <span class="n">epoch_nr</span><span class="o">.</span><span class="n">append</span><span class="p">((</span><span class="n">yoff1</span><span class="p">,</span> <span class="n">xoff1</span><span class="p">)</span> <span class="k">if</span> <span class="n">yoff1</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+
+                <span class="k">if</span> <span class="n">epoch_idx</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">blocks</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">epoch_blocks</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">blocks</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="n">epoch_idx</span> <span class="o">==</span> <span class="mi">0</span> <span class="ow">and</span> <span class="n">epoch_blocks</span><span class="p">:</span>
+                <span class="n">all_blocks</span> <span class="o">=</span> <span class="n">epoch_blocks</span>
+
+            <span class="c1"># Stack planes → always (n_frames, n_planes, 2)</span>
+            <span class="n">disps</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">epoch_yoff</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">),</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span><span class="n">epoch_xoff</span><span class="p">,</span> <span class="n">axis</span><span class="o">=</span><span class="mi">1</span><span class="p">)],</span> <span class="n">axis</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+
+            <span class="n">all_displacements</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">disps</span><span class="p">)</span>
+
+            <span class="n">has_nonrigid</span> <span class="o">=</span> <span class="nb">any</span><span class="p">(</span><span class="n">o</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">epoch_nr</span><span class="p">)</span>
+            <span class="n">all_nonrigid_offsets</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">epoch_nr</span> <span class="k">if</span> <span class="n">has_nonrigid</span> <span class="k">else</span> <span class="kc">None</span><span class="p">)</span>
+
+            <span class="c1"># Compute valid FOV region and refined bad-frame mask for each plane</span>
+            <span class="n">epoch_yranges</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">epoch_xranges</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="n">epoch_cbf</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">NDArray</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+            <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_planes</span><span class="p">):</span>
+                <span class="n">bf</span><span class="p">,</span> <span class="n">yrange</span><span class="p">,</span> <span class="n">xrange</span> <span class="o">=</span> <span class="n">compute_crop</span><span class="p">(</span>
+                    <span class="n">xoff</span><span class="o">=</span><span class="n">epoch_xoff</span><span class="p">[</span><span class="n">p</span><span class="p">],</span>
+                    <span class="n">yoff</span><span class="o">=</span><span class="n">epoch_yoff</span><span class="p">[</span><span class="n">p</span><span class="p">],</span>
+                    <span class="n">corrXY</span><span class="o">=</span><span class="n">epoch_corrXY</span><span class="p">[</span><span class="n">p</span><span class="p">],</span>
+                    <span class="n">th_badframes</span><span class="o">=</span><span class="n">ops</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"th_badframes"</span><span class="p">,</span> <span class="mf">1.0</span><span class="p">),</span>
+                    <span class="n">badframes</span><span class="o">=</span><span class="n">badframes0</span><span class="o">.</span><span class="n">copy</span><span class="p">(),</span>
+                    <span class="n">maxregshift</span><span class="o">=</span><span class="n">ops</span><span class="p">[</span><span class="s2">"maxregshift"</span><span class="p">],</span>
+                    <span class="n">Ly</span><span class="o">=</span><span class="n">Ly</span><span class="p">,</span>
+                    <span class="n">Lx</span><span class="o">=</span><span class="n">Lx</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="n">epoch_yranges</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">yrange</span><span class="p">))</span>
+                <span class="n">epoch_xranges</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">tuple</span><span class="p">(</span><span class="n">xrange</span><span class="p">))</span>
+                <span class="n">epoch_cbf</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">bf</span><span class="p">)</span>
+
+            <span class="n">all_yranges</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">epoch_yranges</span><span class="p">)</span>
+            <span class="n">all_xranges</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">epoch_xranges</span><span class="p">)</span>
+            <span class="c1"># Bad frames are a property of the time axis (a corrupted volume frame</span>
+            <span class="c1"># is bad on all planes) — collapse Suite2P's per-plane masks into one.</span>
+            <span class="n">all_corrected_badframes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">logical_or</span><span class="o">.</span><span class="n">reduce</span><span class="p">(</span><span class="n">epoch_cbf</span><span class="p">))</span>
+
+        <span class="n">nonrigid_offsets</span> <span class="o">=</span> <span class="n">all_nonrigid_offsets</span> <span class="k">if</span> <span class="nb">any</span><span class="p">(</span><span class="n">o</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">for</span> <span class="n">o</span> <span class="ow">in</span> <span class="n">all_nonrigid_offsets</span><span class="p">)</span> <span class="k">else</span> <span class="kc">None</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">imaging</span><span class="o">=</span><span class="n">imaging</span><span class="p">,</span>
+            <span class="n">displacements</span><span class="o">=</span><span class="n">all_displacements</span><span class="p">,</span>
+            <span class="n">ops</span><span class="o">=</span><span class="n">ops</span><span class="p">,</span>
+            <span class="n">reference</span><span class="o">=</span><span class="n">refImgs</span><span class="p">,</span>
+            <span class="n">nonrigid_offsets</span><span class="o">=</span><span class="n">nonrigid_offsets</span><span class="p">,</span>
+            <span class="n">blocks</span><span class="o">=</span><span class="n">all_blocks</span><span class="p">,</span>
+            <span class="n">yranges</span><span class="o">=</span><span class="n">all_yranges</span><span class="p">,</span>
+            <span class="n">xranges</span><span class="o">=</span><span class="n">all_xranges</span><span class="p">,</span>
+            <span class="n">corrected_badframes</span><span class="o">=</span><span class="n">all_corrected_badframes</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+
+<span class="c1"># suite2p's make_blocks returns (yblock, xblock, nblocks, block_size, NRsm, Kmat, nup). Kmat is a</span>
+<span class="c1"># ((2*lpad+1)**2, nup**2) float32 tensor -- ~0.7 MB, ~11 MB as json, per plane -- but it is fully</span>
+<span class="c1"># determined by lpad and subpixel, so serialize those two ints instead and recompute it on load.</span>
+<span class="n">_KMAT_INDEX</span> <span class="o">=</span> <span class="mi">5</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_compact_blocks</span><span class="p">(</span><span class="n">blocks</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Replace the ``Kmat`` of one plane's ``blocks`` by the ``mat_upsample`` arguments that produce it."""</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">blocks</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">blocks</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">7</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">blocks</span>  <span class="c1"># rigid registration stores no blocks for the plane</span>
+    <span class="n">kmat</span><span class="p">,</span> <span class="n">nup</span> <span class="o">=</span> <span class="n">blocks</span><span class="p">[</span><span class="n">_KMAT_INDEX</span><span class="p">],</span> <span class="n">blocks</span><span class="p">[</span><span class="mi">6</span><span class="p">]</span>
+    <span class="n">lpad</span> <span class="o">=</span> <span class="p">(</span><span class="n">math</span><span class="o">.</span><span class="n">isqrt</span><span class="p">(</span><span class="n">kmat</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">])</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="mi">2</span>
+    <span class="n">subpixel</span> <span class="o">=</span> <span class="p">(</span><span class="n">nup</span> <span class="o">-</span> <span class="mi">1</span><span class="p">)</span> <span class="o">//</span> <span class="p">(</span><span class="mi">2</span> <span class="o">*</span> <span class="n">lpad</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">blocks</span><span class="p">[:</span><span class="n">_KMAT_INDEX</span><span class="p">]</span> <span class="o">+</span> <span class="p">({</span><span class="s2">"lpad"</span><span class="p">:</span> <span class="n">lpad</span><span class="p">,</span> <span class="s2">"subpixel"</span><span class="p">:</span> <span class="n">subpixel</span><span class="p">},)</span> <span class="o">+</span> <span class="n">blocks</span><span class="p">[</span><span class="n">_KMAT_INDEX</span> <span class="o">+</span> <span class="mi">1</span> <span class="p">:]</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_expand_blocks</span><span class="p">(</span><span class="n">blocks</span><span class="p">:</span> <span class="n">Any</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Any</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Inverse of :func:`_compact_blocks`."""</span>
+
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">blocks</span><span class="p">,</span> <span class="nb">tuple</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">len</span><span class="p">(</span><span class="n">blocks</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">7</span> <span class="ow">or</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">blocks</span><span class="p">[</span><span class="n">_KMAT_INDEX</span><span class="p">],</span> <span class="nb">dict</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">blocks</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">suite2p.registration.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">mat_upsample</span>  <span class="c1"># noqa: PLC0415</span>
+
+    <span class="n">kmat</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">mat_upsample</span><span class="p">(</span><span class="o">**</span><span class="n">blocks</span><span class="p">[</span><span class="n">_KMAT_INDEX</span><span class="p">])</span>
+    <span class="k">return</span> <span class="n">blocks</span><span class="p">[:</span><span class="n">_KMAT_INDEX</span><span class="p">]</span> <span class="o">+</span> <span class="p">(</span><span class="n">kmat</span><span class="p">,)</span> <span class="o">+</span> <span class="n">blocks</span><span class="p">[</span><span class="n">_KMAT_INDEX</span> <span class="o">+</span> <span class="mi">1</span> <span class="p">:]</span>
+
+
+<div class="viewcode-block" id="RegisterSuite2PImaging">
+<a class="viewcode-back" href="../../../api/photon_mosaic.preprocessing.suite2p_registration.html#photon_mosaic.preprocessing.suite2p_registration.RegisterSuite2PImaging">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">RegisterSuite2PImaging</span><span class="p">(</span><span class="n">RegisterImaging</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Apply pre-computed Suite2P motion correction on-the-fly.</span>
+
+<span class="sd">    Thin alias of :class:`photon_mosaic.preprocessing.registration.RegisterImaging`,</span>
+<span class="sd">    kept for discoverability and backwards compatibility; the generic class</span>
+<span class="sd">    already dispatches on ``method``.</span>
+<span class="sd">    """</span></div>
+
+
+
+<div class="viewcode-block" id="RegisterSuite2PImagingEpoch">
+<a class="viewcode-back" href="../../../api/photon_mosaic.preprocessing.suite2p_registration.html#photon_mosaic.preprocessing.suite2p_registration.RegisterSuite2PImagingEpoch">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">RegisterSuite2PImagingEpoch</span><span class="p">(</span><span class="n">RegisterImagingEpoch</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">"""Epoch-level preprocessor that applies stored Suite2P displacements.</span>
+
+<span class="sd">    Frame bounds, plane selection and output allocation come from</span>
+<span class="sd">    :class:`~photon_mosaic.preprocessing.registration.RegisterImagingEpoch`; this class</span>
+<span class="sd">    only shifts one plane's frames with Suite2P's ``shift_frames``.</span>
+<span class="sd">    """</span>
+
+    <span class="n">motion</span><span class="p">:</span> <span class="n">Suite2PMotion</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_correct_plane</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">plane_video</span><span class="p">:</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">[</span><span class="n">Any</span><span class="p">]],</span>
+        <span class="n">plane_index</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">start_frame</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+        <span class="n">end_frame</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">NDArray</span><span class="p">[</span><span class="n">np</span><span class="o">.</span><span class="n">floating</span><span class="p">[</span><span class="n">Any</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">"""Shift one plane's frames by the stored rigid (and non-rigid) offsets."""</span>
+
+        <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">suite2p.registration</span><span class="w"> </span><span class="kn">import</span> <span class="n">register</span>
+
+        <span class="n">p</span> <span class="o">=</span> <span class="n">plane_index</span>
+        <span class="n">disps</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">motion</span><span class="o">.</span><span class="n">displacements</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">epoch_index</span><span class="p">]</span>
+        <span class="n">yoff</span> <span class="o">=</span> <span class="n">disps</span><span class="p">[</span><span class="n">start_frame</span><span class="p">:</span><span class="n">end_frame</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+        <span class="n">xoff</span> <span class="o">=</span> <span class="n">disps</span><span class="p">[</span><span class="n">start_frame</span><span class="p">:</span><span class="n">end_frame</span><span class="p">,</span> <span class="n">p</span><span class="p">,</span> <span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="nb">int</span><span class="p">)</span>
+
+        <span class="n">yoff1</span> <span class="o">=</span> <span class="n">xoff1</span> <span class="o">=</span> <span class="n">blocks</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">motion</span><span class="o">.</span><span class="n">nonrigid_offsets</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">epoch_offsets</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">motion</span><span class="o">.</span><span class="n">nonrigid_offsets</span><span class="p">[</span><span class="bp">self</span><span class="o">.</span><span class="n">epoch_index</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">epoch_offsets</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">p</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">epoch_offsets</span><span class="p">):</span>
+                <span class="n">plane_offsets</span> <span class="o">=</span> <span class="n">epoch_offsets</span><span class="p">[</span><span class="n">p</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">plane_offsets</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">yoff1_full</span><span class="p">,</span> <span class="n">xoff1_full</span> <span class="o">=</span> <span class="n">plane_offsets</span>
+                    <span class="n">yoff1</span> <span class="o">=</span> <span class="n">yoff1_full</span><span class="p">[</span><span class="n">start_frame</span><span class="p">:</span><span class="n">end_frame</span><span class="p">]</span>
+                    <span class="n">xoff1</span> <span class="o">=</span> <span class="n">xoff1_full</span><span class="p">[</span><span class="n">start_frame</span><span class="p">:</span><span class="n">end_frame</span><span class="p">]</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">motion</span><span class="o">.</span><span class="n">blocks</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                        <span class="n">blocks</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">motion</span><span class="o">.</span><span class="n">blocks</span><span class="p">[</span><span class="n">p</span><span class="p">]</span>
+
+        <span class="c1"># Apply motion correction shifts — always CPU for on-the-fly application</span>
+        <span class="n">device</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">"cpu"</span><span class="p">)</span>
+
+        <span class="n">plane_video_torch</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">plane_video</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">yoff_torch</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">yoff</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">))</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+        <span class="n">xoff_torch</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">xoff</span><span class="o">.</span><span class="n">astype</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">))</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+
+        <span class="n">yoff1_torch</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="n">xoff1_torch</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="n">yoff1</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">yoff1_torch</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">yoff1</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+            <span class="n">xoff1_torch</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">from_numpy</span><span class="p">(</span><span class="n">xoff1</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">register</span><span class="o">.</span><span class="n">shift_frames</span><span class="p">(</span>
+            <span class="n">plane_video_torch</span><span class="p">,</span>
+            <span class="n">yoff_torch</span><span class="p">,</span>
+            <span class="n">xoff_torch</span><span class="p">,</span>
+            <span class="n">yoff1_torch</span><span class="p">,</span>
+            <span class="n">xoff1_torch</span><span class="p">,</span>
+            <span class="n">blocks</span><span class="o">=</span><span class="n">blocks</span><span class="p">,</span>
+            <span class="n">device</span><span class="o">=</span><span class="n">device</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+
+<span class="n">register_motion_class</span><span class="p">(</span><span class="n">Suite2PMotion</span><span class="p">)</span>
+<span class="n">register_registration_class</span><span class="p">(</span><span class="s2">"suite2p"</span><span class="p">,</span> <span class="n">RegisterSuite2PImagingEpoch</span><span class="p">)</span>
+</pre></div>
+
+                </article>
+              
+              
+              
+              
+              
+                <footer class="prev-next-footer d-print-none">
+                  
+<div class="prev-next-area">
+</div>
+                </footer>
+              
+            </div>
+            
+            
+              
+            
+          </div>
+          <footer class="bd-footer-content">
+            
+          </footer>
+        
+      </main>
+    </div>
+  </div>
+  
+  <!-- Scripts loaded after <body> so the DOM is not blocked -->
+  <script defer src="../../../_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8"></script>
+<script defer src="../../../_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8"></script>
+
+  <footer class="bd-footer">
+<div class="bd-footer__inner bd-page-width">
+  
+    <div class="footer-items__start">
+      
+        <div class="footer-item"><p class="sphinx-version">
+    Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.1.
+    <br/>
+    </p>
+    <p class="theme-version">
+    Built with the
+    <a href="https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html">PyData Sphinx Theme</a>
+    0.24.0.
+    </p></div>
+      
+    </div>
+  
+  
+  
+    <div class="footer-items__end">
+      
+        <div class="footer-item"><div class="things-in-a-row">
+    <a href="https://neuroinformatics.dev/">
+        <img src="../../../_static/light-logo-niu.png" alt="NIU" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-niu.png" alt="NIU" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.sainsburywellcome.org/web/">
+        <img src="../../../_static/light-logo-swc.png" alt="SWC" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-swc.png" alt="SWC" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://https://alleninstitute.org/neural-dynamics">
+        <img src="../../../_static/light-logo-aind.png" alt="AIND" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-aind.png" alt="AIND" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.sainsburywellcome.org/web/">
+        <img src="../../../_static/logo-ibl.png" alt="IBL" class="only-light img-sponsor"/>
+        <img src="../../../_static/logo-ibl.png" alt="IBL" class="only-dark img-sponsor"/>
+    </a>
+    <a href="https://www.ucl.ac.uk/">
+        <img src="../../../_static/light-logo-ucl.png" alt="UCL" class="only-light img-sponsor"/>
+        <img src="../../../_static/dark-logo-ucl.png" alt="UCL" class="only-dark img-sponsor"/>
+    </a>
+</div></div>
+      
+    </div>
+  
+</div>
+
+  </footer>
+  </body>
+</html>

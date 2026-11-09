@@ -1,0 +1,13 @@
+﻿photon\_mosaic.extractors.suite2prois
+=====================================
+
+.. automodule:: photon_mosaic.extractors.suite2prois
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      Suite2pRois
+      read_suite2p_rois
+   

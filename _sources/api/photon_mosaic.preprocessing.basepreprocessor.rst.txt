@@ -1,0 +1,13 @@
+﻿photon\_mosaic.preprocessing.basepreprocessor
+=============================================
+
+.. automodule:: photon_mosaic.preprocessing.basepreprocessor
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      BasePreprocessor
+      BasePreprocessorEpoch
+   

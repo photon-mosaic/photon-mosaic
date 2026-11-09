@@ -1,0 +1,16 @@
+﻿photon\_mosaic.core.binaryimaging
+=================================
+
+.. automodule:: photon_mosaic.core.binaryimaging
+
+   
+   .. rubric:: Classes
+
+   .. autosummary::
+   
+      BinaryFolderImaging
+      BinaryImaging
+      BinaryImagingEpoch
+      read_binary
+      read_binary_folder
+   

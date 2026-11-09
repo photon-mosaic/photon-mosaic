@@ -1,0 +1,6 @@
+﻿photon\_mosaic.segmentation.run\_segmentation
+=============================================
+
+.. currentmodule:: photon_mosaic.segmentation
+
+.. autofunction:: run_segmentation

@@ -1,0 +1,12 @@
+﻿photon\_mosaic.core.testingtools
+================================
+
+.. automodule:: photon_mosaic.core.testingtools
+
+   
+   .. rubric:: Functions
+
+   .. autosummary::
+   
+      assert_imaging_equal
+   
