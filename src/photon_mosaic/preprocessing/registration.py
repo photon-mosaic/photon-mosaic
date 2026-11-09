@@ -198,3 +198,60 @@ class RegisterImagingEpoch(BasePreprocessorEpoch):
 
 
 register_motion = RegisterImaging
+
+
+def frame_correlations(
+    imaging: BaseImaging,
+    plane_index: int = 0,
+    epoch_index: int = 0,
+    bounds: tuple[tuple[int, int], tuple[int, int]] | None = None,
+    chunk_size: int = 100,
+) -> NDArray[np.float64]:
+    """Correlation of every frame with the mean image, CaImAn's main registration metric.
+
+    The better a movie is registered, the more each frame looks like the mean, so the
+    higher (and flatter over time) these Pearson correlations are. Frames are read
+    ``chunk_size`` at a time, twice (the mean, then the correlations), never all at once.
+
+    Parameters
+    ----------
+    imaging : BaseImaging
+        Usually a registered movie, but any imaging works (e.g. the raw one, to compare).
+    plane_index, epoch_index : int
+        Which plane and epoch to score.
+    bounds : ((y0, y1), (x0, x1)), optional
+        The pixels to compare. By default a registered movie's valid region (its motion's
+        ``yranges``/``xranges``), so filled-in borders don't count, else the whole frame.
+        Pass the same bounds to compare movies registered differently on the same pixels.
+    chunk_size : int
+        Frames read at a time.
+
+    Returns
+    -------
+    array, ``(n_frames,)``
+        One correlation per frame.
+
+    Notes
+    -----
+    CaImAn ``compute_metrics_motion_correction`` (``correlations``), without its optical
+    flow and crispness.
+    """
+    motion = getattr(imaging, "motion", None)
+    if bounds is None and motion is not None and motion.yranges is not None and motion.xranges is not None:
+        bounds = (motion.yranges[epoch_index][plane_index], motion.xranges[epoch_index][plane_index])
+    rows, cols = (slice(*b) for b in bounds) if bounds is not None else (slice(None), slice(None))
+    epoch = imaging.epochs[epoch_index]
+    n_frames = epoch.get_num_samples()
+
+    def chunks():
+        for start in range(0, n_frames, chunk_size):
+            frames = epoch.get_series(start, min(start + chunk_size, n_frames), [plane_index])[:, rows, cols, 0]
+            yield frames.reshape(len(frames), -1).astype(np.float64)
+
+    template = sum(frames.sum(axis=0) for frames in chunks()) / n_frames
+    template = (template - template.mean()) / np.linalg.norm(template - template.mean())
+    out = []
+    for frames in chunks():
+        frames -= frames.mean(axis=1, keepdims=True)
+        out.append(frames @ template / np.linalg.norm(frames, axis=1))
+    return np.concatenate(out)
