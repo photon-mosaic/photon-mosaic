@@ -205,3 +205,13 @@ class TestFrameCorrelations:
         template = movie.mean(axis=0)
         expected = [np.corrcoef(f.ravel(), template.ravel())[0, 1] for f in movie]
         np.testing.assert_allclose(frame_correlations(registered, chunk_size=4), expected, rtol=1e-6)
+
+    def test_a_given_template_is_cropped_and_used(self, imaging):
+        motion = DoublingMotion(
+            imaging=imaging, displacements=[np.zeros((6, 1, 2))], yranges=[[(1, 7)]], xranges=[[(2, 8)]]
+        )
+        registered = RegisterImaging(imaging, motion)
+        template = np.random.default_rng(3).random((8, 9))
+        movie = registered.get_series(0, 6)[:, 1:7, 2:8, 0]
+        expected = [np.corrcoef(f.ravel(), template[1:7, 2:8].ravel())[0, 1] for f in movie]
+        np.testing.assert_allclose(frame_correlations(registered, template=template, chunk_size=4), expected, rtol=1e-6)
