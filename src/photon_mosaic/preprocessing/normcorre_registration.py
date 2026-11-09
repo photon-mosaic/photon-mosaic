@@ -12,7 +12,7 @@ Typical use::
     from photon_mosaic.preprocessing import compute_motion, register_motion
 
     motion = compute_motion(imaging, method="normcorre", nonrigid=True)
-    registered = register_motion(imaging, motion, method="normcorre")
+    registered = register_motion(imaging, motion)
 
 ``compute_motion`` estimates the shifts and keeps the final template as
 ``motion.reference``; ``register_motion`` applies them lazily, as frames are read.
@@ -1291,8 +1291,13 @@ class NormcorreMotion(Motion):
         ``"border_to_0"``: the largest shift, rounded up, i.e. how many pixels at each edge
         may hold filled-in values (CaImAn ``border_to_0``).
 
-    ``yranges``, ``xranges`` and ``corrected_badframes`` are accepted and kept as
-    :class:`~photon_mosaic.core.Motion` keeps them; NoRMCorre leaves them ``None``.
+    yranges, xranges : list
+        ``[epoch][plane] -> (start, stop)``: the rows and columns no shift reaches past, so
+        without filled-in values. The margin on each side is the largest shift along that
+        axis, rounded up (suite2p's rule; CaImAn's ``border_to_0`` is the largest of both).
+
+    ``corrected_badframes`` is accepted and kept as :class:`~photon_mosaic.core.Motion`
+    keeps it; NoRMCorre leaves it ``None``.
     """
 
     method_name = "normcorre"
@@ -1339,6 +1344,16 @@ class NormcorreMotion(Motion):
         kwargs = super()._from_dict_kwargs(kwargs)
         kwargs["settings"] = cls.settings_class.model_validate(kwargs.get("settings") or {})
         return kwargs
+
+    def patch_motion(self, epoch_index: int, plane_index: int) -> tuple[NDArray, tuple[NDArray, NDArray]] | None:
+        """See :meth:`Motion.patch_motion`: NoRMCorre stores exactly this."""
+
+        if self.patch_shifts is None or self.patch_centers is None:
+            return None
+        epoch_shifts = self.patch_shifts[epoch_index]
+        shifts = epoch_shifts[plane_index] if epoch_shifts is not None else None
+        centers = self.patch_centers[plane_index]
+        return None if shifts is None or centers is None else (shifts, centers)
 
     @classmethod
     def _compute(
@@ -1451,10 +1466,21 @@ class NormcorreMotion(Motion):
         moved = [np.abs(d).max() for d in displacements]
         if settings.nonrigid:
             moved = [max(np.abs(x).max() for x in epoch_patches if x is not None) for epoch_patches in patches]
+
+        # valid region: no shift reaches past ceil(max |shift|) along each axis (suite2p's compute_crop rule)
+        H, W = imaging.shape[0], imaging.shape[1]
+        yranges, xranges = [], []
+        for e, rigid_e in enumerate(displacements):
+            shifts = [patch_motion[e][p] if settings.nonrigid else rigid_e[:, p] for p in range(imaging.num_planes)]
+            margins = [np.ceil(np.abs(np.reshape(s, (-1, 2))).max(axis=0)).astype(int) for s in shifts]
+            yranges.append([(int(my), H - int(my)) for my, _ in margins])
+            xranges.append([(int(mx), W - int(mx)) for _, mx in margins])
         return cls(
             imaging=imaging,
             displacements=displacements,
             reference=templates,
+            yranges=yranges,
+            xranges=xranges,
             patch_shifts=patch_motion if settings.nonrigid else None,
             patch_centers=centers if settings.nonrigid else None,
             settings=settings,
@@ -1465,14 +1491,13 @@ class NormcorreMotion(Motion):
 class RegisterNormcorreImagingEpoch(RegisterImagingEpoch):
     """One epoch of a registered movie: applies stored NoRMCorre shifts as frames are read.
 
-    Not built directly: ``register_motion(imaging, motion, method="normcorre")`` makes one
-    per epoch. Rigid shifts are applied as they were estimated (``shifts_opencv``);
+    Not built directly: ``register_motion(imaging, motion)`` makes one per epoch for a
+    NoRMCorre motion, or for any motion with ``method="normcorre"``. Rigid shifts are
+    applied as they were estimated (``shifts_opencv``);
     non-rigid shifts always by cubic interpolation of the per-pixel field, as CaImAn's
     ``apply_shifts_movie`` (L399). Frame bounds, plane selection and output allocation come
     from :class:`~photon_mosaic.preprocessing.registration.RegisterImagingEpoch`.
     """
-
-    motion: NormcorreMotion
 
     def _correct_plane(
         self,
@@ -1503,24 +1528,23 @@ class RegisterNormcorreImagingEpoch(RegisterImagingEpoch):
             The registered frames.
         """
 
-        settings = self.motion.settings
-        p = plane_index
-        epoch_patches = self.motion.patch_shifts[self.epoch_index] if self.motion.patch_shifts is not None else None
+        # another backend's motion carries no NoRMCorre settings: apply it with the defaults
+        own = isinstance(self.motion, NormcorreMotion)
+        settings = self.motion.settings if isinstance(self.motion, NormcorreMotion) else NormcorreRegistrationSettings()
+        patches = self.motion.patch_motion(self.epoch_index, plane_index)
         # stored shifts are motion; the kernels apply corrections, their negative
-        if epoch_patches is None:
-            correction = -self.motion.displacements[self.epoch_index][start_frame:end_frame, p]
+        if patches is None:
+            correction = -np.asarray(self.motion.displacements[self.epoch_index][start_frame:end_frame, plane_index])
             if settings.shifts_opencv:
-                return _apply_shift_iteration(plane_video, correction, settings.border_nan)
-            return _apply_shifts_dft(plane_video, correction, None, settings.border_nan)
+                return _apply_shift_iteration(plane_video, correction.astype(float), settings.border_nan)
+            return _apply_shifts_dft(plane_video, correction.astype(float), None, settings.border_nan)
 
-        centers = self.motion.patch_centers[p] if self.motion.patch_centers is not None else None
-        assert centers is not None, "piecewise motion without patch centres"
+        shifts, centers = patches
         cropped = settings.bounds is not None and settings.bounds != ((None, None), (None, None))
-        interpolate = settings.shifts_interpolate or cropped
-        patches = epoch_patches[p]
-        assert patches is not None
+        # another backend's patches are not on NoRMCorre's grid: interpolate between their centres
+        interpolate = settings.shifts_interpolate or cropped or not own
         return _apply_pw_shifts_remap(
-            plane_video, -patches[start_frame:end_frame], centers, settings.border_nan, interpolate
+            plane_video, -shifts[start_frame:end_frame], centers, settings.border_nan, interpolate
         )
 
 

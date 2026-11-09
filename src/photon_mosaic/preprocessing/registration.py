@@ -72,17 +72,18 @@ class RegistrationSettings(BaseSettings):
 class RegisterImaging(BasePreprocessor):
     """Apply pre-computed motion correction on-the-fly, whatever the backend.
 
-    Dispatch is by ``method`` (like :meth:`Motion.compute`), defaulting to
-    ``"suite2p"``, and resolved through
+    Dispatch is by ``method``, resolved through
     :func:`photon_mosaic.core.get_registration_class`, so this class imports
-    no backend itself.
+    no backend itself. By default the motion is applied by the backend that
+    estimated it (``motion.method_name``, or ``"suite2p"`` for a plain
+    :class:`Motion`); pass ``method`` to apply it with another backend.
     """
 
     def __init__(
         self,
         imaging: BaseImaging,
         motion: Motion | dict[str, Any],
-        method: KnownMotionMethod | str = "suite2p",
+        method: KnownMotionMethod | str | None = None,
         **kwargs: Any,
     ) -> None:
         """Build an imaging view that applies stored motion fields lazily.
@@ -92,6 +93,7 @@ class RegisterImaging(BasePreprocessor):
         """
         if isinstance(motion, dict):
             motion = Motion.from_dict(motion, imaging=imaging)
+        method = method or motion.method_name or "suite2p"
 
         BasePreprocessor.__init__(self, imaging)
 
@@ -196,3 +198,70 @@ class RegisterImagingEpoch(BasePreprocessorEpoch):
 
 
 register_motion = RegisterImaging
+
+
+def frame_correlations(
+    imaging: BaseImaging,
+    plane_index: int = 0,
+    epoch_index: int = 0,
+    bounds: tuple[tuple[int, int], tuple[int, int]] | None = None,
+    template: NDArray | None = None,
+    chunk_size: int = 100,
+) -> NDArray[np.float64]:
+    """Correlation of every frame with a template image, after CaImAn's main registration metric.
+
+    The better a movie is registered, the more each frame looks like the template, so the
+    higher (and flatter over time) these Pearson correlations are. Frames are read
+    ``chunk_size`` at a time, never all at once.
+
+    Parameters
+    ----------
+    imaging : BaseImaging
+        Usually a registered movie, but any imaging works (e.g. the raw one, to compare).
+    plane_index, epoch_index : int
+        Which plane and epoch to score.
+    bounds : ((y0, y1), (x0, x1)), optional
+        The pixels to compare. By default a registered movie's valid region (its motion's
+        ``yranges``/``xranges``), so filled-in borders don't count, else the whole frame.
+        Pass the same bounds to compare movies registered differently on the same pixels.
+    template : array, ``(H, W)``, optional
+        The full-frame image to compare every frame with, cropped to ``bounds`` here; pass
+        the same one to score several movies against one reference (e.g. suite2p's
+        ``motion.reference``). By default the movie's own mean image, at the cost of a
+        second pass over the frames.
+    chunk_size : int
+        Frames read at a time.
+
+    Returns
+    -------
+    array, ``(n_frames,)``
+        One correlation per frame.
+
+    Notes
+    -----
+    CaImAn ``compute_metrics_motion_correction`` (``correlations``), without its optical
+    flow and crispness. Its default template is the median of binned frames, which needs the
+    whole movie in memory; here it is the mean, or the one passed.
+    """
+    motion = getattr(imaging, "motion", None)
+    if bounds is None and motion is not None and motion.yranges is not None and motion.xranges is not None:
+        bounds = (motion.yranges[epoch_index][plane_index], motion.xranges[epoch_index][plane_index])
+    rows, cols = (slice(*b) for b in bounds) if bounds is not None else (slice(None), slice(None))
+    epoch = imaging.epochs[epoch_index]
+    n_frames = epoch.get_num_samples()
+
+    def chunks():
+        for start in range(0, n_frames, chunk_size):
+            frames = epoch.get_series(start, min(start + chunk_size, n_frames), [plane_index])[:, rows, cols, 0]
+            yield frames.reshape(len(frames), -1).astype(np.float64)
+
+    if template is None:
+        template = sum(frames.sum(axis=0) for frames in chunks()) / n_frames
+    else:
+        template = np.asarray(template, dtype=np.float64)[rows, cols].ravel()
+    template = (template - template.mean()) / np.linalg.norm(template - template.mean())
+    out = []
+    for frames in chunks():
+        frames -= frames.mean(axis=1, keepdims=True)
+        out.append(frames @ template / np.linalg.norm(frames, axis=1))
+    return np.concatenate(out)
