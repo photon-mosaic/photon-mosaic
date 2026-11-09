@@ -222,7 +222,9 @@ class Motion:
             Imaging object associated with the computed motion.
         displacements : Sequence[NDArray]
             Per-epoch rigid displacement arrays shaped ``(frames, planes, 2)``
-            or ``(frames, 2)`` in ``(y, x)`` order.
+            or ``(frames, 2)`` in ``(y, x)`` order, in pixels. A displacement is
+            how far the frame moved relative to the reference; the correction
+            applied on registration is its negative.
         reference : Any, optional
             Per-plane reference image(s) used by the registration algorithm.
         yranges : Sequence | None, optional
