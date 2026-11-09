@@ -25,7 +25,7 @@ matplotlib.use("module://ipympl.backend_nbagg")
 
 import warnings
 
-warnings.filterwarnings("ignore")
+warnings.filterwarnings("ignore", message="Sparse invariant checks")
 
 # %% [markdown]
 # We will run our analysis on `suite2p`'s example data (via a `photon_mosaic.sample_data` function that downloads and caches it from their Google drive), on just 1000 frames. Note that this is a toy example to showcase functionality: its result is intentionally far from perfect, illustrating how users must evaluate and optimise their settings in order to get good results form their data. This is expected.
