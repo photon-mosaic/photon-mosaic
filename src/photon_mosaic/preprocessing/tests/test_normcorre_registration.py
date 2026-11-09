@@ -280,3 +280,13 @@ class TestMixAndMatch:
         own = register_motion(imaging, motion).get_series(0, 60)[..., 0]
         mixed = register_motion(imaging, motion, method="suite2p").get_series(0, 60)[..., 0]
         assert np.abs(mixed - own)[:, 16:-16, 16:-16].mean() < 0.25 * imaging.get_series(0, 60).std()
+
+    @pytest.mark.parametrize("applied_by", [None, "suite2p"])
+    def test_a_registration_reloads_with_the_applier_it_used(self, imaging, applied_by):
+        from photon_mosaic.core import BaseImaging
+
+        motion = compute_motion(imaging, method="normcorre", nonrigid=True, **self.SETTINGS["normcorre"])
+        registered = register_motion(imaging, motion, method=applied_by)
+        restored = BaseImaging.from_dict(registered.to_dict())
+        assert isinstance(restored.epochs[0], type(registered.epochs[0]))
+        np.testing.assert_array_equal(restored.get_series(0, 5), registered.get_series(0, 5))
