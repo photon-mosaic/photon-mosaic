@@ -1,4 +1,8 @@
-"""NoRMCorre motion correction following CaImAn v1.13.2 (``240e1f2``); line numbers cite that version."""
+"""NoRMCorre motion correction, following CaImAn's implementation.
+
+NoRMCorre is the algorithm (Pnevmatikakis & Giovannucci 2017); CaImAn is the package whose Python
+implementation this module follows, v1.13.2 (``240e1f2``). Line numbers cite that version.
+"""
 
 from __future__ import annotations
 
@@ -21,7 +25,7 @@ _MIN_MOV_FRAMES = 400
 
 
 class NormcorreRegistrationSettings(RegistrationSettings):
-    """CaImAn's ``motion`` parameters, with CaImAn's names and defaults.
+    """Settings of the NoRMCorre backend: CaImAn's ``motion`` parameters, with CaImAn's names and defaults.
 
     The shared ``nonrigid`` (CaImAn ``pw_rigid``), ``max_nonrigid_shift`` (CaImAn
     ``max_deviation_rigid``) and ``bounds`` (CaImAn ``indices``) come from
