@@ -12,7 +12,7 @@ Typical use::
     from photon_mosaic.preprocessing import compute_motion, register_motion
 
     motion = compute_motion(imaging, method="normcorre", nonrigid=True)
-    registered = register_motion(imaging, motion, method="normcorre")
+    registered = register_motion(imaging, motion)
 
 ``compute_motion`` estimates the shifts and keeps the final template as
 ``motion.reference``; ``register_motion`` applies them lazily, as frames are read.
@@ -1465,8 +1465,9 @@ class NormcorreMotion(Motion):
 class RegisterNormcorreImagingEpoch(RegisterImagingEpoch):
     """One epoch of a registered movie: applies stored NoRMCorre shifts as frames are read.
 
-    Not built directly: ``register_motion(imaging, motion, method="normcorre")`` makes one
-    per epoch. Rigid shifts are applied as they were estimated (``shifts_opencv``);
+    Not built directly: ``register_motion(imaging, motion)`` makes one per epoch for a
+    NoRMCorre motion, or for any motion with ``method="normcorre"``. Rigid shifts are
+    applied as they were estimated (``shifts_opencv``);
     non-rigid shifts always by cubic interpolation of the per-pixel field, as CaImAn's
     ``apply_shifts_movie`` (L399). Frame bounds, plane selection and output allocation come
     from :class:`~photon_mosaic.preprocessing.registration.RegisterImagingEpoch`.

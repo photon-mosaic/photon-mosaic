@@ -108,6 +108,12 @@ class TestRegisterImaging:
         restored = BaseImaging.from_dict(registered.to_dict())
         assert isinstance(restored.epochs[0], DoublingEpoch)
 
+    def test_default_applier_is_the_motion_s_own(self, imaging):
+        motion = DoublingMotion(imaging=imaging, displacements=[np.zeros((6, 1, 2))])
+        registered = RegisterImaging(imaging, motion)
+        assert isinstance(registered.epochs[0], DoublingEpoch)
+        assert registered._kwargs["method"] == "doubling_test_backend"
+
     def test_kwargs_are_forwarded_to_the_epoch(self, imaging):
         motion = DoublingMotion(imaging=imaging, displacements=[np.zeros((6, 1, 2))])
         registered = RegisterImaging(imaging, motion, method="doubling_test_backend", flavour="test")

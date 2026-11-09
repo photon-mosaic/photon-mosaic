@@ -72,17 +72,18 @@ class RegistrationSettings(BaseSettings):
 class RegisterImaging(BasePreprocessor):
     """Apply pre-computed motion correction on-the-fly, whatever the backend.
 
-    Dispatch is by ``method`` (like :meth:`Motion.compute`), defaulting to
-    ``"suite2p"``, and resolved through
+    Dispatch is by ``method``, resolved through
     :func:`photon_mosaic.core.get_registration_class`, so this class imports
-    no backend itself.
+    no backend itself. By default the motion is applied by the backend that
+    estimated it (``motion.method_name``, or ``"suite2p"`` for a plain
+    :class:`Motion`); pass ``method`` to apply it with another backend.
     """
 
     def __init__(
         self,
         imaging: BaseImaging,
         motion: Motion | dict[str, Any],
-        method: KnownMotionMethod | str = "suite2p",
+        method: KnownMotionMethod | str | None = None,
         **kwargs: Any,
     ) -> None:
         """Build an imaging view that applies stored motion fields lazily.
@@ -92,6 +93,7 @@ class RegisterImaging(BasePreprocessor):
         """
         if isinstance(motion, dict):
             motion = Motion.from_dict(motion, imaging=imaging)
+        method = method or motion.method_name or "suite2p"
 
         BasePreprocessor.__init__(self, imaging)
 
