@@ -366,6 +366,17 @@ class Motion:
         target = _get_motion_class(method) if cls is Motion and method is not None else cls
         return target(imaging=imaging, **target._from_dict_kwargs(_decode_motion_value(motion_dict["kwargs"])))
 
+    def patch_motion(self, epoch_index: int, plane_index: int) -> tuple[NDArray, tuple[NDArray, NDArray]] | None:
+        """The non-rigid motion of one plane, in the form every backend's applier reads.
+
+        This is what lets one backend apply another's motion. Returns ``None`` for rigid
+        motion, else ``(shifts, (cy, cx))``: the total motion of every patch,
+        ``(frames, ny, nx, 2)`` in ``(y, x)`` pixels with the same sign as
+        ``displacements`` (rigid part included), and the patch centres along each axis.
+        """
+
+        return None
+
     @property
     def num_epochs(self) -> int:
         """Number of epochs represented in the stored displacements."""
