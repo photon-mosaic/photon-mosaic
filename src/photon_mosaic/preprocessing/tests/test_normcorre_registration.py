@@ -156,6 +156,19 @@ class TestEndToEnd:
             patch_mean = patches.mean(axis=(1, 2))
             assert all(np.corrcoef(patch_mean[:, i], moved[:, i])[0, 1] > 0.9 for i in range(2))
 
+    @pytest.mark.parametrize("nonrigid", [False, True])
+    def test_valid_region_is_the_largest_shift_per_axis(self, true_shifts, nonrigid):
+        # a non-square frame, so swapped axes would show
+        movie = _movie(true_shifts)[:, :, :80, None]
+        imaging = NumpyImaging(imaging_series=[movie], sampling_frequency=10.0)
+        motion = compute_motion(
+            imaging, method="normcorre", nonrigid=nonrigid, strides=(32, 32), overlaps=(16, 16), num_frames_split=20
+        )
+        shifts = motion.patch_shifts[0][0] if nonrigid else motion.displacements[0][:, 0]
+        margin_y, margin_x = np.ceil(np.abs(shifts.reshape(-1, 2)).max(axis=0)).astype(int)
+        assert motion.yranges == [[(margin_y, SIZE - margin_y)]]
+        assert motion.xranges == [[(margin_x, 80 - margin_x)]]
+
     def test_multi_epoch_carries_the_template(self, true_shifts):
         movie = _movie(true_shifts)[..., None]
         imaging = NumpyImaging(imaging_series=[movie[:30], movie[30:]], sampling_frequency=10.0)

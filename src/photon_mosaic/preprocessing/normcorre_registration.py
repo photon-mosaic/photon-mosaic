@@ -1291,8 +1291,13 @@ class NormcorreMotion(Motion):
         ``"border_to_0"``: the largest shift, rounded up, i.e. how many pixels at each edge
         may hold filled-in values (CaImAn ``border_to_0``).
 
-    ``yranges``, ``xranges`` and ``corrected_badframes`` are accepted and kept as
-    :class:`~photon_mosaic.core.Motion` keeps them; NoRMCorre leaves them ``None``.
+    yranges, xranges : list
+        ``[epoch][plane] -> (start, stop)``: the rows and columns no shift reaches past, so
+        without filled-in values. The margin on each side is the largest shift along that
+        axis, rounded up (suite2p's rule; CaImAn's ``border_to_0`` is the largest of both).
+
+    ``corrected_badframes`` is accepted and kept as :class:`~photon_mosaic.core.Motion`
+    keeps it; NoRMCorre leaves it ``None``.
     """
 
     method_name = "normcorre"
@@ -1451,10 +1456,21 @@ class NormcorreMotion(Motion):
         moved = [np.abs(d).max() for d in displacements]
         if settings.nonrigid:
             moved = [max(np.abs(x).max() for x in epoch_patches if x is not None) for epoch_patches in patches]
+
+        # valid region: no shift reaches past ceil(max |shift|) along each axis (suite2p's compute_crop rule)
+        H, W = imaging.shape[0], imaging.shape[1]
+        yranges, xranges = [], []
+        for e, rigid_e in enumerate(displacements):
+            shifts = [patch_motion[e][p] if settings.nonrigid else rigid_e[:, p] for p in range(imaging.num_planes)]
+            margins = [np.ceil(np.abs(np.reshape(s, (-1, 2))).max(axis=0)).astype(int) for s in shifts]
+            yranges.append([(int(my), H - int(my)) for my, _ in margins])
+            xranges.append([(int(mx), W - int(mx)) for _, mx in margins])
         return cls(
             imaging=imaging,
             displacements=displacements,
             reference=templates,
+            yranges=yranges,
+            xranges=xranges,
             patch_shifts=patch_motion if settings.nonrigid else None,
             patch_centers=centers if settings.nonrigid else None,
             settings=settings,
