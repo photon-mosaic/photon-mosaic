@@ -67,6 +67,14 @@ def _make_shifted_imaging(num_frames, num_planes=1, height=16, width=16, shifts=
     return NumpyImaging(imaging_series=videos, sampling_frequency=sampling_frequency)
 
 
+def _capture_reference_samples(monkeypatch):
+    """The frames each call to the reference wrapper receives, one array per plane."""
+    samples = []
+    wrapper = s2p._compute_reference_wrapper
+    monkeypatch.setattr(s2p, "_compute_reference_wrapper", lambda x, *a, **k: samples.append(x) or wrapper(x, *a, **k))
+    return samples
+
+
 class TestComputeMotionSettingsResolution:
     def test_none_settings_creates_defaults_from_kwargs(self):
         settings = None
@@ -174,6 +182,29 @@ class TestComputeMotionSuite2p:
         assert not motion.displacements[0][[0, 4, 5]].any()
         assert motion.corrected_badframes[0][[0, 4, 5]].all()
         np.testing.assert_array_equal(samples[0], imaging.get_series(1, 4)[..., 0])  # frames 1 to 3 only
+
+    def test_reference_draws_frames_from_every_epoch(self, monkeypatch):
+        samples = _capture_reference_samples(monkeypatch)
+        # three epochs whose frames all differ: the block moves every frame and is brighter in each later epoch
+        shifts = [(0, 0), (1, 0), (0, 1), (1, 1), (-1, 0), (0, -1)]
+        videos = [(e + 1) * _make_shifted_video(6, height=12, width=12, shifts=shifts) for e in range(3)]
+        imaging = NumpyImaging(imaging_series=videos, sampling_frequency=10.0)
+        compute_motion(imaging, method="suite2p", nonrigid=False, nimg_init=6)
+        picks = np.linspace(0, 18, 7, dtype=int)[:-1]  # suite2p's picks over the three epochs joined: two from each
+        np.testing.assert_array_equal(samples[0], np.concatenate(videos)[picks, ..., 0])
+
+    def test_single_epoch_reference_is_unchanged(self, monkeypatch):
+        video = 1000 * _make_shifted_video(20, height=12, width=12, shifts=[((i % 3) - 1, i % 2) for i in range(20)])
+        imaging = NumpyImaging(imaging_series=[video], sampling_frequency=10.0)  # suite2p's reference is int16
+        settings = Suite2pRegistrationSettings(nonrigid=False, nimg_init=7)
+        # what the first-epoch code read: nimg_init frames spaced by np.linspace over the epoch
+        before = video[np.linspace(0, 20, 8, dtype=int)[:-1], ..., 0]
+        reference_before, _ = s2p._compute_reference_wrapper(before, settings)
+        samples = _capture_reference_samples(monkeypatch)
+        motion = compute_motion(imaging, method="suite2p", settings=settings)
+        np.testing.assert_array_equal(samples[0], before)
+        assert reference_before.any()
+        np.testing.assert_array_equal(motion.reference[0], reference_before)
 
     def test_invalid_trims_and_outlier_settings_raise(self):
         imaging = _make_shifted_imaging((6, 3), height=12, width=12)
