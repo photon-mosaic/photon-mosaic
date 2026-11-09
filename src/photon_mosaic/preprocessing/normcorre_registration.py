@@ -157,14 +157,6 @@ def _apply_patch_shifts_fft(
 # --------------------------------------------------------------------------- #
 
 
-def _read_plane(epoch: BaseImagingEpoch, plane_index: int, start: int, end: int, step: int = 1) -> NDArray:
-    """``(n, H, W)`` float32 frames of one plane."""
-
-    video = epoch.get_series(start, end)[::step]
-    plane = video[:, :, :, plane_index] if video.ndim == 4 else video
-    return np.asarray(plane, dtype=np.float32)
-
-
 def _crop(frames: NDArray, settings: NormcorreRegistrationSettings) -> NDArray:
     """The ``bounds`` region of the frames (CaImAn ``m[:, indices[0], indices[1]]``)."""
 
@@ -255,7 +247,8 @@ def _correct_epoch(
     for idx in np.array_split(np.arange(n_frames), n_splits):
         if idx.size == 0:
             continue
-        frames = _crop(_read_plane(epoch, plane_index, int(idx[0]), int(idx[-1]) + 1), settings)
+        plane = epoch.get_series(int(idx[0]), int(idx[-1]) + 1, slice(plane_index, plane_index + 1))[..., 0]
+        frames = _crop(plane.astype(np.float32), settings)
         corrected, rigid_split, patch_split, centers = _tile_and_correct(frames, template, add_to_movie, settings)
         split_templates.append(_split_template(np.asarray(corrected)))
         rigid.append(rigid_split)
@@ -339,7 +332,8 @@ class NormcorreMotion(Motion):
         centers: list[tuple[NDArray, NDArray] | None] = []
         for p in range(imaging.num_planes):
             if settings.min_mov is None:
-                first = _read_plane(epochs[0], p, 0, min(_MIN_MOV_FRAMES, epochs[0].get_num_samples()))
+                n_first = min(_MIN_MOV_FRAMES, epochs[0].get_num_samples())
+                first = epochs[0].get_series(0, n_first, slice(p, p + 1))[..., 0].astype(np.float32)
                 if settings.gSig_filt is not None:
                     first = _high_pass_filter_space(first, settings.gSig_filt)
                 min_mov = float(np.min(first))
@@ -354,7 +348,8 @@ class NormcorreMotion(Motion):
                 if template is None:
                     n_frames = epoch.get_num_samples()
                     picks = range(0, n_frames, n_frames // 50 + 1)
-                    sample = _crop(np.concatenate([_read_plane(epoch, p, i, i + 1) for i in picks]), settings)
+                    picked = [epoch.get_series(i, i + 1, slice(p, p + 1))[..., 0] for i in picks]
+                    sample = _crop(np.concatenate(picked).astype(np.float32), settings)
                     if settings.gSig_filt is not None:
                         sample = _high_pass_filter_space(sample, settings.gSig_filt)
                     template = _bin_median(_register_sample(sample, settings.max_shifts))
