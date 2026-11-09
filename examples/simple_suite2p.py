@@ -34,7 +34,7 @@ warnings.filterwarnings("ignore", message="Sparse invariant checks")
 # We start by opening the `suite2p` sample data as an `Imaging` object and plotting it.
 
 # %%
-imaging = download_suite2p_google_drive(20)
+imaging = download_suite2p_google_drive(1)
 
 _ = plot_imaging_series(imaging, backend="ipywidgets", colormap="plasma")
 
