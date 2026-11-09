@@ -162,7 +162,20 @@ def _apply_patch_shifts_fft(
 
 
 def _crop(frames: NDArray, settings: NormcorreRegistrationSettings) -> NDArray:
-    """The ``bounds`` region of the frames (CaImAn ``m[:, indices[0], indices[1]]``)."""
+    """The ``bounds`` region of the frames (CaImAn ``m[:, indices[0], indices[1]]``).
+
+    Parameters
+    ----------
+    frames : NDArray
+        Frames of one plane, ``(T, H, W)``.
+    settings : NormcorreRegistrationSettings
+        Only ``bounds``, ``((y0, y1), (x0, x1))``, is read; None keeps the full frame.
+
+    Returns
+    -------
+    NDArray
+        The cropped frames, ``frames[:, y0:y1, x0:x1]``.
+    """
 
     if settings.bounds is None:
         return frames
@@ -175,8 +188,30 @@ def _tile_and_correct(
 ) -> tuple[NDArray, NDArray, NDArray | None, tuple[NDArray, NDArray] | None]:
     """One split through CaImAn's ``tile_and_correct`` (L2013), vectorised over frames.
 
-    Returns the corrected frames and the *correction* shifts: rigid ``(T, 2)`` and, when
-    ``settings.nonrigid``, per patch ``(T, ny, nx, 2)`` with the patch centres.
+    Parameters
+    ----------
+    frames : NDArray
+        The split's frames of one plane, already cropped, ``(T, H, W)``.
+    template : NDArray
+        The template the frames are registered to, ``(H, W)``.
+    add_to_movie : float
+        Offset added to the frames and the template before estimating the shifts, and
+        subtracted from the corrected frames, as CaImAn does. CaImAn passes ``-min_mov``, to
+        keep the movie non-negative during estimation.
+    settings : NormcorreRegistrationSettings
+        The estimation and apply settings.
+
+    Returns
+    -------
+    corrected : NDArray
+        The corrected frames, ``(T, H, W)``.
+    rigid : NDArray
+        The rigid *correction* shifts, ``(T, 2)`` as ``(y, x)``.
+    patches : NDArray or None
+        Per-patch *correction* shifts ``(T, ny, nx, 2)`` when ``settings.nonrigid``, else None.
+        On the FFT path they are on the upsampled patch grid.
+    centers : tuple of NDArray or None
+        The patch centres ``(cy, cx)`` of ``patches``, else None.
     """
 
     raw = frames.astype(np.float64)
@@ -224,7 +259,18 @@ def _tile_and_correct(
 
 
 def _split_template(corrected: NDArray) -> NDArray:
-    """A split's template: ``nanmean`` over frames, NaN filled with the minimum (``tile_and_correct_wrapper``)."""
+    """A split's template: ``nanmean`` over frames, NaN filled with the minimum (``tile_and_correct_wrapper``).
+
+    Parameters
+    ----------
+    corrected : NDArray
+        The split's corrected frames, ``(T, H, W)``.
+
+    Returns
+    -------
+    NDArray
+        The split's template, ``(H, W)`` float32.
+    """
 
     template = np.nanmean(corrected.astype(np.float32), axis=0)  # CaImAn writes mc as float32
     template[np.isnan(template)] = np.nanmin(template)
@@ -241,8 +287,33 @@ def _correct_epoch(
 ) -> tuple[NDArray, NDArray, NDArray | None, tuple[NDArray, NDArray] | None]:
     """One pass of ``motion_correction_piecewise`` (L3144) over an epoch's contiguous splits.
 
-    Returns the new template (median of the split templates, high-passed if ``gSig_filt``)
-    and the shifts of every frame against the *input* template, as CaImAn's are.
+    Parameters
+    ----------
+    epoch : BaseImagingEpoch
+        The epoch to read frames from.
+    plane_index : int
+        The plane to register.
+    template : NDArray
+        The template every split is registered to, cropped to ``bounds``, ``(H, W)``.
+    add_to_movie : float
+        Offset added during estimation, see :func:`_tile_and_correct`.
+    n_splits : int
+        Number of contiguous splits the epoch is cut into (CaImAn's ``splits``). Each split is
+        registered to ``template`` and gives its own template.
+    settings : NormcorreRegistrationSettings
+        The estimation and apply settings.
+
+    Returns
+    -------
+    template : NDArray
+        The new template: the median of the split templates, high-passed if ``gSig_filt``.
+    rigid : NDArray
+        The rigid *correction* shifts of every frame against the *input* template, as CaImAn's
+        are, ``(T, 2)``.
+    patches : NDArray or None
+        Per-patch *correction* shifts ``(T, ny, nx, 2)`` when ``settings.nonrigid``, else None.
+    centers : tuple of NDArray or None
+        The patch centres ``(cy, cx)``, in cropped coordinates, else None.
     """
 
     n_frames = epoch.get_num_samples()
