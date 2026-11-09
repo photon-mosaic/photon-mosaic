@@ -329,7 +329,9 @@ class Suite2PMotion(Motion):
         """See :meth:`Motion.patch_motion`: each block's offset plus the rigid shift, at the block centres."""
 
         epoch_offsets = self.nonrigid_offsets[epoch_index] if self.nonrigid_offsets is not None else None
-        if self.blocks is None or not epoch_offsets or epoch_offsets[plane_index] is None:
+        if self.blocks is None or not epoch_offsets or plane_index >= len(epoch_offsets):
+            return None
+        if epoch_offsets[plane_index] is None:
             return None
         yblock, xblock, (ny, nx) = self.blocks[plane_index][:3]
         rigid = self.displacements[epoch_index][:, plane_index]
