@@ -112,7 +112,7 @@ def test_registered_imaging_provenance_is_json(imaging, tmp_path):
     from photon_mosaic.preprocessing import RegisterImaging
     from photon_mosaic.preprocessing.suite2p_registration import Suite2PMotion
 
-    motion = Suite2PMotion(imaging=imaging, displacements=[np.zeros((2, 1, 2)), np.zeros((3, 1, 2))], ops={})
+    motion = Suite2PMotion(imaging=imaging, displacements=[np.zeros((2, 1, 2)), np.zeros((3, 1, 2))])
     registered = RegisterImaging(imaging, motion)
 
     run_segmentation(registered, method="dummy", folder=tmp_path / "seg")

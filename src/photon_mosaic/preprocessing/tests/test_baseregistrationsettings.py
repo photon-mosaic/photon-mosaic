@@ -22,7 +22,7 @@ class TestSuite2pDefaults:
         assert settings.data_type == "h5"
 
     def test_batch_size_default(self, settings):
-        assert settings.batch_size == 500
+        assert settings.batch_size == 100
 
     def test_align_by_chan_default(self, settings):
         assert settings.align_by_chan == 1

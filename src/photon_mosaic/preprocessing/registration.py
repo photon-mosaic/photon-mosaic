@@ -32,7 +32,7 @@ class RegistrationSettings(BaseSettings):
         default=Path("/scratch"),
         description="Directory into which to write temporary files produced by the registration backend",
     )
-    batch_size: int = Field(default=500, description="Number of frames per batch")
+    batch_size: int = Field(default=100, description="Number of frames per batch")
     device: str = Field(
         default="cpu",
         description="Torch device for registration: 'cpu', 'cuda', or 'mps'.",
@@ -55,6 +55,18 @@ class RegistrationSettings(BaseSettings):
     )
 
     model_config = ConfigDict(env_prefix="REGISTRATION_", case_sensitive=False, env_file=".env")
+
+    @classmethod
+    def settings_customise_sources(
+        cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings
+    ):
+        """Read the .env file but skip keys without this class's prefix: other tools share that file."""
+        prefix = str(cls.model_config.get("env_prefix", "")).lower()
+
+        def own_dotenv():
+            return {k: v for k, v in dotenv_settings().items() if k in cls.model_fields or k.startswith(prefix)}
+
+        return init_settings, env_settings, own_dotenv, file_secret_settings
 
 
 class RegisterImaging(BasePreprocessor):
