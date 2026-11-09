@@ -207,7 +207,7 @@ def frame_correlations(
     bounds: tuple[tuple[int, int], tuple[int, int]] | None = None,
     chunk_size: int = 100,
 ) -> NDArray[np.float64]:
-    """Correlation of every frame with the mean image, CaImAn's main registration metric.
+    """Correlation of every frame with the mean image, after CaImAn's main registration metric.
 
     The better a movie is registered, the more each frame looks like the mean, so the
     higher (and flatter over time) these Pearson correlations are. Frames are read
@@ -234,7 +234,8 @@ def frame_correlations(
     Notes
     -----
     CaImAn ``compute_metrics_motion_correction`` (``correlations``), without its optical
-    flow and crispness.
+    flow and crispness, and with the mean image as the template: CaImAn uses the median of
+    binned frames, which needs the whole movie in memory.
     """
     motion = getattr(imaging, "motion", None)
     if bounds is None and motion is not None and motion.yranges is not None and motion.xranges is not None:
