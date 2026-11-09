@@ -76,42 +76,17 @@ class NormcorreRegistrationSettings(RegistrationSettings):
 
 
 def _high_pass_filter_space(frames: NDArray, gSig_filt: tuple[int, int]) -> NDArray:
-    """Zero-mean Gaussian high-pass, frame by frame.
-
-    Kernel from ``g = gSig_filt[0]`` alone: a 2-D Gaussian of std ``g`` and size ``(3*g)//2*2+1``;
-    its values at or above the first column's maximum are made zero-mean, the rest set to
-    zero; convolved with
-    reflect padding. CaImAn ``high_pass_filter_space`` L1965 (``cv2.filter2D``);
-    jnormcorre ``onephotonmethods.high_pass_filter_cv`` L29; masknmf
-    ``spatial_filters.compute_highpass_filter_kernel`` L8.
-    """
+    """CaImAn ``high_pass_filter_space`` (L1965)."""
     raise NotImplementedError
 
 
 def _bin_median(frames: NDArray, window: int = 10) -> NDArray:
-    """``(H, W)`` median of the means of ``window``-frame bins.
-
-    The first ``window * (T // window)`` frames are reshaped to ``(window, T // window, H, W)``
-    and averaged over axis 0, so a bin holds frames ``T // window`` apart, not consecutive ones;
-    then the median over bins. ``window`` is clamped to ``T`` for short inputs, and both
-    reductions ignore NaNs (``nanmean``/``nanmedian``), as in CaImAn.
-
-    CaImAn ``bin_median`` L1008; jnormcorre ``bin_median`` L690.
-    """
+    """CaImAn ``bin_median`` (L1008)."""
     raise NotImplementedError
 
 
 def _register_sample(frames: NDArray, max_shifts: tuple[int, int]) -> NDArray:
-    """CaImAn's template-free registration of the template sample; returns the registered frames.
-
-    ``movie.motion_correct(max_shifts[1], max_shifts[0], template=None)``: take every
-    ``max(1, T / (1e8 / (H*W)))``-th frame, template = bin median; register by normalised
-    cross-correlation (``cv2.matchTemplate`` ``TM_CCORR_NORMED`` on the template cropped by
-    ``max_shifts``, sub-pixel by a log-parabola through the peak's neighbours); shift with
-    cubic interpolation; new template = bin median; register all frames to it, take the bin
-    median, register all frames to that and return them. CaImAn ``caiman/base/movies.py``
-    ``motion_correct`` L97, ``extract_shifts`` L216, ``apply_shifts`` L308.
-    """
+    """CaImAn ``movie.motion_correct`` with ``template=None`` (``caiman/base/movies.py`` L97)."""
     raise NotImplementedError
 
 
@@ -123,15 +98,7 @@ def _register_translation(
     shifts_lb: NDArray | None = None,
     shifts_ub: NDArray | None = None,
 ) -> tuple[NDArray, NDArray]:
-    """Per frame, the ``(y, x)`` shift of ``frames`` relative to ``template`` and the global phase difference.
-
-    Cross-power spectrum, integer peak within ``max_shifts``, or within ``[shifts_lb, shifts_ub]``
-    instead when bounds are given (CaImAn L1586-1600),
-    upsampled-DFT refinement to ``1/upsample_factor`` px. Returns CaImAn's ``rigid_shts``
-    (the correction is its negative) ``(T, 2)`` and ``diffphase`` ``(T,)``.
-    CaImAn ``register_translation`` L1454; jnormcorre ``register_translation_jax_simple`` L903;
-    masknmf ``estimate_rigid_shifts`` L99.
-    """
+    """CaImAn ``register_translation`` (L1454)."""
     raise NotImplementedError
 
 
@@ -145,32 +112,17 @@ def _register_patches(
     upsample_factor: int,
     rigid_shifts: NDArray,
 ) -> tuple[NDArray, NDArray, tuple[NDArray, NDArray]]:
-    """:func:`_register_translation` per patch, bounded to ``ceil(rigid - d)..floor(rigid + d)``.
-
-    Patches of ``strides + overlaps`` (``sliding_window`` L1839). Returns raw patch shifts
-    ``(T, ny, nx, 2)``, their phase differences ``(T, ny, nx)`` and the patch centres
-    ``(cy, cx)`` (``get_patch_centers`` L1793). CaImAn ``tile_and_correct`` L2013, piecewise
-    branch; jnormcorre ``_register_to_template_pwrigid`` L1556; masknmf
-    ``_estimate_patchwise_rigid_shifts`` L614.
-    """
+    """CaImAn ``tile_and_correct`` (L2013), patch estimation of the piecewise branch."""
     raise NotImplementedError
 
 
 def _apply_shift_iteration(frames: NDArray, shifts: NDArray, border_nan: BorderNan) -> NDArray:
-    """Translate each frame by its correction shift with cubic interpolation (``shifts_opencv`` rigid path).
-
-    ``cv2.warpAffine`` ``INTER_CUBIC``, reflect border, clipped to the frame's min/max, then the
-    uncovered strip filled per ``border_nan``. CaImAn ``apply_shift_iteration`` L512.
-    """
+    """CaImAn ``apply_shift_iteration`` (L512)."""
     raise NotImplementedError
 
 
 def _apply_shifts_dft(frames: NDArray, shifts: NDArray, diffphase: NDArray | None, border_nan: BorderNan) -> NDArray:
-    """Translate each frame by its correction shift through a Fourier phase ramp, then fill per ``border_nan``.
-
-    CaImAn ``apply_shifts_dft`` L1654; jnormcorre ``apply_shifts_dft_fast_1`` L1219;
-    masknmf ``apply_rigid_shifts`` L45.
-    """
+    """CaImAn ``apply_shifts_dft`` (L1654)."""
     raise NotImplementedError
 
 
@@ -181,13 +133,7 @@ def _apply_pw_shifts_remap(
     border_nan: BorderNan,
     shifts_interpolate: bool,
 ) -> NDArray:
-    """Warp each frame by the dense field built from its correction patch shifts.
-
-    Field from the patch grid: interpolated from ``patch_centers`` (``shifts_interpolate``) or
-    resized corner to corner; frame sampled at ``grid - correction`` with cubic remap,
-    ``border_nan`` as the border mode. CaImAn ``apply_pw_shifts_remap_2d`` L2533 and
-    ``interpolate_shifts`` L1899; masknmf ``apply_displacement_vector_field`` L465.
-    """
+    """CaImAn ``apply_pw_shifts_remap_2d`` (L2533)."""
     raise NotImplementedError
 
 
@@ -202,15 +148,7 @@ def _apply_patch_shifts_fft(
     shifts_interpolate: bool,
     border_nan: BorderNan,
 ) -> tuple[NDArray, NDArray, tuple[NDArray, NDArray]]:
-    """CaImAn's FFT piecewise path: upsample the patch grid, Fourier-shift each patch, blend.
-
-    New strides ``round(strides / upsample_factor_grid)``; raw shifts and phases brought onto
-    the finer grid (from the centres if ``shifts_interpolate``, else resized); each finer patch
-    shifted with :func:`_apply_shifts_dft`; overlaps blended with linear weights, or cut at the
-    middle when neighbouring shifts differ by >= 0.5 px. Returns the corrected frames, the
-    *correction* shifts on the finer grid and its centres. CaImAn ``tile_and_correct`` L2013
-    (FFT branch) and ``create_weight_matrix_for_blending`` L1929.
-    """
+    """CaImAn ``tile_and_correct`` (L2013), FFT branch of the piecewise path."""
     raise NotImplementedError
 
 
