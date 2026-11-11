@@ -4,8 +4,6 @@ NoRMCorre is the algorithm (Pnevmatikakis & Giovannucci 2017); CaImAn is the pac
 implementation this module follows, v1.13.2 (``240e1f2``). Line numbers cite that version.
 """
 
-from __future__ import annotations
-
 from typing import Any, Literal, Sequence
 
 import numpy as np
