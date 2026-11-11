@@ -194,7 +194,7 @@ sphinx_gallery_conf = {
         "repo": "photon-mosaic",
         "branch": "gh-pages",
         "binderhub_url": "https://mybinder.org",
-        "dependencies": ["../binder/requirements.txt"],
+        "dependencies": ["../binder/requirements.txt", "../binder/runtime.txt"],
     },
     "reference_url": {"photon-mosaic": None},
     # "default_thumb_file": "source/_static/data_icon.png",  # default thumbnail image
