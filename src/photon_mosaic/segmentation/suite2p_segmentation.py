@@ -29,10 +29,6 @@ class Suite2pSegmentationSettings(BaseSettings):
         default=1.0,
         description="Timescale of the indicator (seconds). GCaMP6s ~1.5, GCaMP6f ~0.7.",
     )
-    fs: float = Field(
-        default=30.0,
-        description="Sampling frequency of the imaging data in Hz.",
-    )
     preclassify: float = Field(
         default=0.0,
         description="Apply classifier before refinement with probability threshold. 0 disables. Not used yet.",
@@ -75,7 +71,10 @@ class Suite2pSegmentationSettings(BaseSettings):
     )
     bin_size: int | None = Field(
         default=None,
-        description="Frames per bin. None uses max(1, n_frames // nbins, round(tau * fs)).",
+        description=(
+            "Frames per bin. None uses max(1, n_frames // nbins, round(tau * fs)), where fs is the "
+            "imaging object's sampling frequency."
+        ),
     )
     highpass_time: int = Field(
         default=100,
@@ -367,7 +366,9 @@ class Suite2pSegmentation(BaseSegmentation):
 
         n_epochs = imaging.get_num_epochs()
         n_frames = int(imaging.get_total_frames())
-        bin_size = settings.bin_size or int(max(1, n_frames // settings.nbins, np.round(settings.tau * settings.fs)))
+        bin_size = settings.bin_size or int(
+            max(1, n_frames // settings.nbins, np.round(settings.tau * imaging.sampling_frequency))
+        )
 
         logging.info("Suite2p detection — %d epochs", n_epochs)
         t0 = time.time()
