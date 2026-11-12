@@ -1,13 +1,1 @@
--e .[widgets,suite2p]
-ipython
-linkify-it-py
-myst-parser
-nbsphinx
-numpydoc
-pydata-sphinx-theme
-setuptools-scm
-sphinx
-sphinx-argparse
-sphinx-autodoc-typehints
-sphinx-gallery
-sphinx_design
+photon-mosaic[widgets,suite2p]
