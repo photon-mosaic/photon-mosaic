@@ -156,6 +156,22 @@ class TestRunSuite2p:
         run_segmentation(imaging, method="suite2p", folder=None, bin_size=2)
         assert bin_calls[0]["bin_size"] == 2
 
+    def test_bin_size_follows_the_imaging_sampling_frequency(self, imaging, fake_inner):
+        # tau defaults to 1.0 s, so an unset bin_size is round(tau * fs) frames
+        bin_calls, _ = fake_inner
+        run_segmentation(imaging, method="suite2p", folder=None)
+        assert imaging.sampling_frequency == 7.0
+        assert bin_calls[0]["bin_size"] == 7
+
+        faster = NumpyImaging([np.ones((5, 4, 5, 1), dtype=np.float32)], sampling_frequency=21.0)
+        run_segmentation(faster, method="suite2p", folder=None, tau=2.0)
+        assert bin_calls[1]["bin_size"] == 42
+
+    def test_fs_is_not_a_setting(self, imaging, fake_inner):
+        # the rate comes from the imaging object; a stale fs cannot override it
+        with pytest.raises(ValueError, match="fs"):
+            run_segmentation(imaging, method="suite2p", folder=None, fs=30.0)
+
     def test_unsupported_setting_raises(self, imaging, fake_inner):
         with pytest.raises(ValueError, match="Not supported"):
             run_segmentation(imaging, method="suite2p", folder=None, chan2_threshold=0.5)
