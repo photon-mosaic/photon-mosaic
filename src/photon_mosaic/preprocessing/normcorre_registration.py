@@ -160,7 +160,7 @@ def _high_pass_filter_space(frames: NDArray, gSig_filt: tuple[int, int]) -> NDAr
     )
 
 
-def _bin_median(frames: NDArray, window: int = _BIN_MEDIAN_WINDOW, clamp_window: bool = True) -> NDArray:
+def _bin_median(frames: NDArray, window: int = _BIN_MEDIAN_WINDOW, *, clamp_window: bool) -> NDArray:
     """A robust average image: the median of ``window`` bin averages.
 
     The first ``window * (T // window)`` frames are split into ``window`` bins of frames
@@ -174,8 +174,9 @@ def _bin_median(frames: NDArray, window: int = _BIN_MEDIAN_WINDOW, clamp_window:
     window : int
         Number of bins.
     clamp_window : bool
-        Use ``min(window, T)`` bins, as CaImAn's module function does; False is CaImAn's
-        movie method, which does not clamp.
+        Use ``min(window, T)`` bins, as CaImAn's module function does (the driver's initial
+        template); False is CaImAn's movie method, which does not clamp
+        (:func:`_register_sample`).
 
     Returns
     -------
@@ -850,7 +851,7 @@ class NormcorreMotion(Motion):
                     sample = _crop(np.concatenate(picked).astype(np.float32), settings)
                     if settings.gSig_filt is not None:
                         sample = _high_pass_filter_space(sample, settings.gSig_filt)
-                    template = _bin_median(_register_sample(sample, settings.max_shifts))
+                    template = _bin_median(_register_sample(sample, settings.max_shifts), clamp_window=True)
                 for _ in range(settings.niter_rig):
                     template, shifts, _, _ = _correct_epoch(epoch, p, template, add_to_movie, n_splits, rigid_settings)
                 rigid[e].append(shifts)
