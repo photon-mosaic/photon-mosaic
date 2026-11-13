@@ -2,6 +2,7 @@
 
 import json
 import pickle
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -210,3 +211,37 @@ class TestEndToEnd:
             compute_motion(imaging, method="normcorre", badframes=np.zeros(60, bool))
         with pytest.raises(ValueError, match="shifts_opencv=True"):
             compute_motion(imaging, method="normcorre", gSig_filt=(3, 3), shifts_opencv=False)
+
+
+REFERENCE = Path(__file__).parent / "data" / "caiman_reference.npz"
+CAIMAN_SETTINGS = dict(
+    max_shifts=(6, 6), num_frames_split=20, strides=(24, 24), overlaps=(16, 16), max_nonrigid_shift=3, border_nan="copy"
+)
+CAIMAN_CONFIGS = {
+    "rigid": dict(nonrigid=False),
+    "nonrigid_remap": dict(nonrigid=True),
+    "nonrigid_fft": dict(nonrigid=True, shifts_opencv=False),
+}
+
+
+class TestAgainstCaiman:
+    """Results saved once from CaImAn 1.13.2 on a small synthetic movie (``data/make_caiman_reference.py``)."""
+
+    @pytest.mark.parametrize("config", CAIMAN_CONFIGS)
+    def test_matches_caiman(self, config):
+        reference = np.load(REFERENCE)
+        imaging = NumpyImaging(imaging_series=[reference["movie"][..., None]], sampling_frequency=10.0)
+        motion = compute_motion(imaging, method="normcorre", **CAIMAN_SETTINGS, **CAIMAN_CONFIGS[config])
+        # OpenCV's cubic interpolation changed between 4.x and 5.x, enough to move a shift by one 0.1 px
+        # upsampling step (a little more on the finer Fourier grid) and a template by about 0.2%.
+        # CaImAn stores corrections, photon-mosaic the motion: the negative.
+        shifts = -reference[f"{config}_shifts_rig"]
+        np.testing.assert_allclose(motion.displacements[0][:, 0], shifts, rtol=0, atol=0.15)
+        template = reference[f"{config}_template"]
+        np.testing.assert_allclose(motion.reference[0], template, rtol=0, atol=0.005 * np.abs(template).max())
+        if CAIMAN_CONFIGS[config]["nonrigid"]:
+            patches = motion.patch_shifts[0][0]
+            patches = patches.reshape(len(patches), -1, 2)
+            # CaImAn's x is the first (row) axis
+            np.testing.assert_allclose(patches[..., 0], -reference[f"{config}_x_shifts_els"], rtol=0, atol=0.15)
+            np.testing.assert_allclose(patches[..., 1], -reference[f"{config}_y_shifts_els"], rtol=0, atol=0.15)
