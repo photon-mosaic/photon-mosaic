@@ -26,6 +26,25 @@ BorderNan = bool | Literal["copy", "min"]
 _UPSAMPLE_FACTOR_FFT = 10
 # Frames CaImAn reads to estimate ``min_mov`` (``MotionCorrect.motion_correct``).
 _MIN_MOV_FRAMES = 400
+# The first template comes from every ``T // 50 + 1``-th frame of the first epoch
+# (``motion_correct_batch_rigid`` L2846).
+_TEMPLATE_SAMPLE_FRAMES = 50
+# Pixels of that sample used for its first two templates (``caiman/base/movies.py`` L137, written ``10e7``).
+_TEMPLATE_SAMPLE_MAX_PIXELS = 1e8
+# Bins of the median image (``bin_median`` L1008).
+_BIN_MEDIAN_WINDOW = 10
+# ``num_frames_split`` is raised to at least this (``caiman/source_extraction/cnmf/params.py`` L935).
+_MIN_SPLIT_FRAMES = 10
+# Template matching first offsets the frames (the template) when their 1st (8th) percentile is
+# below -0.1, by subtracting their 1st percentile (``caiman/base/movies.py`` L239, L259).
+_NEGATIVE_THRESHOLD = -0.1
+_FRAMES_LOW_PERCENTILE = 1
+_TEMPLATE_LOW_PERCENTILE = 8
+# Side of the region upsampled around the correlation peak, in units of ``upsample_factor``
+# (``register_translation`` L1618, from scikit-image).
+_UPSAMPLED_REGION_FACTOR = 1.5
+# One-photon high-pass kernel size, in units of ``gSig_filt[0]`` (``high_pass_filter_space`` L1988).
+_HIGH_PASS_KERNEL_SIGMAS = 3
 
 
 class NormcorreRegistrationSettings(RegistrationSettings):
@@ -129,7 +148,7 @@ def _high_pass_filter_space(frames: NDArray, gSig_filt: tuple[int, int]) -> NDAr
     CaImAn ``high_pass_filter_space`` L1965; jnormcorre ``onephotonmethods.high_pass_filter_cv``
     L29; masknmf ``spatial_filters.compute_highpass_filter_kernel`` L8.
     """
-    ksize = tuple((3 * i) // 2 * 2 + 1 for i in gSig_filt)
+    ksize = tuple((_HIGH_PASS_KERNEL_SIGMAS * i) // 2 * 2 + 1 for i in gSig_filt)
     ker = cv2.getGaussianKernel(ksize[0], gSig_filt[0])
     ker2D = ker.dot(ker.T)
     nz = np.nonzero(ker2D >= ker2D[:, 0].max())
@@ -141,7 +160,7 @@ def _high_pass_filter_space(frames: NDArray, gSig_filt: tuple[int, int]) -> NDAr
     )
 
 
-def _bin_median(frames: NDArray, window: int = 10, clamp_window: bool = True) -> NDArray:
+def _bin_median(frames: NDArray, window: int = _BIN_MEDIAN_WINDOW, clamp_window: bool = True) -> NDArray:
     """A robust average image: the median of ``window`` bin averages.
 
     The first ``window * (T // window)`` frames are split into ``window`` bins of frames
@@ -202,14 +221,14 @@ def _extract_shifts(frames: NDArray, max_shift_w: int, max_shift_h: int, templat
     -----
     CaImAn ``caiman/base/movies.py`` ``extract_shifts`` L216.
     """
-    min_val = np.percentile(frames, 1)
-    if min_val < -0.1:
+    min_val = np.percentile(frames, _FRAMES_LOW_PERCENTILE)
+    if min_val < _NEGATIVE_THRESHOLD:
         frames = frames - min_val
     frames = np.asarray(frames, dtype=np.float32)
     _, h_i, w_i = frames.shape
     ms_w, ms_h = max_shift_w, max_shift_h
-    if np.percentile(template, 8) < -0.1:
-        template = template - np.percentile(template, 1)
+    if np.percentile(template, _TEMPLATE_LOW_PERCENTILE) < _NEGATIVE_THRESHOLD:
+        template = template - np.percentile(template, _FRAMES_LOW_PERCENTILE)
     template = template[ms_h : h_i - ms_h, ms_w : w_i - ms_w].astype(np.float32)
 
     shifts = np.empty((len(frames), 2))
@@ -293,7 +312,7 @@ def _register_sample(frames: NDArray, max_shifts: tuple[int, int]) -> NDArray:
     """
     max_shift_h, max_shift_w = max_shifts
     T, H, W = frames.shape
-    frames_to_skip = int(np.maximum(1, T / (10e7 / (H * W))))
+    frames_to_skip = int(np.maximum(1, T / (_TEMPLATE_SAMPLE_MAX_PIXELS / (H * W))))
     submov = frames[::frames_to_skip].copy()
     template = _bin_median(submov, clamp_window=False)
     submov = _apply_shifts_cubic(submov, _extract_shifts(submov, max_shift_w, max_shift_h, template))
@@ -444,7 +463,7 @@ def _register_translation_image(
         CCmax = cross_correlation.max()
     else:
         shifts = np.round(shifts * upsample_factor) / upsample_factor
-        upsampled_region_size = np.ceil(upsample_factor * 1.5)
+        upsampled_region_size = np.ceil(upsample_factor * _UPSAMPLED_REGION_FACTOR)
         dftshift = np.trunc(upsampled_region_size / 2.0)
         factor = np.array(upsample_factor, dtype=np.float64)
         normalization = src_freq.size * factor**2
@@ -800,7 +819,7 @@ class NormcorreMotion(Motion):
             # CaImAn then takes the rigid branch of tile_and_correct and fails building x_shifts_els
             raise ValueError("nonrigid registration needs max_nonrigid_shift > 0.")
         epochs = imaging.epochs
-        n_splits = max(epochs[0].get_num_samples() // max(settings.num_frames_split, 10), 1)
+        n_splits = max(epochs[0].get_num_samples() // max(settings.num_frames_split, _MIN_SPLIT_FRAMES), 1)
         y0 = settings.bounds[0][0] or 0 if settings.bounds is not None else 0
         x0 = settings.bounds[1][0] or 0 if settings.bounds is not None else 0
         rigid_settings = settings.model_copy(update={"nonrigid": False})
@@ -826,7 +845,7 @@ class NormcorreMotion(Motion):
             for e, epoch in enumerate(epochs):
                 if template is None:
                     n_frames = epoch.get_num_samples()
-                    picks = range(0, n_frames, n_frames // 50 + 1)
+                    picks = range(0, n_frames, n_frames // _TEMPLATE_SAMPLE_FRAMES + 1)
                     picked = [epoch.get_series(i, i + 1, slice(p, p + 1))[..., 0] for i in picks]
                     sample = _crop(np.concatenate(picked).astype(np.float32), settings)
                     if settings.gSig_filt is not None:
