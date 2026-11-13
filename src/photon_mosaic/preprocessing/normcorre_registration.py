@@ -69,6 +69,11 @@ _TEMPLATE_LOW_PERCENTILE = 8
 _UPSAMPLED_REGION_FACTOR = 1.5
 # One-photon high-pass kernel size, in units of ``gSig_filt[0]`` (``high_pass_filter_space`` L1988).
 _HIGH_PASS_KERNEL_SIGMAS = 3
+# The Fourier-domain non-rigid path blends the overlaps of neighbouring patches unless the 75th percentile
+# of the differences between neighbouring patch shifts reaches 0.5 px; it then cuts them at the middle
+# (``tile_and_correct`` L2200, L2221).
+_SHEAR_PERCENTILE = 75
+_MAX_SHEAR = 0.5
 
 
 class NormcorreRegistrationSettings(RegistrationSettings):
@@ -1072,7 +1077,7 @@ def _apply_patch_shifts_fft(
 
         max_shear = np.percentile(
             [np.max(np.abs(np.diff(s, axis=ax))) for s, ax in itertools.product([shift_img_x, shift_img_y], [0, 1])],
-            75,
+            _SHEAR_PERCENTILE,
         )
         total_shifts = np.stack([-shift_img_x.reshape(num_tiles), -shift_img_y.reshape(num_tiles)], axis=-1)
         imgs = [
@@ -1082,7 +1087,7 @@ def _apply_patch_shifts_fft(
 
         normalizer = np.zeros_like(img) * np.nan
         new_img = np.zeros_like(img) * np.nan
-        if max_shear < 0.5:
+        if max_shear < _MAX_SHEAR:
             for (_, _, x, y, _), im, weight_mat in zip(windows, imgs, weights):
                 prev_val_1 = normalizer[x : x + newshapes[0], y : y + newshapes[1]]
                 normalizer[x : x + newshapes[0], y : y + newshapes[1]] = np.nansum(
