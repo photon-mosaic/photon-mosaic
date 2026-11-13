@@ -308,8 +308,9 @@ def _register_sample(frames: NDArray, max_shifts: tuple[int, int]) -> NDArray:
     Notes
     -----
     CaImAn ``movie.motion_correct(max_shifts[1], max_shifts[0], template=None)``,
-    ``caiman/base/movies.py`` L97. Very large frames are subsampled further, to at most
-    ``1e8 / (H * W)`` frames, as there.
+    ``caiman/base/movies.py`` L97. As there, the first two templates are built from at most
+    ``1e8 / (H * W)`` of the frames. That drops frames only when the sample holds more than
+    1e8 pixels: with a sample of about 50 frames, frames above about 2 megapixels.
     """
     max_shift_h, max_shift_w = max_shifts
     T, H, W = frames.shape
@@ -399,7 +400,7 @@ def _register_translation_image(
     shifts_lb: NDArray | None,
     shifts_ub: NDArray | None,
 ) -> tuple[NDArray, float]:
-    """How far one image is translated relative to another, by phase correlation.
+    """How far one image is translated relative to another, by cross-correlation.
 
     The integer peak of the cross-correlation is found within the allowed range, then
     refined to ``1 / upsample_factor`` pixel with :func:`_upsampled_dft`.
