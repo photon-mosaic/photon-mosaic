@@ -31,7 +31,7 @@ _MIN_MOV_FRAMES = 400
 _TEMPLATE_SAMPLE_FRAMES = 50
 # Pixels of that sample used for its first two templates (``caiman/base/movies.py`` L137, written ``10e7``).
 _TEMPLATE_SAMPLE_MAX_PIXELS = 1e8
-# Bins of the median image (``bin_median`` L1008).
+# Frames per bin of the median image (``bin_median`` L1008).
 _BIN_MEDIAN_WINDOW = 10
 # ``num_frames_split`` is raised to at least this (``caiman/source_extraction/cnmf/params.py`` L935).
 _MIN_SPLIT_FRAMES = 10
@@ -161,21 +161,21 @@ def _high_pass_filter_space(frames: NDArray, gSig_filt: tuple[int, int]) -> NDAr
 
 
 def _bin_median(frames: NDArray, window: int = _BIN_MEDIAN_WINDOW, *, clamp_window: bool) -> NDArray:
-    """A robust average image: the median of ``window`` bin averages.
+    """A robust average image: the median of bin averages.
 
-    The first ``window * (T // window)`` frames are split into ``window`` bins of frames
-    spaced ``T // window`` apart (not consecutive ones), each bin is averaged, and the
-    median of those averages is returned. NaNs are ignored.
+    The first ``window * (T // window)`` frames are split into ``T // window`` bins of
+    ``window`` frames each, spaced ``T // window`` apart (not consecutive ones); each bin is
+    averaged, and the median of those averages is returned. NaNs are ignored.
 
     Parameters
     ----------
     frames : array, ``(T, H, W)``
         The movie.
     window : int
-        Number of bins.
+        Frames per bin.
     clamp_window : bool
-        Use ``min(window, T)`` bins, as CaImAn's module function does (the driver's initial
-        template); False is CaImAn's movie method, which does not clamp
+        Use ``min(window, T)`` frames per bin, as CaImAn's module function does (the
+        driver's initial template); False is CaImAn's movie method, which does not clamp
         (:func:`_register_sample`).
 
     Returns
