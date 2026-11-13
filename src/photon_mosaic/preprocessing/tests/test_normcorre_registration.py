@@ -87,7 +87,7 @@ class TestKernels:
             _shifted(base, shift)[None], base, (32, 32), (16, 16), (6, 6), 3, 10, shift[None]
         )
         assert patches.shape == (1, len(cy), len(cx), 2) and phase.shape == (1, len(cy), len(cx))
-        # small non-periodic patches bias phase correlation by a few tenths of a pixel
+        # small non-periodic patches bias cross-correlation by a few tenths of a pixel
         np.testing.assert_allclose(patches[0], np.broadcast_to(shift, patches[0].shape), atol=0.4)
 
     @pytest.mark.parametrize("shifts_interpolate", [False, True])

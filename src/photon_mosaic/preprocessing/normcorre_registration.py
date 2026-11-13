@@ -689,7 +689,7 @@ def _register_patches(
 ) -> tuple[NDArray, NDArray, tuple[NDArray, NDArray]]:
     """The translation of every patch of every frame, kept close to the frame's rigid translation.
 
-    Each patch is registered to the same patch of the template by phase correlation, with
+    Each patch is registered to the same patch of the template by cross-correlation, with
     the search limited to ``ceil(rigid - max_nonrigid_shift)`` to
     ``floor(rigid + max_nonrigid_shift)``.
 
