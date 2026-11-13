@@ -57,7 +57,7 @@ class TestKernels:
     def test_bin_median_of_bins_spaced_through_the_movie(self):
         frames = np.arange(20, dtype=float)[:, None, None] * np.ones((1, 2, 2))
         # 2 bins of 10 frames each, frames 0,2,4,... and 1,3,5,...: means 9 and 10, median 9.5
-        np.testing.assert_allclose(nc._bin_median(frames), 9.5)
+        np.testing.assert_allclose(nc._bin_median(frames, clamp_window=True), 9.5)
 
     def test_register_sample_aligns_the_frames(self, true_shifts):
         registered = nc._register_sample(_movie(true_shifts), (6, 6))
