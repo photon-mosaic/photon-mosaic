@@ -40,6 +40,9 @@ class ZarrRois(BaseRois):
         rois_group = zarr_root[zarr_group_name]
 
         roi_ids = np.array(rois_group["roi_ids"])
+        if roi_ids.dtype.kind == "T":
+            # zarr returns variable-length UTF-8 as numpy StringDType
+            roi_ids = np.array(roi_ids.tolist())
         sampling_frequency = rois_group.attrs["sampling_frequency"]
         shape = tuple(rois_group.attrs["shape"])
 
@@ -178,7 +181,7 @@ def add_rois_to_zarr_group(rois: BaseRois, zarr_group, **kwargs) -> None:
     ----------
     rois : BaseRois
         The ROIs object to save.
-    zarr_group : zarr.hierarchy.Group
+    zarr_group : zarr.Group
         The zarr group to write to.
     **kwargs : Additional kwargs
         Additional zarr dataset creation options (e.g., compressor).
@@ -196,7 +199,7 @@ def add_rois_to_zarr_group(rois: BaseRois, zarr_group, **kwargs) -> None:
             gcxs = sparse.GCXS.from_coo(image_masks.tocoo(), compressed_axes=(0,))
         zarr_group.attrs["roi_image_masks_sparse"] = True
         zarr_group.attrs["roi_image_masks_shape"] = list(gcxs.shape)
-        zarr_group.create_dataset("roi_image_masks_indptr", data=gcxs.indptr, compressor=None)
+        zarr_group.create_array("roi_image_masks_indptr", data=gcxs.indptr, compressors=None)
 
         # Chunk indices/data to roughly a handful of ROIs' worth of entries, unless the caller
         # has already specified a chunk layout. zarr's own auto-chunking picks a chunk size
@@ -209,8 +212,8 @@ def add_rois_to_zarr_group(rois: BaseRois, zarr_group, **kwargs) -> None:
             avg_roi_nnz = max(1, gcxs.nnz // max(gcxs.shape[0], 1))
             entries_per_chunk = max(8 * avg_roi_nnz, 1024)
             sparse_saving_options = {**kwargs, "chunks": (entries_per_chunk,)}
-        zarr_group.create_dataset("roi_image_masks_indices", data=gcxs.indices, **sparse_saving_options)
-        zarr_group.create_dataset("roi_image_masks_data", data=gcxs.data, **sparse_saving_options)
+        zarr_group.create_array("roi_image_masks_indices", data=gcxs.indices, **sparse_saving_options)
+        zarr_group.create_array("roi_image_masks_data", data=gcxs.data, **sparse_saving_options)
     else:
         zarr_group.attrs["roi_image_masks_sparse"] = False
         # Chunk along the ROI axis (first dimension) for efficient per-ROI access,
@@ -218,15 +221,13 @@ def add_rois_to_zarr_group(rois: BaseRois, zarr_group, **kwargs) -> None:
         if "chunks" not in kwargs:
             roi_chunks = (1,) + image_masks.shape[1:]
             kwargs = {**kwargs, "chunks": roi_chunks}
-        zarr_group.create_dataset("roi_image_masks", data=image_masks, **kwargs)
+        zarr_group.create_array("roi_image_masks", data=image_masks, **kwargs)
 
     roi_ids = np.array(rois.roi_ids)
     if roi_ids.dtype.kind == "U":
-        import numcodecs
-
-        zarr_group.create_dataset("roi_ids", data=roi_ids.astype(object), object_codec=numcodecs.JSON())
-    else:
-        zarr_group.create_dataset("roi_ids", data=roi_ids, compressor=None)
+        # variable-length UTF-8, as spikeinterface stores its channel and unit ids
+        roi_ids = roi_ids.astype("T")
+    zarr_group.create_array("roi_ids", data=roi_ids, compressors=None)
 
     zarr_group.attrs["sampling_frequency"] = float(rois.sampling_frequency)
     zarr_group.attrs["shape"] = list(rois.shape)
@@ -237,7 +238,7 @@ def add_rois_to_zarr_group(rois: BaseRois, zarr_group, **kwargs) -> None:
         values = rois.get_property(key)
         if values.dtype.kind == "O":
             continue  # skip non-serializable object-dtype properties
-        prop_group.create_dataset(key, data=values, compressor=None)
+        prop_group.create_array(key, data=values, compressors=None)
 
     # Save annotations
     annotations = rois.get_annotation_keys()

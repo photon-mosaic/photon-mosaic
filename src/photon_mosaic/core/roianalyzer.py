@@ -26,6 +26,7 @@ from spikeinterface.core.core_tools import (
     retrieve_importing_provenance,
 )
 from spikeinterface.core.job_tools import split_job_kwargs
+from spikeinterface.core.zarr_tools import read_encoded_array, write_json_array, write_pickle_array
 
 import photon_mosaic
 
@@ -392,12 +393,10 @@ class RoiAnalyzer:
 
     @classmethod
     def create_zarr(cls, folder, rois, imaging, imaging_attributes, backend_options):
-        import numcodecs
         import zarr
 
         backend_options = backend_options or {}
         storage_options = backend_options.get("storage_options", {})
-        saving_options = backend_options.get("saving_options", {})
 
         remote = is_path_remote(str(folder))
         if not remote:
@@ -405,7 +404,7 @@ class RoiAnalyzer:
             if Path(folder).is_dir():
                 raise ValueError(f"Folder already exists: {folder}")
 
-        zarr_root = zarr.open(str(folder), mode="w", storage_options=storage_options)
+        zarr_root = zarr.open(str(folder), mode="w", storage_options=storage_options or None)
 
         # Info
         info = dict(
@@ -419,22 +418,18 @@ class RoiAnalyzer:
         if imaging is not None:
             rec_dict = imaging.to_dict(relative_to=relative_to, recursive=True)
             if imaging.check_serializability("json"):
-                zarr_rec = np.array([check_json(rec_dict)], dtype=object)
-                zarr_root.create_dataset("imaging", data=zarr_rec, object_codec=numcodecs.JSON())
+                write_json_array(zarr_root, "imaging", check_json(rec_dict))
             elif imaging.check_serializability("pickle"):
-                zarr_rec = np.array([rec_dict], dtype=object)
-                zarr_root.create_dataset("imaging", data=zarr_rec, object_codec=numcodecs.Pickle())
+                write_pickle_array(zarr_root, "imaging", rec_dict)
             else:
                 warnings.warn("The imaging is not serializable. The link will be lost on reload.")
 
         # Save rois provenance
         rois_dict = rois.to_dict(relative_to=relative_to, recursive=True)
         if rois.check_serializability("json"):
-            zarr_rois = np.array([check_json(rois_dict)], dtype=object)
-            zarr_root.create_dataset("rois_provenance", data=zarr_rois, object_codec=numcodecs.JSON())
+            write_json_array(zarr_root, "rois_provenance", check_json(rois_dict))
         elif rois.check_serializability("pickle"):
-            zarr_rois = np.array([rois_dict], dtype=object)
-            zarr_root.create_dataset("rois_provenance", data=zarr_rois, object_codec=numcodecs.Pickle())
+            write_pickle_array(zarr_root, "rois_provenance", rois_dict)
         else:
             warnings.warn("The rois provenance is not serializable. The link will be lost on reload.")
 
@@ -446,7 +441,7 @@ class RoiAnalyzer:
 
         # Save rois data
         rois_group = zarr_root.create_group("rois")
-        add_rois_to_zarr_group(rois, rois_group, saving_options=saving_options)
+        add_rois_to_zarr_group(rois, rois_group)
 
         # Extensions group
         zarr_root.create_group("extensions")
@@ -472,7 +467,7 @@ class RoiAnalyzer:
         if imaging is None:
             rec_field = zarr_root.get("imaging")
             if rec_field is not None:
-                rec_dict = rec_field[0]
+                rec_dict = read_encoded_array(rec_field)
                 try:
                     imaging = si_load(rec_dict, base_folder=folder)
                 except Exception:
@@ -562,7 +557,7 @@ class RoiAnalyzer:
                     if key in props_group:
                         props_group[key][:] = prop_values
                     else:
-                        props_group.create_dataset(name=key, data=prop_values, compressor=None)
+                        props_group.create_array(name=key, data=prop_values, compressors=None)
                     zarr.consolidate_metadata(zarr_root.store)
 
     def get_roi_property(self, key: str, ids=None) -> np.ndarray:
@@ -812,7 +807,7 @@ class RoiAnalyzer:
             zarr_root = self._get_zarr_root(mode="r")
             if "rois_provenance" in zarr_root.keys():
                 try:
-                    rois_dict = zarr_root["rois_provenance"][0]
+                    rois_dict = read_encoded_array(zarr_root["rois_provenance"])
                     return si_load(rois_dict, base_folder=self.folder)
                 except Exception:
                     pass
@@ -1378,8 +1373,8 @@ class AnalyzerExtension:
             group = self._get_zarr_extension_group(mode="r")
             for name in group.keys():
                 item = group[name]
-                if "dict" in item.attrs:
-                    self.set_data(name, item[0])
+                if "encoding" in item.attrs:
+                    self.set_data(name, read_encoded_array(item))
                 elif "dataframe" in item.attrs:
                     if HAS_PANDAS:
                         index = item["index"]
@@ -1388,8 +1383,6 @@ class AnalyzerExtension:
                             if col != "index":
                                 df[col] = item[col][:]
                         self.set_data(name, df.convert_dtypes())
-                elif "object" in item.attrs:
-                    self.set_data(name, item[0])
                 else:
                     self.set_data(name, np.array(item))
 
@@ -1582,53 +1575,37 @@ class AnalyzerExtension:
                         raise Exception(f"Could not save '{name}' as extension data")
 
         elif self.format == "zarr":
-            import numcodecs
             from spikeinterface.core.zarrextractors import get_default_zarr_compressor
 
             saving_options = self.roi_analyzer._backend_options.get("saving_options", {})
             group = self._get_zarr_extension_group(mode="r+")
-            if "compressor" not in saving_options:
-                saving_options["compressor"] = get_default_zarr_compressor()
+            if "compressor" not in saving_options and "compressors" not in saving_options:
+                saving_options["compressors"] = get_default_zarr_compressor()
 
             for name, data in self.data.items():
                 if name in group:
                     del group[name]
                 if isinstance(data, (dict, list)):
-                    group.create_dataset(
-                        name=name,
-                        data=np.array([check_json(data)], dtype=object),
-                        object_codec=numcodecs.JSON(),
-                    )
-                    group[name].attrs["dict"] = True
+                    write_json_array(group, name, check_json(data))
                 elif isinstance(data, np.ndarray):
-                    group.create_dataset(name=name, data=data, **saving_options)
+                    group.create_array(name=name, data=data, **saving_options)
                 elif HAS_PANDAS and isinstance(data, pd.DataFrame):
                     df_group = group.create_group(name)
                     indices = data.index.to_numpy()
                     if indices.dtype.kind == "O":
                         indices = indices.astype(str)
-                    df_group.create_dataset(name="index", data=indices)
+                    df_group.create_array(name="index", data=indices)
                     for col in data.columns:
                         col_data = data[col].to_numpy()
                         if col_data.dtype.kind == "O":
                             col_data = col_data.astype(str)
-                        df_group.create_dataset(name=col, data=col_data)
+                        df_group.create_array(name=col, data=col_data)
                     df_group.attrs["dataframe"] = True
                 else:
-                    # Wrap via an object array assignment rather than np.array([data], dtype=object):
-                    # the latter still invokes data.__array__ for array-like objects (e.g. sparse
-                    # arrays), which either densifies unexpectedly or raises outright.
-                    boxed = np.empty(1, dtype=object)
-                    boxed[0] = data
                     try:
-                        group.create_dataset(
-                            name=name,
-                            data=boxed,
-                            object_codec=numcodecs.Pickle(),
-                        )
+                        write_pickle_array(group, name, data)
                     except Exception:
                         raise Exception(f"Could not save '{name}' as extension data")
-                    group[name].attrs["object"] = True
 
     # ------------------------------------------------------------------
     # Function factory for backwards-compatible compute_xxx() helpers

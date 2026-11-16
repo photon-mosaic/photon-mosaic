@@ -51,7 +51,7 @@ def load(file_or_folder, **kwargs):
     path = Path(file_or_folder)
 
     # --- zarr store ---------------------------------------------------------
-    if str(path).endswith(".zarr") or (path.is_dir() and (path / ".zgroup").exists()):
+    if str(path).endswith(".zarr") or (path.is_dir() and any((path / f).exists() for f in ("zarr.json", ".zgroup"))):
         return _load_zarr(path, **kwargs)
 
     # --- local folder -------------------------------------------------------
