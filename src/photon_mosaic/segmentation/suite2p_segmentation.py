@@ -35,7 +35,7 @@ class Suite2pSegmentationSettings(BaseSettings):
     )
     preclassify: float = Field(
         default=0.0,
-        description="Apply classifier before refinement with probability threshold. 0 disables.",
+        description="Apply classifier before refinement with probability threshold. 0 disables. Not used yet.",
     )
     device: str = Field(
         default="cpu",
@@ -67,49 +67,65 @@ class Suite2pSegmentationSettings(BaseSettings):
     )
     allow_overlap: bool = Field(
         default=False,
-        description="If False, overlapping pixels are discarded; if True, added to both ROIs.",
+        description="If False, overlapping pixels are discarded; if True, added to both ROIs. Not used yet.",
     )
     nbins: int = Field(
         default=5000,
         description="Number of bins for the activity histogram.",
     )
+    bin_size: int | None = Field(
+        default=None,
+        description="Frames per bin. None uses max(1, n_frames // nbins, round(tau * fs)).",
+    )
     highpass_time: int = Field(
         default=100,
         description="Window size (frames) for temporal high-pass filter before detection.",
     )
-
-    model_config = SettingsConfigDict(
-        env_file=".env", env_prefix="SUITE2P_SEGMENTATION_", case_sensitive=False, extra="ignore"
+    block_size: list[int] = Field(default=[64, 64], description="Block size [y, x] for PCA denoising.")
+    npix_norm_min: float = Field(default=0.0, description="Remove ROIs with a soma smaller than this x the median.")
+    npix_norm_max: float = Field(default=100.0, description="Remove ROIs with a soma larger than this x the median.")
+    highpass_neuropil: int = Field(default=25, description="Sparsery: high-pass filter (pixels) removing neuropil.")
+    max_ROIs: int = Field(default=5000, description="Sparsery: maximum number of ROIs to detect.")
+    spatial_scale: int = Field(default=0, description="Sparsery: 0 estimates it; 1, 2, 3, 4 = 6, 12, 24, 48 pixels.")
+    active_percentile: float = Field(default=0.0, description="Sparsery: if > 0, this percentile is the threshold.")
+    connected: bool = Field(default=True, description="Sourcery: keep ROIs connected (False for dendrites).")
+    max_iterations: int = Field(default=20, description="Sourcery: maximum number of detection iterations.")
+    smooth_masks: bool = Field(default=False, description="Sourcery: smooth the ROI masks.")
+    cellpose_img: str = Field(
+        default="max_proj / meanImg", description="Cellpose: image to segment; also 'meanImg' or 'max_proj'."
     )
+    highpass_spatial: float = Field(default=0.0, description="Cellpose: high-pass sigma, x diameter; 0 disables it.")
+    flow_threshold: float = Field(default=0.4, description="Cellpose: flow error threshold.")
+    cellprob_threshold: float = Field(default=0.0, description="Cellpose: cell probability threshold.")
+    cellpose_params: dict[str, Any] | None = Field(default=None, description="Cellpose: extra arguments to model.eval.")
+    cellpose_model: str = Field(
+        default="cpsam", description="Must be 'cpsam': suite2p 1.1.0 ignores it and always loads cpsam."
+    )
+    chan2_threshold: float = Field(default=0.25, description="Must be 0.25: chan2 detection is not supported.")
+    cellpose_chan2: bool = Field(default=False, description="Must be False: chan2 detection is not supported.")
+    cellpose_params_chan2: dict[str, Any] | None = Field(default=None, description="Must be None: as cellpose_chan2.")
+
+    model_config = SettingsConfigDict(env_file=".env", env_prefix="SUITE2P_SEGMENTATION_", case_sensitive=False)
 
     @field_validator("algorithm")
     @classmethod
     def lowercase_algorithm(cls, v: str) -> str:
         return v.lower()
 
-    def merged_with_suite2p_defaults(self) -> dict[str, Any]:
-        """Return suite2p's installed detection defaults overlaid with our overrides.
+    @classmethod
+    def settings_customise_sources(
+        cls, settings_cls: Any, init_settings: Any, env_settings: Any, dotenv_settings: Any, file_secret_settings: Any
+    ) -> tuple[Any, ...]:
+        """Skip the keys of a shared ``.env`` that are not ours; a misspelt ``SUITE2P_SEGMENTATION_*`` still raises."""
+        prefix = str(cls.model_config.get("env_prefix", "")).lower()
 
-        Used to source per-algorithm sub-dicts (``sparsery_settings``,
-        ``sourcery_settings``, ``cellpose_settings``) without hard-coding them
-        and to forward ``denoise``/``highpass_time`` etc. to the inner calls.
-        """
-        from suite2p import default_settings  # noqa: PLC0415
+        def own_dotenv() -> dict[str, Any]:
+            return {k: v for k, v in dotenv_settings().items() if k in cls.model_fields or k.startswith(prefix)}
 
-        base: dict[str, Any] = dict(default_settings()["detection"])
-        base.update(
-            {
-                "algorithm": self.algorithm,
-                "denoise": self.denoise,
-                "threshold_scaling": self.threshold_scaling,
-                "max_overlap": self.max_overlap,
-                "soma_crop": self.soma_crop,
-                "allow_overlap": self.allow_overlap,
-                "nbins": self.nbins,
-                "highpass_time": self.highpass_time,
-            }
-        )
-        return base
+        return init_settings, env_settings, own_dotenv, file_secret_settings
+
+
+_UNSUPPORTED = ("cellpose_model", "chan2_threshold", "cellpose_chan2", "cellpose_params_chan2")
 
 
 def _read_plane_range(
@@ -227,17 +243,16 @@ def _detect_rois_from_mov(
     from suite2p.detection import anatomical, sourcery, sparsedetect, utils  # noqa: PLC0415
     from suite2p.detection.stats import roi_stats  # noqa: PLC0415
 
-    s = cfg.merged_with_suite2p_defaults()
     device = torch.device(cfg.device)
     diameter = np.array(cfg.diameter, dtype=float)
 
-    if s.get("denoise", False):
+    if cfg.denoise:
         from suite2p.detection.denoise import pca_denoise  # noqa: PLC0415
 
-        mov = pca_denoise(mov, block_size=s["block_size"], n_comps_frac=0.5)
+        mov = pca_denoise(mov, block_size=cfg.block_size, n_comps_frac=0.5)
 
     meanImg = mov.mean(axis=0)
-    mov = utils.temporal_high_pass_filter(mov=mov, width=s["highpass_time"])
+    mov = utils.temporal_high_pass_filter(mov=mov, width=cfg.highpass_time)
     max_proj = mov.max(axis=0)
 
     use_cellpose = cfg.algorithm == "cellpose" and anatomical.CELLPOSE_INSTALLED
@@ -251,7 +266,11 @@ def _detect_rois_from_mov(
         _, raw_stat = anatomical.select_rois(
             meanImg,
             max_proj,
-            settings=s["cellpose_settings"],
+            settings={
+                "img": cfg.cellpose_img,
+                "params": cfg.cellpose_params,
+                **cfg.model_dump(include={"highpass_spatial", "flow_threshold", "cellprob_threshold"}),
+            },
             diameter=diameter,
             device=device,
         )
@@ -263,7 +282,7 @@ def _detect_rois_from_mov(
                 mov=mov,
                 sdmov=sdmov,
                 threshold_scaling=cfg.threshold_scaling,
-                **s["sparsery_settings"],
+                **cfg.model_dump(include={"highpass_neuropil", "spatial_scale", "max_ROIs", "active_percentile"}),
             )
         elif algo == "sourcery":
             _, raw_stat = sourcery.sourcery(
@@ -271,7 +290,7 @@ def _detect_rois_from_mov(
                 sdmov=sdmov,
                 diameter=diameter,
                 threshold_scaling=cfg.threshold_scaling,
-                **s["sourcery_settings"],
+                **cfg.model_dump(include={"connected", "max_iterations", "smooth_masks"}),
             )
         else:
             raise ValueError(f"unknown algorithm {cfg.algorithm!r}")
@@ -300,6 +319,8 @@ def _detect_rois_from_mov(
             diameter=diameter,
             max_overlap=cfg.max_overlap,
             do_soma_crop=cfg.soma_crop,
+            npix_norm_min=cfg.npix_norm_min,
+            npix_norm_max=cfg.npix_norm_max,
             median=use_cellpose,
         )
     )
@@ -340,11 +361,13 @@ class Suite2pSegmentation(BaseSegmentation):
     ) -> Suite2pRois:
         from suite2p.classification import builtin_classfile, classify  # noqa: PLC0415
 
+        if changed := [k for k in _UNSUPPORTED if getattr(settings, k) != cls.settings_class.model_fields[k].default]:
+            raise ValueError(f"Not supported, keep the default: {changed} (see each setting's description).")
         H, W, n_planes = imaging.shape
 
         n_epochs = imaging.get_num_epochs()
         n_frames = int(imaging.get_total_frames())
-        bin_size = int(max(1, n_frames // settings.nbins, np.round(settings.tau * settings.fs)))
+        bin_size = settings.bin_size or int(max(1, n_frames // settings.nbins, np.round(settings.tau * settings.fs)))
 
         logging.info("Suite2p detection — %d epochs", n_epochs)
         t0 = time.time()
