@@ -270,7 +270,7 @@ class BaseRois(BaseExtractor):
                     Storage options for zarr `store`. E.g., if "s3://" or "gcs://" they can
                     provide authentication methods, etc.
                     For cloud storage locations, this should not be None (in case of default values, use an empty dict)
-                - compressor: zarr.abc.codec.Codec or None, default: None
+                - compressors: zarr.abc.codec.Codec or None, default: None
                     Compressor for the ROI mask datasets. If None, zarr's default is used
                 - filters: list[zarr.abc.codec.Codec] or None, default: None
                     Filters for the ROI mask datasets
