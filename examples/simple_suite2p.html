@@ -44,7 +44,7 @@
   <link rel="preload" as="script" href="../_static/scripts/bootstrap.js?digest=75c7c72ae941e8b558d8" />
 <link rel="preload" as="script" href="../_static/scripts/pydata-sphinx-theme.js?digest=75c7c72ae941e8b558d8" />
 
-    <script src="../_static/documentation_options.js?v=2709fde1"></script>
+    <script src="../_static/documentation_options.js?v=e3a6060d"></script>
     <script src="../_static/doctools.js?v=fd6eb6e6"></script>
     <script src="../_static/sphinx_highlight.js?v=6ffebe34"></script>
     <script src="../_static/sg-tags.js?v=d80f6fa4"></script>
@@ -136,7 +136,7 @@
     <img src="../_static/logo.png" class="logo__image only-dark pst-js-only" alt=""/>
   
   
-    <p class="title logo__title">photon-mosaic v0.1</p>
+    <p class="title logo__title">photon-mosaic v0.0.2</p>
   
 </a></div>
     
@@ -512,14 +512,14 @@ We select the ROIs labelled as cells and plot them:</p>
 </span><span class="n">df_over_f</span> <span class="o">=</span> <a class="sphx-glr-backref-module-photon_mosaic sphx-glr-backref-type-py-method reference internal" href="../api/photon_mosaic.core.roianalyzer.html#photon_mosaic.core.roianalyzer.RoiAnalyzer.compute" title="photon_mosaic.RoiAnalyzer.compute"><span class="n">roi_analyzer</span><span class="o">.</span><span class="n">compute</span></a><span class="p">(</span><span class="s2">&quot;</span><span class="s2">df_over_f</span><span class="s2">&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">get_data</span><span class="p">(</span><span class="n">outputs</span><span class="o">=</span><span class="s2">&quot;</span><span class="s2">recording</span><span class="s2">&quot;</span><span class="p">)</span><span class="w">
 </span></pre></div></div>
 <div class="sphx-glr-script-out highlight-none notranslate"><div class="highlight"><pre><span></span>fluorescence (no parallelization):   0%|          | 0/7 [00:00&lt;?, ?it/s]
-fluorescence (no parallelization):  14%|█▍        | 1/7 [00:01&lt;00:10,  1.81s/it]
-fluorescence (no parallelization):  29%|██▊       | 2/7 [00:02&lt;00:04,  1.01it/s]
-fluorescence (no parallelization):  43%|████▎     | 3/7 [00:02&lt;00:02,  1.37it/s]
-fluorescence (no parallelization):  57%|█████▋    | 4/7 [00:03&lt;00:01,  1.65it/s]
-fluorescence (no parallelization):  71%|███████▏  | 5/7 [00:03&lt;00:01,  1.87it/s]
-fluorescence (no parallelization):  86%|████████▌ | 6/7 [00:03&lt;00:00,  2.02it/s]
-fluorescence (no parallelization): 100%|██████████| 7/7 [00:04&lt;00:00,  2.42it/s]
-fluorescence (no parallelization): 100%|██████████| 7/7 [00:04&lt;00:00,  1.69it/s]
+fluorescence (no parallelization):  14%|█▍        | 1/7 [00:01&lt;00:07,  1.18s/it]
+fluorescence (no parallelization):  29%|██▊       | 2/7 [00:01&lt;00:03,  1.55it/s]
+fluorescence (no parallelization):  43%|████▎     | 3/7 [00:01&lt;00:01,  2.13it/s]
+fluorescence (no parallelization):  57%|█████▋    | 4/7 [00:01&lt;00:01,  2.58it/s]
+fluorescence (no parallelization):  71%|███████▏  | 5/7 [00:02&lt;00:00,  2.93it/s]
+fluorescence (no parallelization):  86%|████████▌ | 6/7 [00:02&lt;00:00,  3.18it/s]
+fluorescence (no parallelization): 100%|██████████| 7/7 [00:02&lt;00:00,  3.85it/s]
+fluorescence (no parallelization): 100%|██████████| 7/7 [00:02&lt;00:00,  2.65it/s]
 </pre></div>
 </div>
 <p>We can again plot the DF/F traces</p>
@@ -527,7 +527,7 @@ fluorescence (no parallelization): 100%|██████████| 7/7 [00:
 </span><span class="n">_</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">figure</span><span class="p">(</span><span class="n">traces_widget</span><span class="o">.</span><span class="n">figure</span><span class="p">)</span><span class="w">
 </span></pre></div></div>
 <img src="../_images/sphx_glr_simple_suite2p_004.png" srcset="../_images/sphx_glr_simple_suite2p_004.png" alt="simple suite2p" class = "sphx-glr-single-img"/><p>This concludes our simple example of using <cite>photon-mosaic</cite> to run a full multiphoton analysis in Python.</p>
-<p class="sphx-glr-timing"><strong>Total running time of the script:</strong> (18 minutes 9.152 seconds)</p>
+<p class="sphx-glr-timing"><strong>Total running time of the script:</strong> (3 minutes 22.711 seconds)</p>
 <div class="sphx-glr-footer sphx-glr-footer-example docutils container" id="sphx-glr-download-examples-simple-suite2p-py">
 <div class="binder-badge docutils container">
 <a class="reference external image-reference" href="https://mybinder.org/v2/gh/photon-mosaic/photon-mosaic/gh-pages?filepath=notebooks/examples/simple_suite2p.ipynb"><img alt="Launch binder" src="../_images/binder_badge_logo.svg" style="width: 150px;" />
