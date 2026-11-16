@@ -457,7 +457,7 @@ class BaseImaging(BaseExtractor, TimeSeries):
                     For cloud storage locations, this should not be None (in case of default values, use an empty dict)
                 - dtype: np.dtype or None, default: None
                     The dtype to use for the video datasets. If None, the imaging's dtype is used
-                - compressor: zarr.abc.codec.Codec or None, default: None
+                - compressors: zarr.abc.codec.Codec or None, default: None
                     Global compressor. If None, Blosc-zstd, level 5, with bit shuffle is used
                 - filters: list[zarr.abc.codec.Codec] or None, default: None
                     Global filters for zarr (global)
