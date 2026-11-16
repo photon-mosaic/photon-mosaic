@@ -219,7 +219,9 @@ def add_imaging_to_zarr_group(imaging: BaseImaging, zarr_group: zarr.Group, verb
     chunks, _, job_kwargs = adjust_chunks_shards_and_job_kwargs(
         extra_chunks=zarr_kwargs.get("extra_chunks", None), job_kwargs=fix_job_kwargs(job_kwargs), time_series=imaging
     )
-    global_compressor = zarr_kwargs.pop("compressor", get_default_zarr_compressor())
+    global_compressor = (
+        zarr_kwargs.pop("compressors", None) or zarr_kwargs.pop("compressor", None) or get_default_zarr_compressor()
+    )
     compressor_by_dataset = zarr_kwargs.pop("compressor_by_dataset", {})
     global_filters = zarr_kwargs.pop("filters", None)
     filters_by_dataset = zarr_kwargs.pop("filters_by_dataset", {})
