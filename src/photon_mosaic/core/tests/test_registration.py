@@ -43,26 +43,24 @@ class TestMotion:
     def motion_single(self, imaging_single):
         displacements = [np.random.default_rng(0).random((10, 1, 2))]
         return Motion(
-            imaging=imaging_single,
             displacements=displacements,
             reference=("ref_plane_0",),
             metadata={"backend": "test"},
         )
 
     def test_attributes(self, imaging_single, motion_single):
-        assert motion_single.imaging is imaging_single
         assert motion_single.num_epochs == 1
         assert motion_single.reference == ("ref_plane_0",)
         assert motion_single.metadata == {"backend": "test"}
 
     def test_metadata_defaults_to_empty_dict(self, imaging_single):
         disps = [np.zeros((5, 1, 2))]
-        m = Motion(imaging_single, disps)
+        m = Motion(disps)
         assert m.metadata == {}
 
     def test_num_epochs_matches_displacements(self, imaging_single):
         disps = [np.zeros((5, 1, 2)), np.zeros((8, 1, 2))]
-        m = Motion(imaging_single, disps)
+        m = Motion(disps)
         assert m.num_epochs == 2
 
     def test_get_displacement_at_frames_single_int(self, motion_single):
@@ -78,7 +76,7 @@ class TestMotion:
 
     def test_get_displacement_at_frames_plane_index(self, imaging_multi):
         disps = [np.random.default_rng(2).random((10, 3, 2))]
-        motion = Motion(imaging_multi, disps)
+        motion = Motion(disps)
         single_val = motion.get_displacement_at_frames(0, plane_index=1)
         assert single_val.shape == (2,)
         np.testing.assert_array_equal(single_val, disps[0][0, 1])
@@ -100,7 +98,7 @@ class DummyMotion(Motion):
 
     @classmethod
     def _compute(cls, imaging, *, settings=None, badframes=None, **params):
-        motion = cls(imaging=imaging, displacements=[np.zeros((3, 1, 2))])
+        motion = cls(displacements=[np.zeros((3, 1, 2))])
         motion.metadata = {"settings": settings, "badframes": badframes, "params": params}
         return motion
 
@@ -215,7 +213,7 @@ class TestMotionDict:
             metadata={"note": "hi"},
         )
 
-        restored = Motion.from_dict(self._through_json(motion), imaging=imaging)
+        restored = Motion.from_dict(self._through_json(motion))
 
         assert type(restored) is Motion
         assert restored.imaging is imaging
@@ -232,6 +230,6 @@ class TestMotionDict:
     def test_from_dict_dispatches_on_method(self, imaging, registered_dummy):
         motion = DummyMotion(imaging=imaging, displacements=[np.zeros((4, 2, 2))])
 
-        restored = Motion.from_dict(self._through_json(motion), imaging=imaging)
+        restored = Motion.from_dict(self._through_json(motion))
 
         assert type(restored) is DummyMotion

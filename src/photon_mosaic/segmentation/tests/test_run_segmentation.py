@@ -112,7 +112,7 @@ def test_registered_imaging_provenance_is_json(imaging, tmp_path):
     from photon_mosaic.preprocessing import RegisterImaging
     from photon_mosaic.preprocessing.suite2p_registration import Suite2PMotion
 
-    motion = Suite2PMotion(imaging=imaging, displacements=[np.zeros((2, 1, 2)), np.zeros((3, 1, 2))], ops={})
+    motion = Suite2PMotion(displacements=[np.zeros((2, 1, 2)), np.zeros((3, 1, 2))], ops={})
     registered = RegisterImaging(imaging, motion)
 
     run_segmentation(registered, method="dummy", folder=tmp_path / "seg")
@@ -194,7 +194,6 @@ def test_registered_imaging_defaults_to_motion_ranges_and_badframes_of_selected_
     from photon_mosaic.preprocessing import RegisterImaging
 
     motion = Motion(
-        imaging=imaging,
         displacements=[np.zeros((2, 1, 2)), np.zeros((3, 1, 2))],
         yranges=[[(0, 4)], [(1, 3)]],
         xranges=[[(0, 5)], [(2, 4)]],
@@ -218,6 +217,6 @@ def test_registered_imaging_without_motion_ranges_falls_back_to_full_frame(imagi
     from photon_mosaic.core import Motion
     from photon_mosaic.preprocessing import RegisterImaging
 
-    motion = Motion(imaging=imaging, displacements=[np.zeros((2, 1, 2)), np.zeros((3, 1, 2))])
+    motion = Motion(displacements=[np.zeros((2, 1, 2)), np.zeros((3, 1, 2))])
     run_segmentation(RegisterImaging(imaging, motion), method="dummy", folder=tmp_path / "seg")
     assert not (tmp_path / "seg" / "badframes.npz").exists()

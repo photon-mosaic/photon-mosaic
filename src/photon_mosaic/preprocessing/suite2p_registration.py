@@ -244,7 +244,6 @@ class Suite2PMotion(Motion):
 
     def __init__(
         self,
-        imaging: BaseImaging,
         displacements: Sequence[NDArray[np.floating[Any]]],
         ops: dict[str, Any],
         reference: Any = None,
@@ -261,7 +260,7 @@ class Suite2PMotion(Motion):
 
         Parameters
         ----------
-        imaging, displacements, reference, yranges, xranges, metadata
+        displacements, reference, yranges, xranges, metadata
             See :class:`photon_mosaic.core.motion.Motion`.
         corrected_badframes : Sequence | None, optional
             Per-epoch bad-frame mask (see :class:`photon_mosaic.core.motion.Motion`).
@@ -278,7 +277,6 @@ class Suite2PMotion(Motion):
             Suite2P block definitions when non-rigid registration is enabled.
         """
         super().__init__(
-            imaging=imaging,
             displacements=displacements,
             reference=reference,
             yranges=yranges,
@@ -485,7 +483,6 @@ class Suite2PMotion(Motion):
         nonrigid_offsets = all_nonrigid_offsets if any(o is not None for o in all_nonrigid_offsets) else None
 
         return cls(
-            imaging=imaging,
             displacements=all_displacements,
             ops=ops,
             reference=refImgs,

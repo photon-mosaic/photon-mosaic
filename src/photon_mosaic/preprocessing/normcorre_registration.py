@@ -349,7 +349,6 @@ class NormcorreMotion(Motion):
 
     def __init__(
         self,
-        imaging: BaseImaging,
         displacements: Sequence[NDArray[np.floating[Any]]],
         reference: Any = None,
         patch_shifts: Sequence[Sequence[NDArray[np.floating[Any]] | None] | None] | None = None,
@@ -357,7 +356,7 @@ class NormcorreMotion(Motion):
         settings: dict[str, Any] | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        super().__init__(imaging=imaging, displacements=displacements, reference=reference, metadata=metadata)
+        super().__init__(displacements=displacements, reference=reference, metadata=metadata)
         self.patch_shifts = patch_shifts
         self.patch_centers = patch_centers
         self.settings = settings if settings is not None else {}
@@ -449,7 +448,6 @@ class NormcorreMotion(Motion):
         if settings.nonrigid:
             moved = [max(np.abs(x).max() for x in epoch_patches if x is not None) for epoch_patches in patches]
         return cls(
-            imaging=imaging,
             displacements=displacements,
             reference=templates,
             patch_shifts=patches if settings.nonrigid else None,

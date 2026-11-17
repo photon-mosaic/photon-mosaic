@@ -79,7 +79,7 @@ class RegisterImaging(BasePreprocessor):
         this class receives when it is reloaded from json or pickle.
         """
         if isinstance(motion, dict):
-            motion = Motion.from_dict(motion, imaging=imaging)
+            motion = Motion.from_dict(motion)
 
         BasePreprocessor.__init__(self, imaging)
 
