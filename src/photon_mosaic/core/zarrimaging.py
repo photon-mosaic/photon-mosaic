@@ -3,8 +3,9 @@ from pathlib import Path
 import numpy as np
 import zarr
 from spikeinterface.core.core_tools import check_json, retrieve_importing_provenance
-from spikeinterface.core.job_tools import split_job_kwargs
+from spikeinterface.core.job_tools import fix_job_kwargs, split_job_kwargs
 from spikeinterface.core.time_series_tools import _write_time_series_to_zarr
+from spikeinterface.core.zarr_tools import adjust_chunks_shards_and_job_kwargs
 from spikeinterface.core.zarrextractors import (
     add_properties_and_annotations,
     get_default_zarr_compressor,
@@ -64,7 +65,7 @@ class ZarrImaging(BaseImaging):
                 if t_starts is None:
                     t_start = None
                 else:
-                    t_start = t_starts[epoch_index]
+                    t_start = float(t_starts[epoch_index])
                     if np.isnan(t_start):
                         t_start = None  # pragma: no cover
                 time_kwargs["t_start"] = t_start
@@ -75,7 +76,7 @@ class ZarrImaging(BaseImaging):
 
             if load_compression_ratio:
                 nbytes_epoch = self._root[video_name].nbytes
-                nbytes_stored_epoch = self._root[video_name].nbytes_stored
+                nbytes_stored_epoch = self._root[video_name].nbytes_stored()
                 if nbytes_stored_epoch > 0:
                     cr_by_epoch[epoch_index] = nbytes_epoch / nbytes_stored_epoch
                 else:
@@ -88,7 +89,10 @@ class ZarrImaging(BaseImaging):
         if "properties" in self._root:
             prop_group = self._root["properties"]
             for key in prop_group.keys():
-                values = self._root["properties"][key]
+                values = self._root["properties"][key][:]
+                if values.dtype.kind == "T":
+                    # zarr returns variable-length UTF-8 as numpy StringDType
+                    values = np.array(values.tolist())
                 self.set_property(key, values)
 
         # load annotations
@@ -170,16 +174,14 @@ class ZarrImagingEpoch(BaseImagingEpoch):
         return np.asarray(video)
 
 
-def add_imaging_to_zarr_group(
-    imaging: BaseImaging, zarr_group: zarr.hierarchy.Group, verbose=False, dtype=None, **kwargs
-):
+def add_imaging_to_zarr_group(imaging: BaseImaging, zarr_group: zarr.Group, verbose=False, dtype=None, **kwargs):
     """Adds an Imaging object to a zarr group.
 
     Parameters
     ----------
     imaging: BaseImaging
         The Imaging object to add to the zarr group.
-    zarr_group: zarr.hierarchy.Group
+    zarr_group: zarr.Group
         The zarr group to which the imaging data should be added.
     verbose: bool
         Whether to print verbose output during the writing process.
@@ -202,7 +204,7 @@ def add_imaging_to_zarr_group(
     # save data (done the subclass)
     zarr_group.attrs["sampling_frequency"] = float(imaging.get_sampling_frequency())
     zarr_group.attrs["num_epochs"] = int(imaging.get_num_epochs())
-    zarr_group.create_dataset(name="shape", data=imaging.shape, compressor=None)
+    zarr_group.create_array(name="shape", data=np.asarray(imaging.shape), compressors=None)
     dataset_paths = [f"video_epoch{i}" for i in range(imaging.get_num_epochs())]
     dataset_timestamps_paths: list | None = None
     if any(imaging.has_time_vector(i) for i in range(imaging.get_num_epochs())):
@@ -214,8 +216,12 @@ def add_imaging_to_zarr_group(
                 dataset_timestamps_paths.append(None)
 
     dtype = imaging.get_dtype() if dtype is None else dtype
-    extra_chunks = zarr_kwargs.get("extra_chunks", None)
-    global_compressor = zarr_kwargs.pop("compressor", get_default_zarr_compressor())
+    chunks, _, job_kwargs = adjust_chunks_shards_and_job_kwargs(
+        extra_chunks=zarr_kwargs.get("extra_chunks", None), job_kwargs=fix_job_kwargs(job_kwargs), time_series=imaging
+    )
+    global_compressor = (
+        zarr_kwargs.pop("compressors", None) or zarr_kwargs.pop("compressor", None) or get_default_zarr_compressor()
+    )
     compressor_by_dataset = zarr_kwargs.pop("compressor_by_dataset", {})
     global_filters = zarr_kwargs.pop("filters", None)
     filters_by_dataset = zarr_kwargs.pop("filters_by_dataset", {})
@@ -234,7 +240,7 @@ def add_imaging_to_zarr_group(
         compressor_times=compressor_times,
         filters_times=filters_times,
         dtype=dtype,
-        extra_chunks=extra_chunks,
+        chunks=chunks,
         verbose=verbose,
         **job_kwargs,
     )

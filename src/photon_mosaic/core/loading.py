@@ -51,7 +51,7 @@ def load(file_or_folder, **kwargs):
     path = Path(file_or_folder)
 
     # --- zarr store ---------------------------------------------------------
-    if str(path).endswith(".zarr") or (path.is_dir() and (path / ".zgroup").exists()):
+    if str(path).endswith(".zarr") or (path.is_dir() and any((path / f).exists() for f in ("zarr.json", ".zgroup"))):
         return _load_zarr(path, **kwargs)
 
     # --- local folder -------------------------------------------------------
@@ -121,6 +121,12 @@ def _load_zarr(path, **kwargs):
         from .zarrrois import ZarrRois
 
         return ZarrRois(path, zarr_group_name="rois", storage_options=storage_options)
+
+    # Standalone zarr imaging — has a "shape" dataset and the video of the first epoch
+    if "shape" in zarr_root and "video_epoch0" in zarr_root:
+        from .zarrimaging import ZarrImaging
+
+        return ZarrImaging(path, storage_options=storage_options)
 
     # Fall back to spikeinterface
     from spikeinterface.core.loading import load as si_load
