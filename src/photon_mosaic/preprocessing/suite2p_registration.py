@@ -325,6 +325,19 @@ class Suite2PMotion(Motion):
         kwargs.update(settings=self.settings.model_dump(), nonrigid_offsets=self.nonrigid_offsets, blocks=blocks)
         return kwargs
 
+    def patch_motion(self, epoch_index: int, plane_index: int) -> tuple[NDArray, tuple[NDArray, NDArray]] | None:
+        """See :meth:`Motion.patch_motion`: each block's offset plus the rigid shift, at the block centres."""
+
+        epoch_offsets = self.nonrigid_offsets[epoch_index] if self.nonrigid_offsets is not None else None
+        if self.blocks is None or not epoch_offsets or plane_index >= len(epoch_offsets):
+            return None
+        if epoch_offsets[plane_index] is None:
+            return None
+        yblock, xblock, (ny, nx) = self.blocks[plane_index][:3]
+        rigid = self.displacements[epoch_index][:, plane_index]
+        shifts = np.stack(epoch_offsets[plane_index], axis=-1).reshape(-1, ny, nx, 2) + rigid[:, None, None, :]
+        return shifts, (np.mean(yblock[::nx], axis=1), np.mean(xblock[:nx], axis=1))
+
     @classmethod
     def _from_dict_kwargs(cls, kwargs: dict[str, Any]) -> dict[str, Any]:
         """Rebuild the settings object and the upsampling matrix dropped by :meth:`_to_dict_kwargs`."""
@@ -586,8 +599,6 @@ class RegisterSuite2PImagingEpoch(RegisterImagingEpoch):
     only shifts one plane's frames with Suite2P's ``shift_frames``.
     """
 
-    motion: Suite2PMotion
-
     def _correct_plane(
         self,
         plane_video: NDArray[np.floating[Any]],
@@ -595,51 +606,44 @@ class RegisterSuite2PImagingEpoch(RegisterImagingEpoch):
         start_frame: int,
         end_frame: int,
     ) -> NDArray[np.floating[Any]]:
-        """Shift one plane's frames by the stored rigid (and non-rigid) offsets."""
+        """Shift one plane's frames by the stored rigid (and non-rigid) offsets.
+
+        Reads the motion through :meth:`Motion.patch_motion`, so it applies any backend's
+        motion: suite2p rolls by whole pixels (another backend's rigid shifts are rounded)
+        and leaves the rest to the block offsets.
+        """
 
         import torch
         from suite2p.registration import register
 
-        p = plane_index
-        disps = self.motion.displacements[self.epoch_index]
-        yoff = disps[start_frame:end_frame, p, 0].astype(int)
-        xoff = disps[start_frame:end_frame, p, 1].astype(int)
-
+        n_frames = end_frame - start_frame
+        rigid = np.round(self.motion.displacements[self.epoch_index][start_frame:end_frame, plane_index])
+        rigid = rigid.astype(np.int64)
         yoff1 = xoff1 = blocks = None
-        if self.motion.nonrigid_offsets is not None:
-            epoch_offsets = self.motion.nonrigid_offsets[self.epoch_index]
-            if epoch_offsets is not None and p < len(epoch_offsets):
-                plane_offsets = epoch_offsets[p]
-                if plane_offsets is not None:
-                    yoff1_full, xoff1_full = plane_offsets
-                    yoff1 = yoff1_full[start_frame:end_frame]
-                    xoff1 = xoff1_full[start_frame:end_frame]
-                    if self.motion.blocks is not None:
-                        blocks = self.motion.blocks[p]
-
-        # Apply motion correction shifts — always CPU for on-the-fly application
-        device = torch.device("cpu")
-
-        plane_video_torch = torch.from_numpy(plane_video).to(device)
-        yoff_torch = torch.from_numpy(yoff.astype(np.int64)).to(device)
-        xoff_torch = torch.from_numpy(xoff.astype(np.int64)).to(device)
-
-        yoff1_torch = None
-        xoff1_torch = None
-        if yoff1 is not None:
-            yoff1_torch = torch.from_numpy(yoff1).to(device)
-            xoff1_torch = torch.from_numpy(xoff1).to(device)
+        patches = self.motion.patch_motion(self.epoch_index, plane_index)
+        if patches is not None:
+            shifts, (cy, cx) = patches
+            residual = (shifts[start_frame:end_frame] - rigid[:, None, None, :]).astype(np.float32)
+            yoff1, xoff1 = (torch.from_numpy(residual[..., i].reshape(n_frames, -1).copy()) for i in (0, 1))
+            # suite2p's transform_data reads only each block's centre, the mean of its extent
+            blocks = (
+                [np.array([y, y]) for y in cy for _ in cx],
+                [np.array([x, x]) for _ in cy for x in cx],
+                [len(cy), len(cx)],
+            )
 
         frames = register.shift_frames(
-            plane_video_torch,
-            yoff_torch,
-            xoff_torch,
-            yoff1_torch,
-            xoff1_torch,
+            torch.from_numpy(plane_video),
+            torch.from_numpy(rigid[:, 0].copy()),
+            torch.from_numpy(rigid[:, 1].copy()),
+            yoff1,
+            xoff1,
             blocks=blocks,
-            device=device,
+            device=torch.device("cpu"),
         )
-        return np.clip(frames, 0, None) if self.motion.settings.clip_negative else frames
+        # another backend's motion carries no suite2p settings: apply it with the defaults
+        settings = self.motion.settings if isinstance(self.motion, Suite2PMotion) else Suite2pRegistrationSettings()
+        return np.clip(frames, 0, None) if settings.clip_negative else frames
 
 
 register_motion_class(Suite2PMotion)
