@@ -211,10 +211,9 @@ class TestRegisterSuite2PImaging:
         return generate_random_imaging(num_frames=10, height=8, width=9, sampling_frequency=30.0, seed=0)
 
     @pytest.fixture()
-    def motion(self, imaging):
+    def motion(self):
         displacements = [np.zeros((10, 1, 2))]
         return Suite2PMotion(
-            imaging=imaging,
             displacements=displacements,
             ops={"bidiphase": 0},
             reference=("ref", "masks"),
@@ -227,7 +226,7 @@ class TestRegisterSuite2PImaging:
 
     def test_epoch_mismatch_raises(self, imaging):
         displacements = [np.zeros((10, 1, 2)), np.zeros((10, 1, 2))]
-        motion = Suite2PMotion(imaging=imaging, displacements=displacements, ops={})
+        motion = Suite2PMotion(displacements=displacements, ops={})
         with pytest.raises(ValueError, match="epochs"):
             RegisterSuite2PImaging(imaging, motion)
 

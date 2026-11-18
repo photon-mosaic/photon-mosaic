@@ -75,7 +75,7 @@ class TestRegistrationSettings:
 
 class TestRegisterImaging:
     def test_applies_the_backend_registration_class(self, imaging):
-        motion = DoublingMotion(imaging=imaging, displacements=[np.zeros((6, 1, 2))])
+        motion = DoublingMotion(displacements=[np.zeros((6, 1, 2))])
         registered = RegisterImaging(imaging, motion, method="doubling_test_backend")
 
         assert isinstance(registered.epochs[0], DoublingEpoch)
@@ -83,25 +83,25 @@ class TestRegisterImaging:
         np.testing.assert_allclose(registered.epochs[0].get_series(0, 6), expected)
 
     def test_epoch_count_mismatch_raises(self, imaging):
-        motion = DoublingMotion(imaging=imaging, displacements=[np.zeros((6, 1, 2)), np.zeros((6, 1, 2))])
+        motion = DoublingMotion(displacements=[np.zeros((6, 1, 2)), np.zeros((6, 1, 2))])
         with pytest.raises(ValueError, match="does not match imaging"):
             RegisterImaging(imaging, motion, method="doubling_test_backend")
 
     def test_motion_without_registration_class_raises(self, imaging):
-        motion = Motion(imaging=imaging, displacements=[np.zeros((6, 1, 2))])
+        motion = Motion(displacements=[np.zeros((6, 1, 2))])
         with pytest.raises(TypeError, match="registration_class"):
             RegisterImaging(imaging, motion, method="unregistered_test_backend")
 
     def test_serialisation_keeps_the_method(self, imaging):
         from photon_mosaic.core import BaseImaging
 
-        motion = DoublingMotion(imaging=imaging, displacements=[np.zeros((6, 1, 2))])
+        motion = DoublingMotion(displacements=[np.zeros((6, 1, 2))])
         registered = RegisterImaging(imaging, motion, method="doubling_test_backend")
         restored = BaseImaging.from_dict(registered.to_dict())
         assert isinstance(restored.epochs[0], DoublingEpoch)
 
     def test_kwargs_are_forwarded_to_the_epoch(self, imaging):
-        motion = DoublingMotion(imaging=imaging, displacements=[np.zeros((6, 1, 2))])
+        motion = DoublingMotion(displacements=[np.zeros((6, 1, 2))])
         registered = RegisterImaging(imaging, motion, method="doubling_test_backend", flavour="test")
         assert registered.epochs[0].kwargs == {"flavour": "test"}
 
@@ -112,7 +112,7 @@ class TestRegisterImagingEpoch:
     @pytest.fixture()
     def epoch(self):
         im = generate_random_imaging(num_frames=6, height=8, width=9, num_planes=3, sampling_frequency=10.0, seed=2)
-        motion = DoublingMotion(imaging=im, displacements=[np.zeros((6, 3, 2))])
+        motion = DoublingMotion(displacements=[np.zeros((6, 3, 2))])
         return DoublingEpoch(im.epochs[0], motion, 0), im
 
     def test_output_shape_dtype_and_per_plane_dispatch(self, epoch):
@@ -146,7 +146,7 @@ class TestRegisterImagingEpoch:
 
     def test_correct_plane_is_abstract(self, epoch):
         _, im = epoch
-        motion = DoublingMotion(imaging=im, displacements=[np.zeros((6, 3, 2))])
+        motion = DoublingMotion(displacements=[np.zeros((6, 3, 2))])
         with pytest.raises(NotImplementedError):
             RegisterImagingEpoch(im.epochs[0], motion, 0).get_series(0, 2)
 

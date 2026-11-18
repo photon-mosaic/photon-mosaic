@@ -206,7 +206,6 @@ class Motion:
 
     def __init__(
         self,
-        imaging: BaseImaging,
         displacements: Sequence[NDArray[np.floating[Any]]],
         reference: Any = None,
         yranges: Sequence[Sequence[tuple[int, int]]] | None = None,
@@ -218,8 +217,6 @@ class Motion:
 
         Parameters
         ----------
-        imaging : BaseImaging
-            Imaging object associated with the computed motion.
         displacements : Sequence[NDArray]
             Per-epoch rigid displacement arrays shaped ``(frames, planes, 2)``
             or ``(frames, 2)`` in ``(y, x)`` order.
@@ -241,7 +238,6 @@ class Motion:
             Free-form algorithm-agnostic metadata.
         """
 
-        self.imaging = imaging
         self.displacements = displacements
         self.reference = reference
         self.yranges = yranges
@@ -353,7 +349,7 @@ class Motion:
         }
 
     @classmethod
-    def from_dict(cls, motion_dict: dict[str, Any], imaging: BaseImaging) -> "Motion":
+    def from_dict(cls, motion_dict: dict[str, Any]) -> "Motion":
         """Rebuild a motion from :meth:`to_dict` output, as is or reloaded from json.
 
         Called on :class:`Motion` itself, the subclass is resolved from the
@@ -362,7 +358,7 @@ class Motion:
 
         method = motion_dict.get("method")
         target = _get_motion_class(method) if cls is Motion and method is not None else cls
-        return target(imaging=imaging, **target._from_dict_kwargs(_decode_motion_value(motion_dict["kwargs"])))
+        return target(**target._from_dict_kwargs(_decode_motion_value(motion_dict["kwargs"])))
 
     @property
     def num_epochs(self) -> int:
