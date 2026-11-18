@@ -204,7 +204,6 @@ class TestMotionDict:
 
     def test_round_trip_keeps_dtypes_shapes_and_tuples(self, imaging):
         motion = Motion(
-            imaging=imaging,
             displacements=[np.arange(16, dtype=np.int64).reshape(4, 2, 2), np.zeros((0, 2, 2))],
             reference=[np.ones((8, 9), dtype=np.int16)] * 2,
             yranges=[[(1, 7), (0, 8)]] * 2,
@@ -228,7 +227,7 @@ class TestMotionDict:
         assert restored.metadata == {"note": "hi"}
 
     def test_from_dict_dispatches_on_method(self, imaging, registered_dummy):
-        motion = DummyMotion(imaging=imaging, displacements=[np.zeros((4, 2, 2))])
+        motion = DummyMotion(displacements=[np.zeros((4, 2, 2))])
 
         restored = Motion.from_dict(self._through_json(motion))
 
