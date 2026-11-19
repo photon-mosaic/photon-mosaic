@@ -5,7 +5,7 @@ from typing import Any, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from photon_mosaic.core import (
     BaseImaging,
@@ -17,6 +17,15 @@ from photon_mosaic.core import (
 from photon_mosaic.core.selectplanes import select_planes
 
 from .registration import RegisterImaging, RegisterImagingEpoch, RegistrationSettings
+
+# suite2p options this backend cannot honor: they are not settings, and passing one explains why
+_UNSUPPORTED_OPTIONS = {
+    "subpixel": "suite2p 1.x non-rigid phase correlation assumes 10",
+    "two_step_registration": "not supported",
+    "align_by_chan": "multi-channel imaging is not supported",
+    "max_reference_iterations": "suite2p 1.x hard-codes it to 8",
+}
+_RENAMED_OPTIONS = {"maxregshiftNR": "max_nonrigid_shift"}
 
 
 class Suite2pRegistrationSettings(RegistrationSettings):
@@ -32,11 +41,6 @@ class Suite2pRegistrationSettings(RegistrationSettings):
     do_registration: bool = Field(
         default=True,
         description="whether to register data (2 forces re-registration)",
-    )
-    align_by_chan: int = Field(
-        default=1,
-        description="when multi-channel, you can align by non-functional channel (1-based). "
-        "Must be 1 for now: multi-channel imaging is not supported",
     )
     maxregshift: float = Field(
         default=0.1,
@@ -86,10 +90,6 @@ class Suite2pRegistrationSettings(RegistrationSettings):
         "be pixels with negative values (current has a sign), possibly due to noise in the rig. "
         "Some segmentation algorithms cannot handle negative values in the movie, so we have this "
         "option to artificially set those pixels to zero.",
-    )
-    max_reference_iterations: int = Field(
-        default=8,
-        description="Maximum number of iterations for creating a reference image. Must be 8: suite2p 1.x hard-codes it",
     )
     auto_remove_empty_frames: bool = Field(
         default=True,
@@ -188,10 +188,47 @@ class Suite2pRegistrationSettings(RegistrationSettings):
         description="Number of steps to grid between smooth_sigma and smooth_sigma_time_max. "
         "Large values will add significant time to motion correction",
     )
-    # suite2p options the backend does not support: each must keep its default
-    subpixel: int = Field(default=10, description="Must be 10: suite2p 1.x non-rigid phase correlation assumes 10")
-    two_step_registration: bool = Field(default=False, description="Not supported: must be False")
     model_config = ConfigDict(env_prefix="SUITE2P_REGISTRATION_", case_sensitive=False, env_file=".env")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _explain_unsupported_options(cls, data: Any) -> Any:
+        """Replace pydantic's bare "extra inputs are not permitted" for suite2p options we know about."""
+        if not isinstance(data, dict):
+            return data
+        for old, new in _RENAMED_OPTIONS.items():
+            if old in data:
+                raise ValueError(f"'{old}' is now '{new}'.")
+        if found := {k: why for k, why in _UNSUPPORTED_OPTIONS.items() if k in data}:
+            raise ValueError(
+                "Not supported by the suite2p backend: " + "; ".join(f"{k} ({why})" for k, why in found.items())
+            )
+        return data
+
+    @field_validator("smooth_sigma_time")
+    @classmethod
+    def _smooth_sigma_time_is_zero(cls, value: int) -> int:
+        if value > 0:
+            raise ValueError("smooth_sigma_time > 0 crashes suite2p 1.x registration.")
+        return value
+
+    @field_validator("do_bidiphase", "bidiphase")
+    @classmethod
+    def _no_bidiphase(cls, value: Any) -> Any:
+        if value:
+            raise ValueError("Bidiphase correction corrupts odd scan lines in suite2p 1.x (MouseLand/suite2p#1265).")
+        return value
+
+    @model_validator(mode="after")
+    def _check_nonrigid_combinations(self) -> "Suite2pRegistrationSettings":
+        if self.nonrigid and self.outlier_maxregshift is not None:
+            raise ValueError("outlier_maxregshift clips rigid shifts only: set nonrigid=False.")
+        if self.nonrigid and self.bounds is not None:
+            raise ValueError(
+                "'bounds' (an estimation crop) is supported by the suite2p backend for rigid registration only: "
+                "its non-rigid block geometry is defined on the frame the shifts are applied to."
+            )
+        return self
 
 
 def _compute_reference_wrapper(
@@ -374,26 +411,9 @@ class Suite2PMotion(Motion):
         import torch
         from suite2p.registration.register import compute_crop, register_frames
 
-        if "maxregshiftNR" in params:
-            raise ValueError("'maxregshiftNR' is now 'max_nonrigid_shift'.")
         base = settings if settings is not None else cls.settings_class()
-        settings = cls.settings_class(**{**base.model_dump(), **params})
-        if settings.smooth_sigma_time > 0:
-            raise ValueError("smooth_sigma_time > 0 crashes suite2p 1.x registration.")
-        if settings.do_bidiphase or settings.bidiphase:
-            raise ValueError("Bidiphase correction corrupts odd scan lines in suite2p 1.x (MouseLand/suite2p#1265).")
-        unsupported = ["subpixel", "two_step_registration"]
-        unsupported += ["align_by_chan", "max_reference_iterations"]
-        if changed := [k for k in unsupported if getattr(settings, k) != cls.settings_class.model_fields[k].default]:
-            raise ValueError(f"Not supported by the suite2p backend: {changed}. See each setting's description.")
-        if settings.outlier_maxregshift is not None and settings.nonrigid:
-            raise ValueError("outlier_maxregshift clips rigid shifts only: set nonrigid=False.")
+        settings = cls.settings_class(**{**base.model_dump(), **params})  # validates: see the settings validators
         bounds = settings.bounds
-        if bounds is not None and settings.nonrigid:
-            raise ValueError(
-                "'bounds' (an estimation crop) is supported by the suite2p backend for rigid registration only: "
-                "its non-rigid block geometry is defined on the frame the shifts are applied to."
-            )
         rows, cols = (slice(None), slice(None)) if bounds is None else (slice(*bounds[0]), slice(*bounds[1]))
 
         device = torch.device(settings.device)

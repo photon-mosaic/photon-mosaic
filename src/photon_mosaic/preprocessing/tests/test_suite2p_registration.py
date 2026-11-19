@@ -110,6 +110,45 @@ class TestComputeMotionSettingsResolution:
         assert restored.nonrigid is False
 
 
+class TestSettingsValidation:
+    @pytest.mark.parametrize("option", sorted(s2p._UNSUPPORTED_OPTIONS))
+    def test_unsupported_suite2p_option_says_why(self, option):
+        with pytest.raises(ValidationError, match=rf"Not supported by the suite2p backend: {option} \("):
+            Suite2pRegistrationSettings(**{option: 1})
+
+    def test_all_unsupported_options_are_listed(self):
+        with pytest.raises(ValidationError, match="subpixel.*align_by_chan"):
+            Suite2pRegistrationSettings.model_validate({"subpixel": 10, "align_by_chan": 1})
+
+    def test_renamed_option_names_the_new_one(self):
+        with pytest.raises(ValidationError, match="'maxregshiftNR' is now 'max_nonrigid_shift'"):
+            Suite2pRegistrationSettings(maxregshiftNR=3)
+
+    def test_unknown_option_is_rejected(self):
+        with pytest.raises(ValidationError, match="not_a_setting"):
+            Suite2pRegistrationSettings(not_a_setting=5)
+
+    @pytest.mark.parametrize("bidi", [{"do_bidiphase": True}, {"bidiphase": 2}])
+    def test_bidiphase_is_rejected(self, bidi):
+        with pytest.raises(ValidationError, match="suite2p#1265"):
+            Suite2pRegistrationSettings(**bidi)
+
+    def test_smooth_sigma_time_above_zero_is_rejected(self):
+        with pytest.raises(ValidationError, match="smooth_sigma_time > 0"):
+            Suite2pRegistrationSettings(smooth_sigma_time=1)
+
+    def test_outlier_maxregshift_needs_rigid(self):
+        with pytest.raises(ValidationError, match="rigid shifts only"):
+            Suite2pRegistrationSettings(outlier_maxregshift=0.1)
+        assert Suite2pRegistrationSettings(outlier_maxregshift=0.1, nonrigid=False).outlier_maxregshift == 0.1
+
+    def test_bounds_needs_rigid(self):
+        bounds = ((0, 8), (0, 8))
+        with pytest.raises(ValidationError, match="rigid registration only"):
+            Suite2pRegistrationSettings(bounds=bounds)
+        assert Suite2pRegistrationSettings(bounds=bounds, nonrigid=False).bounds == bounds
+
+
 class TestComputeMotionSuite2p:
     def test_returns_suite2p_motion_and_registers_frames(self):
         shifts = [[(0, 0), (0, 0), (1, 0), (1, 0), (0, 1), (0, 1)]]
@@ -149,9 +188,10 @@ class TestComputeMotionSuite2p:
     def test_every_suite2p_option_is_a_setting(self):
         from suite2p.registration.register import default_settings
 
-        ours = {"maxregshiftNR": "max_nonrigid_shift", "align_by_chan2": "align_by_chan"}  # suite2p's name -> ours
+        ours = {"maxregshiftNR": "max_nonrigid_shift"}  # suite2p's name -> ours
         saving = {"upsample_meanImg", "reg_tif", "reg_tif_chan2"}  # outputs written while applying shifts
-        suite2p_options = {ours.get(k, k) for k in default_settings()["registration"]} - saving
+        unsupported = set(s2p._UNSUPPORTED_OPTIONS) | {"align_by_chan2"}  # rejected with an explanation
+        suite2p_options = {ours.get(k, k) for k in default_settings()["registration"]} - saving - unsupported
         assert suite2p_options <= set(Suite2pRegistrationSettings.model_fields)
 
     def test_clip_negative(self):
@@ -182,8 +222,6 @@ class TestComputeMotionSuite2p:
                 compute_motion(imaging, method="suite2p", **{trim: -1})
         with pytest.raises(ValueError, match="shorter than every epoch"):
             compute_motion(imaging, method="suite2p", trim_frames_end=3)
-        with pytest.raises(ValueError, match="rigid shifts only"):
-            compute_motion(imaging, method="suite2p", outlier_maxregshift=0.1)
 
     def test_outlier_shifts_are_clipped(self):
         video = _make_shifted_video(8, height=12, width=12, shifts=[(0, 0)] * 4 + [(3, 3)] + [(0, 0)] * 3)
@@ -194,31 +232,9 @@ class TestComputeMotionSuite2p:
             )
             assert motion.displacements[0][:, 0].tolist() == [[0, 0]] * 4 + [[expected, expected]] + [[0, 0]] * 3
 
-    @pytest.mark.parametrize(
-        "option",
-        [
-            {"subpixel": 5},
-            {"two_step_registration": True},
-            {"align_by_chan": 2},
-            {"max_reference_iterations": 4},
-        ],
-    )
-    def test_unsupported_options_are_rejected(self, option):
-        with pytest.raises(ValueError, match="Not supported"):
-            compute_motion(_make_shifted_imaging(4, height=12, width=12), method="suite2p", settings=option)
-
-    @pytest.mark.parametrize("bidi", [{"do_bidiphase": True}, {"bidiphase": 2}])
-    def test_bidiphase_is_rejected(self, bidi):
-        imaging = _make_shifted_imaging(4, height=12, width=12)
-        with pytest.raises(ValueError, match="suite2p#1265"):
-            compute_motion(imaging, method="suite2p", settings=bidi)
-
-    def test_smooth_sigma_time_kwarg_is_rejected(self):
-        imaging = _make_shifted_imaging(
-            num_frames=4, num_planes=1, height=12, width=12, shifts=[[(0, 0)] * 4], sampling_frequency=10.0
-        )
-        with pytest.raises(ValueError, match="smooth_sigma_time > 0"):
-            compute_motion(imaging, method="suite2p", smooth_sigma_time=1)
+    def test_settings_errors_reach_the_caller(self):
+        with pytest.raises(ValueError, match="rigid shifts only"):
+            compute_motion(_make_shifted_imaging(4, height=12, width=12), method="suite2p", outlier_maxregshift=0.1)
 
     def test_multi_epoch_single_plane_alignment(self):
         shifts = [
