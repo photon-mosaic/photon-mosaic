@@ -32,7 +32,7 @@ import cv2
 import numpy as np
 import scipy.interpolate
 from numpy.typing import NDArray
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 
 from photon_mosaic.core import (
     BaseImaging,
@@ -145,6 +145,16 @@ class NormcorreRegistrationSettings(RegistrationSettings):
     )
 
     model_config = ConfigDict(env_prefix="NORMCORRE_REGISTRATION_", case_sensitive=False, env_file=".env")
+
+    @model_validator(mode="after")
+    def _check_setting_combinations(self) -> "NormcorreRegistrationSettings":
+        if self.gSig_filt is not None and not self.shifts_opencv:
+            # CaImAn raises the same inside tile_and_correct (L2107, L2209)
+            raise ValueError("FFT shifts with gSig_filt are untested in CaImAn: set shifts_opencv=True.")
+        if self.nonrigid and self.max_nonrigid_shift == 0:
+            # CaImAn then takes the rigid branch of tile_and_correct and fails building x_shifts_els
+            raise ValueError("nonrigid registration needs max_nonrigid_shift > 0.")
+        return self
 
 
 # --------------------------------------------------------------------------- #
@@ -1413,13 +1423,7 @@ class NormcorreMotion(Motion):
         if badframes is not None:
             raise ValueError("The normcorre backend follows CaImAn, which has no bad-frame mechanism.")
         base = cls.settings_class() if settings is None else settings
-        settings = cls.settings_class(**{**base.model_dump(), **params})
-        if settings.gSig_filt is not None and not settings.shifts_opencv:
-            # CaImAn raises the same inside tile_and_correct (L2107, L2209)
-            raise ValueError("FFT shifts with gSig_filt are untested in CaImAn: set shifts_opencv=True.")
-        if settings.nonrigid and settings.max_nonrigid_shift == 0:
-            # CaImAn then takes the rigid branch of tile_and_correct and fails building x_shifts_els
-            raise ValueError("nonrigid registration needs max_nonrigid_shift > 0.")
+        settings = cls.settings_class(**{**base.model_dump(), **params})  # validates: see the settings validator
         epochs = imaging.epochs
         n_splits = max(epochs[0].get_num_samples() // max(settings.num_frames_split, _MIN_SPLIT_FRAMES), 1)
         y0 = settings.bounds[0][0] or 0 if settings.bounds is not None else 0
