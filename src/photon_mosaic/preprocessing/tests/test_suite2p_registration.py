@@ -111,14 +111,21 @@ class TestComputeMotionSettingsResolution:
 
 
 class TestSettingsValidation:
-    @pytest.mark.parametrize("option", sorted(s2p._UNSUPPORTED_OPTIONS))
-    def test_unsupported_suite2p_option_says_why(self, option):
-        with pytest.raises(ValidationError, match=rf"Not supported by the suite2p backend: {option} \("):
-            Suite2pRegistrationSettings(**{option: 1})
+    @pytest.mark.parametrize(
+        "option, value",
+        [("subpixel", 5), ("two_step_registration", True), ("align_by_chan", 2), ("max_reference_iterations", 4)],
+    )
+    def test_option_not_used_yet_warns_and_keeps_the_default(self, option, value):
+        default = Suite2pRegistrationSettings.model_fields[option].default
+        with pytest.warns(UserWarning, match=rf"{option}={value!r} is not used by the suite2p backend yet"):
+            settings = Suite2pRegistrationSettings(**{option: value})
+        assert getattr(settings, option) == default
 
-    def test_all_unsupported_options_are_listed(self):
-        with pytest.raises(ValidationError, match="subpixel.*align_by_chan"):
-            Suite2pRegistrationSettings.model_validate({"subpixel": 10, "align_by_chan": 1})
+    @pytest.mark.parametrize("option", s2p._NOT_USED_YET)
+    def test_option_not_used_yet_at_its_default_is_silent(self, option, recwarn):
+        default = Suite2pRegistrationSettings.model_fields[option].default
+        assert getattr(Suite2pRegistrationSettings(**{option: default}), option) == default
+        assert not recwarn.list
 
     def test_renamed_option_names_the_new_one(self):
         with pytest.raises(ValidationError, match="'maxregshiftNR' is now 'max_nonrigid_shift'"):
@@ -188,10 +195,9 @@ class TestComputeMotionSuite2p:
     def test_every_suite2p_option_is_a_setting(self):
         from suite2p.registration.register import default_settings
 
-        ours = {"maxregshiftNR": "max_nonrigid_shift"}  # suite2p's name -> ours
+        ours = {"maxregshiftNR": "max_nonrigid_shift", "align_by_chan2": "align_by_chan"}  # suite2p's name -> ours
         saving = {"upsample_meanImg", "reg_tif", "reg_tif_chan2"}  # outputs written while applying shifts
-        unsupported = set(s2p._UNSUPPORTED_OPTIONS) | {"align_by_chan2"}  # rejected with an explanation
-        suite2p_options = {ours.get(k, k) for k in default_settings()["registration"]} - saving - unsupported
+        suite2p_options = {ours.get(k, k) for k in default_settings()["registration"]} - saving
         assert suite2p_options <= set(Suite2pRegistrationSettings.model_fields)
 
     def test_clip_negative(self):

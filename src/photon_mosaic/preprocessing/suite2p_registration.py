@@ -1,11 +1,12 @@
 import logging
 import math
 import time
+import warnings
 from typing import Any, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import ConfigDict, Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 from photon_mosaic.core import (
     BaseImaging,
@@ -18,13 +19,9 @@ from photon_mosaic.core.selectplanes import select_planes
 
 from .registration import RegisterImaging, RegisterImagingEpoch, RegistrationSettings
 
-# suite2p options this backend cannot honor: they are not settings, and passing one explains why
-_UNSUPPORTED_OPTIONS = {
-    "subpixel": "suite2p 1.x non-rigid phase correlation assumes 10",
-    "two_step_registration": "not supported",
-    "align_by_chan": "multi-channel imaging is not supported",
-    "max_reference_iterations": "suite2p 1.x hard-codes it to 8",
-}
+# suite2p options that are settings so the full range is covered, but that the backend does not use yet:
+# changing one warns and falls back to its default
+_NOT_USED_YET = ("align_by_chan", "max_reference_iterations", "subpixel", "two_step_registration")
 _RENAMED_OPTIONS = {"maxregshiftNR": "max_nonrigid_shift"}
 
 
@@ -41,6 +38,11 @@ class Suite2pRegistrationSettings(RegistrationSettings):
     do_registration: bool = Field(
         default=True,
         description="whether to register data (2 forces re-registration)",
+    )
+    align_by_chan: int = Field(
+        default=1,
+        description="when multi-channel, you can align by non-functional channel (1-based). "
+        "Not used yet: multi-channel imaging is not supported, so changing it warns and keeps 1",
     )
     maxregshift: float = Field(
         default=0.1,
@@ -90,6 +92,11 @@ class Suite2pRegistrationSettings(RegistrationSettings):
         "be pixels with negative values (current has a sign), possibly due to noise in the rig. "
         "Some segmentation algorithms cannot handle negative values in the movie, so we have this "
         "option to artificially set those pixels to zero.",
+    )
+    max_reference_iterations: int = Field(
+        default=8,
+        description="Maximum number of iterations for creating a reference image. "
+        "Not used yet: suite2p 1.x hard-codes 8, so changing it warns and keeps 8",
     )
     auto_remove_empty_frames: bool = Field(
         default=True,
@@ -188,22 +195,40 @@ class Suite2pRegistrationSettings(RegistrationSettings):
         description="Number of steps to grid between smooth_sigma and smooth_sigma_time_max. "
         "Large values will add significant time to motion correction",
     )
+    subpixel: int = Field(
+        default=10,
+        description="Not used yet: suite2p 1.x non-rigid phase correlation assumes 10, "
+        "so changing it warns and keeps 10",
+    )
+    two_step_registration: bool = Field(
+        default=False,
+        description="Not used yet: two step registration is not supported, so changing it warns and keeps False",
+    )
     model_config = ConfigDict(env_prefix="SUITE2P_REGISTRATION_", case_sensitive=False, env_file=".env")
 
     @model_validator(mode="before")
     @classmethod
-    def _explain_unsupported_options(cls, data: Any) -> Any:
-        """Replace pydantic's bare "extra inputs are not permitted" for suite2p options we know about."""
-        if not isinstance(data, dict):
-            return data
-        for old, new in _RENAMED_OPTIONS.items():
-            if old in data:
-                raise ValueError(f"'{old}' is now '{new}'.")
-        if found := {k: why for k, why in _UNSUPPORTED_OPTIONS.items() if k in data}:
-            raise ValueError(
-                "Not supported by the suite2p backend: " + "; ".join(f"{k} ({why})" for k, why in found.items())
-            )
+    def _name_the_renamed_options(cls, data: Any) -> Any:
+        """Replace pydantic's bare "extra inputs are not permitted" for an option that was renamed."""
+        if isinstance(data, dict):
+            for old, new in _RENAMED_OPTIONS.items():
+                if old in data:
+                    raise ValueError(f"'{old}' is now '{new}'.")
         return data
+
+    @field_validator(*_NOT_USED_YET)
+    @classmethod
+    def _warn_and_keep_default_if_not_used_yet(cls, value: Any, info: ValidationInfo) -> Any:
+        name = str(info.field_name)
+        default = cls.model_fields[name].default
+        if value != default:
+            warnings.warn(
+                f"{name}={value!r} is not used by the suite2p backend yet: using the default {default!r}.",
+                UserWarning,
+                stacklevel=2,
+            )
+            return default
+        return value
 
     @field_validator("smooth_sigma_time")
     @classmethod

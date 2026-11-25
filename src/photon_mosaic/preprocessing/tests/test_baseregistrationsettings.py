@@ -24,6 +24,9 @@ class TestSuite2pDefaults:
     def test_batch_size_default(self, settings):
         assert settings.batch_size == 100
 
+    def test_align_by_chan_default(self, settings):
+        assert settings.align_by_chan == 1
+
     def test_maxregshift_default(self, settings):
         assert settings.maxregshift == pytest.approx(0.1)
 
