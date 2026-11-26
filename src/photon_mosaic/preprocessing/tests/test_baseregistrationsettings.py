@@ -74,21 +74,17 @@ class TestSuite2pDefaults:
 class TestSuite2pCustomValues:
     def test_override_scalar_fields(self):
         settings = Suite2pRegistrationSettings(
-            debug=True,
+            clip_negative=True,
             batch_size=200,
             maxregshift=0.05,
             nonrigid=False,
             smooth_sigma=2.0,
         )
-        assert settings.debug is True
+        assert settings.clip_negative is True
         assert settings.batch_size == 200
         assert settings.maxregshift == pytest.approx(0.05)
         assert settings.nonrigid is False
         assert settings.smooth_sigma == pytest.approx(2.0)
-
-    def test_override_tmp_dir(self):
-        settings = Suite2pRegistrationSettings(tmp_dir=Path("/tmp/my_scratch"))
-        assert settings.tmp_dir == Path("/tmp/my_scratch")
 
     def test_override_block_size(self):
         settings = Suite2pRegistrationSettings(block_size=[64, 64])
@@ -107,9 +103,9 @@ class TestSuite2pEnvVars:
         assert settings.batch_size == 250
 
     def test_env_var_bool(self, monkeypatch):
-        monkeypatch.setenv("SUITE2P_REGISTRATION_DEBUG", "true")
+        monkeypatch.setenv("SUITE2P_REGISTRATION_CLIP_NEGATIVE", "true")
         settings = Suite2pRegistrationSettings()
-        assert settings.debug is True
+        assert settings.clip_negative is True
 
     def test_env_var_float(self, monkeypatch):
         monkeypatch.setenv("SUITE2P_REGISTRATION_MAXREGSHIFT", "0.2")

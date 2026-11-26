@@ -156,8 +156,8 @@ class TestRunSuite2p:
         run_segmentation(imaging, method="suite2p", folder=None, bin_size=2)
         assert bin_calls[0]["bin_size"] == 2
 
-    def test_unsupported_setting_raises(self, imaging, fake_inner):
-        with pytest.raises(ValueError, match="Not supported"):
+    def test_option_not_used_yet_warns(self, imaging, fake_inner):
+        with pytest.warns(UserWarning, match="chan2_threshold=0.5 is not used by the suite2p backend yet"):
             run_segmentation(imaging, method="suite2p", folder=None, chan2_threshold=0.5)
 
 
@@ -260,6 +260,56 @@ class TestSettings:
     def test_unknown_name_raises(self):
         with pytest.raises(ValidationError):
             seg.Suite2pSegmentationSettings(sparsery_settings={"spatial_scale": 1})
+
+    @pytest.mark.parametrize(
+        "option, value",
+        [
+            ("tau", -1.0),
+            ("tau", 11.0),
+            ("threshold_scaling", -1.0),
+            ("max_overlap", 1.5),
+            ("nbins", 0),
+            ("bin_size", 0),
+            ("highpass_time", -1),
+            ("npix_norm_min", -1.0),
+            ("npix_norm_max", -1.0),
+            ("highpass_neuropil", 4),
+            ("max_ROIs", 0),
+            ("spatial_scale", 5),
+            ("active_percentile", 101.0),
+            ("max_iterations", 0),
+            ("highpass_spatial", -1.0),
+            ("flow_threshold", -0.1),
+        ],
+    )
+    def test_out_of_range_value_raises(self, option, value):
+        with pytest.raises(ValidationError, match=option):
+            seg.Suite2pSegmentationSettings(**{option: value})
+
+    def test_algorithm_is_one_of_the_three(self):
+        assert seg.Suite2pSegmentationSettings(algorithm="Sourcery").algorithm == "sourcery"
+        with pytest.raises(ValidationError, match="algorithm"):
+            seg.Suite2pSegmentationSettings(algorithm="foo")
+
+    def test_device_is_a_torch_device(self):
+        assert seg.Suite2pSegmentationSettings(device="cuda:1").device == "cuda:1"
+        with pytest.raises(ValidationError, match="device"):
+            seg.Suite2pSegmentationSettings(device="gpuu")
+
+    @pytest.mark.parametrize(
+        "option, value",
+        [
+            ("cellpose_model", "cyto3"),
+            ("chan2_threshold", 0.5),
+            ("cellpose_chan2", True),
+            ("cellpose_params_chan2", {"a": 1}),
+        ],
+    )
+    def test_option_not_used_yet_warns_and_keeps_the_default(self, option, value):
+        default = seg.Suite2pSegmentationSettings.model_fields[option].default
+        with pytest.warns(UserWarning, match=f"{option}=.* is not used by the suite2p backend yet"):
+            settings = seg.Suite2pSegmentationSettings(**{option: value})
+        assert getattr(settings, option) == default
 
 
 class TestDiameter:

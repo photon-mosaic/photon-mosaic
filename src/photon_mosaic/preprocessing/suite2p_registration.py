@@ -1,7 +1,6 @@
 import logging
 import math
 import time
-import warnings
 from typing import Any, Sequence
 
 import numpy as np
@@ -15,13 +14,38 @@ from photon_mosaic.core import (
     register_registration_class,
     split_epoch_at_frames,
 )
+from photon_mosaic.core.core_tools import _warn_and_keep_default
 from photon_mosaic.core.selectplanes import select_planes
 
 from .registration import RegisterImaging, RegisterImagingEpoch, RegistrationSettings
 
-# suite2p options that are settings so the full range is covered, but that the backend does not use yet:
+# settings the backend does not use yet (see #241):
 # changing one warns and falls back to its default
-_NOT_USED_YET = ("align_by_chan", "max_reference_iterations", "subpixel", "two_step_registration")
+_NOT_USED_YET = (
+    "align_by_chan",
+    "max_reference_iterations",
+    "subpixel",
+    "two_step_registration",
+    "debug",
+    "tmp_dir",
+    "data_type",
+    "do_registration",
+    "force_refImg",
+    "auto_remove_empty_frames",
+    "do_optimize_motion_params",
+    "use_ave_image_as_reference",
+    "n_batches",
+    "smooth_sigma_min",
+    "smooth_sigma_max",
+    "smooth_sigma_steps",
+    "smooth_sigma_time_min",
+    "smooth_sigma_time_max",
+    "smooth_sigma_time_steps",
+    "movie_lower_quantile",
+    "movie_upper_quantile",
+    "preview_frame_bin_seconds",
+    "preview_playback_factor",
+)
 _RENAMED_OPTIONS = {"maxregshiftNR": "max_nonrigid_shift"}
 
 
@@ -46,10 +70,14 @@ class Suite2pRegistrationSettings(RegistrationSettings):
     )
     maxregshift: float = Field(
         default=0.1,
+        ge=0,
+        le=1,
         description="max allowed registration shift, as a fraction of frame max(width and height)",
     )
     force_refImg: bool = Field(default=True, description="Force the use of an external reference image")
-    nimg_init: int = Field(default=400, description="Number of evenly spaced frames used to build the reference image")
+    nimg_init: int = Field(
+        default=400, ge=0, description="Number of evenly spaced frames used to build the reference image"
+    )
     do_bidiphase: bool = Field(
         default=False,
         description="Estimate the bidirectional scanning phase offset. Must be False: suite2p 1.x corrupts odd scan "
@@ -60,14 +88,16 @@ class Suite2pRegistrationSettings(RegistrationSettings):
         description="Bidirectional scanning phase offset in pixels. Must be 0, see do_bidiphase.",
     )
     norm_frames: bool = Field(default=True, description="Normalize frames when estimating shifts")
-    spatial_taper: float = Field(default=3.45, description="Edge taper width in pixels; larger for 1P recordings")
+    spatial_taper: float = Field(default=3.45, ge=0, description="Edge taper width in pixels; larger for 1P recordings")
     th_badframes: float = Field(
         default=1.0,
+        ge=0,
         description="Threshold for the frames excluded when computing the valid region; smaller excludes more",
     )
     block_size: list = Field(default_factory=lambda: [128, 128], description="Block size for non-rigid registration.")
     snr_thresh: float = Field(
         default=1.2,
+        ge=1,
         description="if any nonrigid block is below this threshold, it gets smoothed "
         "until above this threshold. 1.0 results in no smoothing",
     )
@@ -138,6 +168,7 @@ class Suite2pRegistrationSettings(RegistrationSettings):
     )
     smooth_sigma: float = Field(
         default=1.15,
+        ge=0.25,
         description="~1 good for 2P recordings, recommend 3-5 for 1P recordings.",
     )
     use_ave_image_as_reference: bool = Field(
@@ -219,16 +250,7 @@ class Suite2pRegistrationSettings(RegistrationSettings):
     @field_validator(*_NOT_USED_YET)
     @classmethod
     def _warn_and_keep_default_if_not_used_yet(cls, value: Any, info: ValidationInfo) -> Any:
-        name = str(info.field_name)
-        default = cls.model_fields[name].default
-        if value != default:
-            warnings.warn(
-                f"{name}={value!r} is not used by the suite2p backend yet: using the default {default!r}.",
-                UserWarning,
-                stacklevel=2,
-            )
-            return default
-        return value
+        return _warn_and_keep_default(cls, str(info.field_name), value, "suite2p")
 
     @field_validator("smooth_sigma_time")
     @classmethod

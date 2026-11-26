@@ -1,14 +1,15 @@
 import importlib.metadata
 import logging
 import time
-from typing import Annotated, Any, Sequence
+from typing import Annotated, Any, Literal, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from photon_mosaic.core import BaseImaging
+from photon_mosaic.core.core_tools import _DEVICE_PATTERN, _warn_and_keep_default
 from photon_mosaic.extractors.suite2prois import Suite2pRois
 
 from .basesegmentation import BaseSegmentation, register_segmentation_class
@@ -27,6 +28,8 @@ class Suite2pSegmentationSettings(BaseSettings):
     )
     tau: float = Field(
         default=1.0,
+        ge=0,
+        le=10,
         description="Timescale of the indicator (seconds). GCaMP6s ~1.5, GCaMP6f ~0.7.",
     )
     fs: float = Field(
@@ -39,10 +42,11 @@ class Suite2pSegmentationSettings(BaseSettings):
     )
     device: str = Field(
         default="cpu",
+        pattern=_DEVICE_PATTERN,
         description="Torch device for detection: 'cpu', 'cuda', or 'mps'.",
     )
 
-    algorithm: str = Field(
+    algorithm: Literal["sparsery", "sourcery", "cellpose"] = Field(
         default="sparsery",
         description=(
             "ROI detection algorithm. Options: 'sparsery' (suite2p sparse mode), "
@@ -55,10 +59,13 @@ class Suite2pSegmentationSettings(BaseSettings):
     )
     threshold_scaling: float = Field(
         default=1.0,
+        ge=0,
         description="Scale the automatically determined detection threshold.",
     )
     max_overlap: float = Field(
         default=0.75,
+        ge=0,
+        le=1,
         description="ROIs with more overlap than this are removed during triage.",
     )
     soma_crop: bool = Field(
@@ -71,46 +78,74 @@ class Suite2pSegmentationSettings(BaseSettings):
     )
     nbins: int = Field(
         default=5000,
+        ge=1,
         description="Number of bins for the activity histogram.",
     )
     bin_size: int | None = Field(
         default=None,
+        ge=1,
         description="Frames per bin. None uses max(1, n_frames // nbins, round(tau * fs)).",
     )
     highpass_time: int = Field(
         default=100,
+        ge=0,
         description="Window size (frames) for temporal high-pass filter before detection.",
     )
     block_size: list[int] = Field(default=[64, 64], description="Block size [y, x] for PCA denoising.")
-    npix_norm_min: float = Field(default=0.0, description="Remove ROIs with a soma smaller than this x the median.")
-    npix_norm_max: float = Field(default=100.0, description="Remove ROIs with a soma larger than this x the median.")
-    highpass_neuropil: int = Field(default=25, description="Sparsery: high-pass filter (pixels) removing neuropil.")
-    max_ROIs: int = Field(default=5000, description="Sparsery: maximum number of ROIs to detect.")
-    spatial_scale: int = Field(default=0, description="Sparsery: 0 estimates it; 1, 2, 3, 4 = 6, 12, 24, 48 pixels.")
-    active_percentile: float = Field(default=0.0, description="Sparsery: if > 0, this percentile is the threshold.")
+    npix_norm_min: float = Field(
+        default=0.0, ge=0, description="Remove ROIs with a soma smaller than this x the median."
+    )
+    npix_norm_max: float = Field(
+        default=100.0, ge=0, description="Remove ROIs with a soma larger than this x the median."
+    )
+    highpass_neuropil: int = Field(
+        default=25, ge=5, description="Sparsery: high-pass filter (pixels) removing neuropil."
+    )
+    max_ROIs: int = Field(default=5000, ge=1, description="Sparsery: maximum number of ROIs to detect.")
+    spatial_scale: int = Field(
+        default=0, ge=0, le=4, description="Sparsery: 0 estimates it; 1, 2, 3, 4 = 6, 12, 24, 48 pixels."
+    )
+    active_percentile: float = Field(
+        default=0.0, ge=0, le=100, description="Sparsery: if > 0, this percentile is the threshold."
+    )
     connected: bool = Field(default=True, description="Sourcery: keep ROIs connected (False for dendrites).")
-    max_iterations: int = Field(default=20, description="Sourcery: maximum number of detection iterations.")
+    max_iterations: int = Field(default=20, ge=1, description="Sourcery: maximum number of detection iterations.")
     smooth_masks: bool = Field(default=False, description="Sourcery: smooth the ROI masks.")
     cellpose_img: str = Field(
         default="max_proj / meanImg", description="Cellpose: image to segment; also 'meanImg' or 'max_proj'."
     )
-    highpass_spatial: float = Field(default=0.0, description="Cellpose: high-pass sigma, x diameter; 0 disables it.")
-    flow_threshold: float = Field(default=0.4, description="Cellpose: flow error threshold.")
+    highpass_spatial: float = Field(
+        default=0.0, ge=0, description="Cellpose: high-pass sigma, x diameter; 0 disables it."
+    )
+    flow_threshold: float = Field(default=0.4, ge=0, description="Cellpose: flow error threshold.")
     cellprob_threshold: float = Field(default=0.0, description="Cellpose: cell probability threshold.")
     cellpose_params: dict[str, Any] | None = Field(default=None, description="Cellpose: extra arguments to model.eval.")
     cellpose_model: str = Field(
-        default="cpsam", description="Must be 'cpsam': suite2p 1.1.0 ignores it and always loads cpsam."
+        default="cpsam",
+        description="Not used yet: suite2p 1.1.0 always loads cpsam, so changing it warns and keeps 'cpsam'.",
     )
-    chan2_threshold: float = Field(default=0.25, description="Must be 0.25: chan2 detection is not supported.")
-    cellpose_chan2: bool = Field(default=False, description="Must be False: chan2 detection is not supported.")
-    cellpose_params_chan2: dict[str, Any] | None = Field(default=None, description="Must be None: as cellpose_chan2.")
+    chan2_threshold: float = Field(
+        default=0.25, description="Not used yet: chan2 detection is not supported, so changing it warns and keeps 0.25."
+    )
+    cellpose_chan2: bool = Field(
+        default=False,
+        description="Not used yet: chan2 detection is not supported, so changing it warns and keeps False.",
+    )
+    cellpose_params_chan2: dict[str, Any] | None = Field(
+        default=None, description="Not used yet, as cellpose_chan2: changing it warns and keeps None."
+    )
 
     model_config = SettingsConfigDict(env_file=".env", env_prefix="SUITE2P_SEGMENTATION_", case_sensitive=False)
 
-    @field_validator("algorithm")
+    @field_validator("algorithm", mode="before")
     @classmethod
-    def lowercase_algorithm(cls, v: str) -> str:
-        return v.lower()
+    def lowercase_algorithm(cls, v: Any) -> Any:
+        return v.lower() if isinstance(v, str) else v
+
+    @field_validator("cellpose_model", "chan2_threshold", "cellpose_chan2", "cellpose_params_chan2")
+    @classmethod
+    def _warn_and_keep_default_if_not_used_yet(cls, value: Any, info: ValidationInfo) -> Any:
+        return _warn_and_keep_default(cls, str(info.field_name), value, "suite2p")
 
     @classmethod
     def settings_customise_sources(
@@ -123,9 +158,6 @@ class Suite2pSegmentationSettings(BaseSettings):
             return {k: v for k, v in dotenv_settings().items() if k in cls.model_fields or k.startswith(prefix)}
 
         return init_settings, env_settings, own_dotenv, file_secret_settings
-
-
-_UNSUPPORTED = ("cellpose_model", "chan2_threshold", "cellpose_chan2", "cellpose_params_chan2")
 
 
 def _read_plane_range(
@@ -361,8 +393,6 @@ class Suite2pSegmentation(BaseSegmentation):
     ) -> Suite2pRois:
         from suite2p.classification import builtin_classfile, classify  # noqa: PLC0415
 
-        if changed := [k for k in _UNSUPPORTED if getattr(settings, k) != cls.settings_class.model_fields[k].default]:
-            raise ValueError(f"Not supported, keep the default: {changed} (see each setting's description).")
         H, W, n_planes = imaging.shape
 
         n_epochs = imaging.get_num_epochs()

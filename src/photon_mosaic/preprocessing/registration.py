@@ -10,6 +10,7 @@ from pydantic import ConfigDict, Field
 from pydantic_settings import BaseSettings
 
 from photon_mosaic.core import BaseImaging, BaseImagingEpoch, KnownMotionMethod, Motion, get_registration_class
+from photon_mosaic.core.core_tools import _DEVICE_PATTERN
 
 from .basepreprocessor import BasePreprocessor, BasePreprocessorEpoch
 
@@ -32,9 +33,10 @@ class RegistrationSettings(BaseSettings):
         default=Path("/scratch"),
         description="Directory into which to write temporary files produced by the registration backend",
     )
-    batch_size: int = Field(default=100, description="Number of frames per batch")
+    batch_size: int = Field(default=100, ge=1, description="Number of frames per batch")
     device: str = Field(
         default="cpu",
+        pattern=_DEVICE_PATTERN,
         description="Torch device for registration: 'cpu', 'cuda', or 'mps'.",
     )
     nonrigid: bool = Field(
@@ -44,6 +46,7 @@ class RegistrationSettings(BaseSettings):
     )
     max_nonrigid_shift: int = Field(
         default=5,
+        ge=0,
         description="Maximum pixels a block/patch shift may deviate from the frame's rigid shift "
         "(suite2p 'maxregshiftNR', CaImAn 'max_deviation_rigid').",
     )

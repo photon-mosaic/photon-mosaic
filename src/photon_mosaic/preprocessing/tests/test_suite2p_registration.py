@@ -113,7 +113,31 @@ class TestComputeMotionSettingsResolution:
 class TestSettingsValidation:
     @pytest.mark.parametrize(
         "option, value",
-        [("subpixel", 5), ("two_step_registration", True), ("align_by_chan", 2), ("max_reference_iterations", 4)],
+        [
+            ("subpixel", 5),
+            ("two_step_registration", True),
+            ("align_by_chan", 2),
+            ("max_reference_iterations", 4),
+            ("debug", True),
+            ("tmp_dir", "/tmp/elsewhere"),
+            ("data_type", "tiff"),
+            ("do_registration", False),
+            ("force_refImg", False),
+            ("auto_remove_empty_frames", False),
+            ("do_optimize_motion_params", True),
+            ("use_ave_image_as_reference", True),
+            ("n_batches", 22),
+            ("smooth_sigma_min", 0.325),
+            ("smooth_sigma_max", 1.075),
+            ("smooth_sigma_steps", 6),
+            ("smooth_sigma_time_min", 2.0),
+            ("smooth_sigma_time_max", 8.0),
+            ("smooth_sigma_time_steps", 9),
+            ("movie_lower_quantile", 0.05),
+            ("movie_upper_quantile", 0.4995),
+            ("preview_frame_bin_seconds", 1.0),
+            ("preview_playback_factor", 5.0),
+        ],
     )
     def test_option_not_used_yet_warns_and_keeps_the_default(self, option, value):
         default = Suite2pRegistrationSettings.model_fields[option].default
@@ -125,6 +149,34 @@ class TestSettingsValidation:
     def test_option_not_used_yet_at_its_default_is_silent(self, option, recwarn):
         default = Suite2pRegistrationSettings.model_fields[option].default
         assert getattr(Suite2pRegistrationSettings(**{option: default}), option) == default
+        assert not recwarn.list
+
+    @pytest.mark.parametrize(
+        "option, value",
+        [
+            ("batch_size", 0),
+            ("max_nonrigid_shift", -1),
+            ("maxregshift", -0.1),
+            ("maxregshift", 1.5),
+            ("nimg_init", -1),
+            ("spatial_taper", -1.0),
+            ("th_badframes", -1.0),
+            ("snr_thresh", 0.5),
+            ("smooth_sigma", 0.1),
+        ],
+    )
+    def test_out_of_range_value_raises(self, option, value):
+        with pytest.raises(ValidationError, match=option):
+            Suite2pRegistrationSettings(**{option: value})
+
+    def test_device_is_a_torch_device(self):
+        assert Suite2pRegistrationSettings(device="cuda:1").device == "cuda:1"
+        with pytest.raises(ValidationError, match="device"):
+            Suite2pRegistrationSettings(device="gpuu")
+
+    def test_tmp_dir_default_as_a_string_is_silent(self, recwarn):
+        # settings reloaded from JSON give the Path default back as a string
+        Suite2pRegistrationSettings(tmp_dir="/scratch")
         assert not recwarn.list
 
     def test_renamed_option_names_the_new_one(self):
