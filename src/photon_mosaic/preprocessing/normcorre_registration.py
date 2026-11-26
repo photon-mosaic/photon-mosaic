@@ -32,7 +32,7 @@ import cv2
 import numpy as np
 import scipy.interpolate
 from numpy.typing import NDArray
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, model_validator
 
 from photon_mosaic.core import (
     BaseImaging,
@@ -145,6 +145,16 @@ class NormcorreRegistrationSettings(RegistrationSettings):
     )
 
     model_config = ConfigDict(env_prefix="NORMCORRE_REGISTRATION_", case_sensitive=False, env_file=".env")
+
+    @model_validator(mode="after")
+    def _check_setting_combinations(self) -> "NormcorreRegistrationSettings":
+        if self.gSig_filt is not None and not self.shifts_opencv:
+            # CaImAn raises the same inside tile_and_correct (L2107, L2209)
+            raise ValueError("FFT shifts with gSig_filt are untested in CaImAn: set shifts_opencv=True.")
+        if self.nonrigid and self.max_nonrigid_shift == 0:
+            # CaImAn then takes the rigid branch of tile_and_correct and fails building x_shifts_els
+            raise ValueError("nonrigid registration needs max_nonrigid_shift > 0.")
+        return self
 
 
 # --------------------------------------------------------------------------- #
@@ -1292,6 +1302,7 @@ def _correct_epoch(
 class NormcorreMotion(Motion):
     """The motion NoRMCorre estimated, returned by ``compute_motion(..., method="normcorre")``.
 
+    Holds arrays and the settings used, dumped to a dict only when saved.
     Shifts are stored in pixels, ``(y, x)``, as the *motion* of each frame (or patch)
     relative to the template, suite2p's convention for ``displacements``: the correction
     applied on registration is the negative. CaImAn stores the corrections, so CaImAn's
@@ -1309,8 +1320,8 @@ class NormcorreMotion(Motion):
         ``(frames, ny, nx, 2)``.
     patch_centers : list or None
         Non-rigid runs only: per plane, the patch centres ``(cy, cx)`` in full-frame pixels.
-    settings : dict
-        The :class:`NormcorreRegistrationSettings` used, as a dict.
+    settings : NormcorreRegistrationSettings
+        The settings used.
     metadata : dict
         ``"border_to_0"``: the largest shift, rounded up, i.e. how many pixels at each edge
         may hold filled-in values (CaImAn ``border_to_0``).
@@ -1332,7 +1343,7 @@ class NormcorreMotion(Motion):
         corrected_badframes: Sequence[NDArray[np.bool_]] | None = None,
         patch_shifts: Sequence[Sequence[NDArray[np.floating[Any]] | None] | None] | None = None,
         patch_centers: Sequence[tuple[NDArray, NDArray] | None] | None = None,
-        settings: dict[str, Any] | None = None,
+        settings: NormcorreRegistrationSettings | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(
@@ -1346,13 +1357,22 @@ class NormcorreMotion(Motion):
         )
         self.patch_shifts = patch_shifts
         self.patch_centers = patch_centers
-        self.settings = settings if settings is not None else {}
+        self.settings = settings if settings is not None else self.settings_class()
 
     def _to_dict_kwargs(self) -> dict[str, Any]:
         """Add the NoRMCorre-specific fields to :meth:`Motion._to_dict_kwargs`."""
 
         kwargs = super()._to_dict_kwargs()
-        kwargs.update(patch_shifts=self.patch_shifts, patch_centers=self.patch_centers, settings=self.settings)
+        settings = self.settings.model_dump()
+        kwargs.update(patch_shifts=self.patch_shifts, patch_centers=self.patch_centers, settings=settings)
+        return kwargs
+
+    @classmethod
+    def _from_dict_kwargs(cls, kwargs: dict[str, Any]) -> dict[str, Any]:
+        """Validate the saved settings dict back into :class:`NormcorreRegistrationSettings`."""
+
+        kwargs = super()._from_dict_kwargs(kwargs)
+        kwargs["settings"] = cls.settings_class.model_validate(kwargs.get("settings") or {})
         return kwargs
 
     @classmethod
@@ -1403,13 +1423,7 @@ class NormcorreMotion(Motion):
         if badframes is not None:
             raise ValueError("The normcorre backend follows CaImAn, which has no bad-frame mechanism.")
         base = cls.settings_class() if settings is None else settings
-        settings = cls.settings_class(**{**base.model_dump(), **params})
-        if settings.gSig_filt is not None and not settings.shifts_opencv:
-            # CaImAn raises the same inside tile_and_correct (L2107, L2209)
-            raise ValueError("FFT shifts with gSig_filt are untested in CaImAn: set shifts_opencv=True.")
-        if settings.nonrigid and settings.max_nonrigid_shift == 0:
-            # CaImAn then takes the rigid branch of tile_and_correct and fails building x_shifts_els
-            raise ValueError("nonrigid registration needs max_nonrigid_shift > 0.")
+        settings = cls.settings_class(**{**base.model_dump(), **params})  # validates: see the settings validator
         epochs = imaging.epochs
         n_splits = max(epochs[0].get_num_samples() // max(settings.num_frames_split, _MIN_SPLIT_FRAMES), 1)
         y0 = settings.bounds[0][0] or 0 if settings.bounds is not None else 0
@@ -1474,7 +1488,7 @@ class NormcorreMotion(Motion):
             reference=templates,
             patch_shifts=patch_motion if settings.nonrigid else None,
             patch_centers=centers if settings.nonrigid else None,
-            settings=settings.model_dump(),
+            settings=settings,
             metadata={"border_to_0": int(np.ceil(max(moved)))},
         )
 
@@ -1520,7 +1534,7 @@ class RegisterNormcorreImagingEpoch(RegisterImagingEpoch):
             The registered frames.
         """
 
-        settings = NormcorreRegistrationSettings.model_validate(self.motion.settings)
+        settings = self.motion.settings
         p = plane_index
         epoch_patches = self.motion.patch_shifts[self.epoch_index] if self.motion.patch_shifts is not None else None
         # stored shifts are motion; the kernels apply corrections, their negative

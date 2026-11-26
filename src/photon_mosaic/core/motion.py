@@ -184,7 +184,7 @@ class Motion:
     """Algorithm-agnostic container for motion correction artifacts.
 
     Holds outputs that any motion correction backend (Suite2P, CaImAn, ...) is
-    expected to produce. Backend-specific fields (e.g. Suite2P ``ops`` or
+    expected to produce. Backend-specific fields (e.g. Suite2P ``settings`` or
     block-wise non-rigid offsets) belong on dedicated subclasses such as
     ``Suite2PMotion``.
 

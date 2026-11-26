@@ -213,6 +213,18 @@ class TestEndToEnd:
             compute_motion(imaging, method="normcorre", gSig_filt=(3, 3), shifts_opencv=False)
 
 
+class TestSettingsValidation:
+    def test_fft_shifts_with_gsig_filt_are_rejected(self):
+        with pytest.raises(ValueError, match="shifts_opencv=True"):
+            nc.NormcorreRegistrationSettings(gSig_filt=(3, 3), shifts_opencv=False)
+        assert nc.NormcorreRegistrationSettings(gSig_filt=(3, 3)).gSig_filt == (3, 3)
+
+    def test_nonrigid_needs_a_deviation(self):
+        with pytest.raises(ValueError, match="max_nonrigid_shift > 0"):
+            nc.NormcorreRegistrationSettings(nonrigid=True, max_nonrigid_shift=0)
+        assert nc.NormcorreRegistrationSettings(nonrigid=False, max_nonrigid_shift=0).max_nonrigid_shift == 0
+
+
 REFERENCE = Path(__file__).parent / "data" / "caiman_reference.npz"
 CAIMAN_SETTINGS = dict(
     max_shifts=(6, 6), num_frames_split=20, strides=(24, 24), overlaps=(16, 16), max_nonrigid_shift=3, border_nan="copy"

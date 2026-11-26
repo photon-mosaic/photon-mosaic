@@ -1,11 +1,12 @@
 import logging
 import math
 import time
+import warnings
 from typing import Any, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 from photon_mosaic.core import (
     BaseImaging,
@@ -17,6 +18,11 @@ from photon_mosaic.core import (
 from photon_mosaic.core.selectplanes import select_planes
 
 from .registration import RegisterImaging, RegisterImagingEpoch, RegistrationSettings
+
+# suite2p options that are settings so the full range is covered, but that the backend does not use yet:
+# changing one warns and falls back to its default
+_NOT_USED_YET = ("align_by_chan", "max_reference_iterations", "subpixel", "two_step_registration")
+_RENAMED_OPTIONS = {"maxregshiftNR": "max_nonrigid_shift"}
 
 
 class Suite2pRegistrationSettings(RegistrationSettings):
@@ -35,14 +41,30 @@ class Suite2pRegistrationSettings(RegistrationSettings):
     )
     align_by_chan: int = Field(
         default=1,
-        description="when multi-channel, you can align by non-functional channel (1-based)",
+        description="when multi-channel, you can align by non-functional channel (1-based). "
+        "Not used yet: multi-channel imaging is not supported, so changing it warns and keeps 1",
     )
     maxregshift: float = Field(
         default=0.1,
-        description="max allowed registration shift, as a fraction of "
-        "frame max(width and height). This will be ignored if force_refImg is set to True",
+        description="max allowed registration shift, as a fraction of frame max(width and height)",
     )
     force_refImg: bool = Field(default=True, description="Force the use of an external reference image")
+    nimg_init: int = Field(default=400, description="Number of evenly spaced frames used to build the reference image")
+    do_bidiphase: bool = Field(
+        default=False,
+        description="Estimate the bidirectional scanning phase offset. Must be False: suite2p 1.x corrupts odd scan "
+        "lines when the offset is not 0 (https://github.com/MouseLand/suite2p/issues/1265).",
+    )
+    bidiphase: int = Field(
+        default=0,
+        description="Bidirectional scanning phase offset in pixels. Must be 0, see do_bidiphase.",
+    )
+    norm_frames: bool = Field(default=True, description="Normalize frames when estimating shifts")
+    spatial_taper: float = Field(default=3.45, description="Edge taper width in pixels; larger for 1P recordings")
+    th_badframes: float = Field(
+        default=1.0,
+        description="Threshold for the frames excluded when computing the valid region; smaller excludes more",
+    )
     block_size: list = Field(default_factory=lambda: [128, 128], description="Block size for non-rigid registration.")
     snr_thresh: float = Field(
         default=1.2,
@@ -55,13 +77,13 @@ class Suite2pRegistrationSettings(RegistrationSettings):
         "with a median filter of this duration [seconds]. "
         "This value is ~30 or 90 samples in size for 11 and 31 Hz sampling rates respectively.",
     )
-    outlier_maxregshift: float = Field(
-        default=0.05,
+    outlier_maxregshift: float | None = Field(
+        default=None,
         description="Units [fraction FOV dim]. After median-filter detrending, outliers more than this value are "
         "clipped to this value in x and y offset, independently. "
         "This is similar to Suite2P's internal maxregshift, but allows for low-frequency drift. "
-        "Default value of 0.05 is typically clipping outliers to "
-        "512 * 0.05 = 25 pixels above or below the median trend.",
+        "A value of 0.05 is typically clipping outliers to "
+        "512 * 0.05 = 25 pixels above or below the median trend. None (default) turns it off; rigid only.",
     )
     clip_negative: bool = Field(
         default=False,
@@ -73,11 +95,13 @@ class Suite2pRegistrationSettings(RegistrationSettings):
     )
     max_reference_iterations: int = Field(
         default=8,
-        description="Maximum number of iterations for creating a reference image",
+        description="Maximum number of iterations for creating a reference image. "
+        "Not used yet: suite2p 1.x hard-codes 8, so changing it warns and keeps 8",
     )
     auto_remove_empty_frames: bool = Field(
         default=True,
-        description="Automatically detect empty noise frames at the start and end of the movie. "
+        description="Not implemented yet: it does nothing. "
+        "Automatically detect empty noise frames at the start and end of the movie. "
         "Overrides values set in "
         "trim_frames_start and trim_frames_end. Some movies arrive with otherwise quality data but contain a set of "
         "frames that are empty and contain pure noise. When processed, these frames tend to receive "
@@ -88,17 +112,17 @@ class Suite2pRegistrationSettings(RegistrationSettings):
     )
     trim_frames_start: int = Field(
         default=0,
-        description="Number of frames to remove from the start of the movie if known. "
+        ge=0,
+        description="Number of frames to remove from the start of each epoch if known. "
         "Removes frames from motion border calculation "
-        "and resets the frame shifts found. Frames are still written to motion correction. Raises an error if "
-        "auto_remove_empty_frames is set and trim_frames_start > 0",
+        "and resets the frame shifts found. Frames are still written to motion correction.",
     )
     trim_frames_end: int = Field(
         default=0,
-        description="Number of frames to remove from the end of the movie if known. "
+        ge=0,
+        description="Number of frames to remove from the end of each epoch if known. "
         "Removes frames from motion border calculation "
-        "and resets the frame shifts found. Frames are still written to motion correction. Raises an error if "
-        "auto_remove_empty_frames is set and trim_frames_start > 0",
+        "and resets the frame shifts found. Frames are still written to motion correction.",
     )
     do_optimize_motion_params: bool = Field(
         default=False,
@@ -114,8 +138,7 @@ class Suite2pRegistrationSettings(RegistrationSettings):
     )
     smooth_sigma: float = Field(
         default=1.15,
-        description="~1 good for 2P recordings, recommend 3-5 for 1P recordings. "
-        "If do_optimize_motion_params is set, this will be overridden",
+        description="~1 good for 2P recordings, recommend 3-5 for 1P recordings.",
     )
     use_ave_image_as_reference: bool = Field(
         default=False,
@@ -172,12 +195,70 @@ class Suite2pRegistrationSettings(RegistrationSettings):
         description="Number of steps to grid between smooth_sigma and smooth_sigma_time_max. "
         "Large values will add significant time to motion correction",
     )
+    subpixel: int = Field(
+        default=10,
+        description="Not used yet: suite2p 1.x non-rigid phase correlation assumes 10, "
+        "so changing it warns and keeps 10",
+    )
+    two_step_registration: bool = Field(
+        default=False,
+        description="Not used yet: two step registration is not supported, so changing it warns and keeps False",
+    )
     model_config = ConfigDict(env_prefix="SUITE2P_REGISTRATION_", case_sensitive=False, env_file=".env")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _name_the_renamed_options(cls, data: Any) -> Any:
+        """Replace pydantic's bare "extra inputs are not permitted" for an option that was renamed."""
+        if isinstance(data, dict):
+            for old, new in _RENAMED_OPTIONS.items():
+                if old in data:
+                    raise ValueError(f"'{old}' is now '{new}'.")
+        return data
+
+    @field_validator(*_NOT_USED_YET)
+    @classmethod
+    def _warn_and_keep_default_if_not_used_yet(cls, value: Any, info: ValidationInfo) -> Any:
+        name = str(info.field_name)
+        default = cls.model_fields[name].default
+        if value != default:
+            warnings.warn(
+                f"{name}={value!r} is not used by the suite2p backend yet: using the default {default!r}.",
+                UserWarning,
+                stacklevel=2,
+            )
+            return default
+        return value
+
+    @field_validator("smooth_sigma_time")
+    @classmethod
+    def _smooth_sigma_time_is_zero(cls, value: int) -> int:
+        if value > 0:
+            raise ValueError("smooth_sigma_time > 0 crashes suite2p 1.x registration.")
+        return value
+
+    @field_validator("do_bidiphase", "bidiphase")
+    @classmethod
+    def _no_bidiphase(cls, value: Any) -> Any:
+        if value:
+            raise ValueError("Bidiphase correction corrupts odd scan lines in suite2p 1.x (MouseLand/suite2p#1265).")
+        return value
+
+    @model_validator(mode="after")
+    def _check_nonrigid_combinations(self) -> "Suite2pRegistrationSettings":
+        if self.nonrigid and self.outlier_maxregshift is not None:
+            raise ValueError("outlier_maxregshift clips rigid shifts only: set nonrigid=False.")
+        if self.nonrigid and self.bounds is not None:
+            raise ValueError(
+                "'bounds' (an estimation crop) is supported by the suite2p backend for rigid registration only: "
+                "its non-rigid block geometry is defined on the frame the shifts are applied to."
+            )
+        return self
 
 
 def _compute_reference_wrapper(
     f_align_in: NDArray,
-    settings: dict,
+    settings: Suite2pRegistrationSettings,
     refImg: NDArray | None = None,
     device=None,
 ) -> tuple[NDArray, int]:
@@ -187,8 +268,8 @@ def _compute_reference_wrapper(
     ----------
     f_align_in : NDArray
         Frames shaped ``(n_frames, Ly, Lx)``.
-    settings : dict
-        Suite2p settings dict (merged with suite2p defaults).
+    settings : Suite2pRegistrationSettings
+        Registration settings.
     refImg : NDArray | None, optional
         Pre-computed reference image. If provided, skips computation.
     device : torch.device | None, optional
@@ -209,33 +290,41 @@ def _compute_reference_wrapper(
         device = torch.device("cpu")
 
     n_frames = f_align_in.shape[0]
-    compute_bidi = settings.get("do_bidiphase", False) and settings.get("bidiphase", 0) == 0
+    compute_bidi = settings.do_bidiphase and settings.bidiphase == 0
 
     if refImg is None or compute_bidi:
-        ix_frames = np.linspace(0, n_frames, 1 + min(settings.get("nimg_init", 200), n_frames), dtype=int)[:-1]
+        ix_frames = np.linspace(0, n_frames, 1 + min(settings.nimg_init, n_frames), dtype=int)[:-1]
         frames = f_align_in[ix_frames].copy()
 
     if compute_bidi:
         bidiphase = bidi.compute(frames)
         logging.info("Estimated bidiphase offset from data: %d pixels" % bidiphase)
     else:
-        bidiphase = settings.get("bidiphase", 0)
+        bidiphase = settings.bidiphase
 
     if bidiphase != 0 and refImg is None:
         frames = bidi.shift(frames, bidiphase)
 
     if refImg is None:
         t0 = time.time()
-        refImg = compute_reference(frames, settings=settings, device=device)
+        refImg = compute_reference(frames, settings=settings.model_dump(), device=device)
         logging.info("Reference frame computed in %0.2f sec." % (time.time() - t0))
 
     return refImg, bidiphase
 
 
+def _clip_outliers(offsets: NDArray, size: int, limit: int) -> NDArray:
+    """Clip offsets to within ``limit`` pixels of their running median over ``size`` frames."""
+    from scipy.ndimage import median_filter
+
+    trend = median_filter(offsets, size, mode="nearest")
+    return np.clip(offsets, trend - limit, trend + limit)
+
+
 class Suite2PMotion(Motion):
     """Motion artifacts produced by Suite2P registration.
 
-    Adds Suite2P-specific fields (``ops``, block coordinates, non-rigid offsets)
+    Adds Suite2P-specific fields (``settings``, block coordinates, non-rigid offsets)
     on top of the algorithm-agnostic :class:`Motion` container.
     """
 
@@ -246,7 +335,7 @@ class Suite2PMotion(Motion):
         self,
         imaging: BaseImaging,
         displacements: Sequence[NDArray[np.floating[Any]]],
-        ops: dict[str, Any],
+        settings: Suite2pRegistrationSettings | None = None,
         reference: Any = None,
         nonrigid_offsets: Sequence[Sequence[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]]] | None]
         | Sequence[Sequence[tuple[NDArray[np.floating[Any]], NDArray[np.floating[Any]]] | None]]
@@ -269,8 +358,8 @@ class Suite2PMotion(Motion):
             with frames whose registration shift exceeded ``maxregshift``,
             then combined across planes (a frame flagged on any plane is
             flagged for the whole volume).
-        ops : dict[str, Any]
-            Suite2P options used during registration.
+        settings : Suite2pRegistrationSettings | None, optional
+            The registration settings used; dumped to a dict only when saved.
         nonrigid_offsets : Sequence | None, optional
             Per-epoch, per-plane non-rigid offsets.
             Structure: ``[epoch][plane] -> (yoff1, xoff1)`` each ``(n_frames, n_blocks)``.
@@ -286,7 +375,7 @@ class Suite2PMotion(Motion):
             corrected_badframes=corrected_badframes,
             metadata=metadata,
         )
-        self.ops = ops
+        self.settings = settings if settings is not None else self.settings_class()
         self.nonrigid_offsets = nonrigid_offsets
         self.blocks = blocks
 
@@ -295,14 +384,15 @@ class Suite2PMotion(Motion):
 
         kwargs = super()._to_dict_kwargs()
         blocks = None if self.blocks is None else [_compact_blocks(b) for b in self.blocks]
-        kwargs.update(ops=self.ops, nonrigid_offsets=self.nonrigid_offsets, blocks=blocks)
+        kwargs.update(settings=self.settings.model_dump(), nonrigid_offsets=self.nonrigid_offsets, blocks=blocks)
         return kwargs
 
     @classmethod
     def _from_dict_kwargs(cls, kwargs: dict[str, Any]) -> dict[str, Any]:
-        """Rebuild the upsampling matrix dropped by :meth:`_to_dict_kwargs`."""
+        """Rebuild the settings object and the upsampling matrix dropped by :meth:`_to_dict_kwargs`."""
 
         kwargs = super()._from_dict_kwargs(kwargs)
+        kwargs["settings"] = cls.settings_class.model_validate(kwargs.get("settings") or {})
         if kwargs.get("blocks") is not None:
             kwargs["blocks"] = [_expand_blocks(b) for b in kwargs["blocks"]]
         return kwargs
@@ -335,37 +425,23 @@ class Suite2PMotion(Motion):
             Boolean array of shape ``(n_frames,)`` marking frames to exclude from
             reference image computation.
         **params : Any
-            Extra Suite2P options applied on top of ``settings``.
+            Settings overriding ``settings``, by field name.
 
         Returns
         -------
         Suite2PMotion
             Motion container with per-epoch displacements and Suite2P-specific
-            fields (``ops``, ``blocks``, ``nonrigid_offsets``).
+            fields (``settings``, ``blocks``, ``nonrigid_offsets``).
         """
         import torch
-        from suite2p.registration.register import compute_crop, default_settings, register_frames
+        from suite2p.registration.register import compute_crop, register_frames
 
-        # Merge suite2p defaults -> our settings -> caller overrides
-        ops = default_settings()["registration"]
-        if settings is None:
-            settings = cls.settings_class()
-        ops.pop("maxregshiftNR", None)  # suite2p's name for max_nonrigid_shift; ours is used throughout
-        ops.update(settings.model_dump())
-        if "maxregshiftNR" in params:
-            raise ValueError("'maxregshiftNR' is now 'max_nonrigid_shift'.")
-        ops.update(params)
-        if ops["smooth_sigma_time"] > 0:
-            raise ValueError("smooth_sigma_time > 0 crashes suite2p 1.x registration.")
-        bounds = ops["bounds"]
-        if bounds is not None and ops["nonrigid"]:
-            raise ValueError(
-                "'bounds' (an estimation crop) is supported by the suite2p backend for rigid registration only: "
-                "its non-rigid block geometry is defined on the frame the shifts are applied to."
-            )
+        base = settings if settings is not None else cls.settings_class()
+        settings = cls.settings_class(**{**base.model_dump(), **params})  # validates: see the settings validators
+        bounds = settings.bounds
         rows, cols = (slice(None), slice(None)) if bounds is None else (slice(*bounds[0]), slice(*bounds[1]))
 
-        device = torch.device(ops.get("device", "cpu"))
+        device = torch.device(settings.device)
 
         n_planes = imaging.num_planes
         n_epochs = imaging.get_num_epochs()
@@ -382,11 +458,17 @@ class Suite2PMotion(Motion):
         all_xranges: list[list[tuple[int, int]]] = []
         all_corrected_badframes: list[NDArray] = []
 
+        trims = settings.trim_frames_start + settings.trim_frames_end
+        if trims and trims >= min(imaging.get_num_samples(segment_index=e) for e in range(n_epochs)):
+            raise ValueError("trim_frames_start + trim_frames_end must be shorter than every epoch.")
         for epoch_idx in range(n_epochs):
             n_frames = imaging.get_num_samples(segment_index=epoch_idx)
             Ly, Lx = imaging.shape[0], imaging.shape[1]
 
             badframes0 = np.zeros(n_frames, dtype=bool) if badframes is None else badframes.copy()
+            # trimmed frames, at the start and end of each epoch, keep zero shift and leave the valid region
+            start, end = settings.trim_frames_start, n_frames - settings.trim_frames_end
+            badframes0[:start] = badframes0[end:] = True
 
             epoch_yoff: list[NDArray] = []
             epoch_xoff: list[NDArray] = []
@@ -395,18 +477,18 @@ class Suite2PMotion(Motion):
             epoch_blocks: list[Any] = []
 
             # sub-epochs of batch_size frames: each is read whole, so one batch is in memory at a time
-            batch_size = ops["batch_size"]
+            batch_size = settings.batch_size
             batched = split_epoch_at_frames(imaging, epoch_idx, range(batch_size, n_frames, batch_size))
 
             for p, plane_id in enumerate(imaging.plane_ids):
                 # Reference once, from the first epoch: read only the nimg_init evenly spaced frames suite2p
                 # samples (the wrapper then uses all of them)
                 if epoch_idx == 0:
-                    picks = np.linspace(0, n_frames, 1 + min(ops.get("nimg_init", 200), n_frames), dtype=int)[:-1]
+                    picks = np.linspace(start, end, 1 + min(settings.nimg_init, end - start), dtype=int)[:-1]
                     plane = select_planes(imaging, [plane_id])
                     sample = np.concatenate([plane.get_series(i, i + 1, epoch_index=0) for i in picks])
                     sample = sample[:, rows, cols, 0].astype(np.float32)
-                    refImgs[p], bidiphases[p] = _compute_reference_wrapper(sample, ops, refImg=None, device=device)
+                    refImgs[p], bidiphases[p] = _compute_reference_wrapper(sample, settings, refImg=None, device=device)
 
                 # Compute shifts without applying them, one sub-epoch (= one suite2p batch) per call.
                 # Only the offsets are kept per batch: the other returns include a mean image per call.
@@ -420,15 +502,15 @@ class Suite2PMotion(Motion):
                         f_align_out=None,
                         batch_size=batch_size,
                         bidiphase=bidiphases[p],
-                        norm_frames=ops.get("norm_frames", True),
-                        smooth_sigma=ops["smooth_sigma"],
-                        spatial_taper=ops.get("spatial_taper", 3.45),
-                        block_size=ops["block_size"],
-                        nonrigid=ops["nonrigid"],
-                        maxregshift=ops["maxregshift"],
-                        smooth_sigma_time=ops["smooth_sigma_time"],
-                        snr_thresh=ops["snr_thresh"],
-                        maxregshiftNR=ops["max_nonrigid_shift"],
+                        norm_frames=settings.norm_frames,
+                        smooth_sigma=settings.smooth_sigma,
+                        spatial_taper=settings.spatial_taper,
+                        block_size=settings.block_size,
+                        nonrigid=settings.nonrigid,
+                        maxregshift=settings.maxregshift,
+                        smooth_sigma_time=settings.smooth_sigma_time,
+                        snr_thresh=settings.snr_thresh,
+                        maxregshiftNR=settings.max_nonrigid_shift,
                         device=device,
                         apply_shifts=False,
                     )
@@ -437,6 +519,13 @@ class Suite2PMotion(Motion):
                 yoff, xoff, corrXY, yoff1, xoff1, corrXY1, zest, cmax_all = [
                     None if parts[0] is None else np.concatenate(parts, axis=0) for parts in zip(*batch_offsets)
                 ]
+                if settings.outlier_maxregshift is not None:
+                    size = max(1, int(imaging.sampling_frequency * settings.outlier_detrend_window))
+                    yoff = _clip_outliers(yoff, size, int(Ly * settings.outlier_maxregshift))
+                    xoff = _clip_outliers(xoff, size, int(Lx * settings.outlier_maxregshift))
+                for off in (yoff, xoff, yoff1, xoff1):
+                    if off is not None:
+                        off[:start] = off[end:] = 0
 
                 epoch_yoff.append(yoff)
                 epoch_xoff.append(xoff)
@@ -466,9 +555,9 @@ class Suite2PMotion(Motion):
                     xoff=epoch_xoff[p],
                     yoff=epoch_yoff[p],
                     corrXY=epoch_corrXY[p],
-                    th_badframes=ops.get("th_badframes", 1.0),
+                    th_badframes=settings.th_badframes,
                     badframes=badframes0.copy(),
-                    maxregshift=ops["maxregshift"],
+                    maxregshift=settings.maxregshift,
                     Ly=Ly,
                     Lx=Lx,
                 )
@@ -487,7 +576,7 @@ class Suite2PMotion(Motion):
         return cls(
             imaging=imaging,
             displacements=all_displacements,
-            ops=ops,
+            settings=settings,
             reference=refImgs,
             nonrigid_offsets=nonrigid_offsets,
             blocks=all_blocks,
@@ -586,7 +675,7 @@ class RegisterSuite2PImagingEpoch(RegisterImagingEpoch):
             yoff1_torch = torch.from_numpy(yoff1).to(device)
             xoff1_torch = torch.from_numpy(xoff1).to(device)
 
-        return register.shift_frames(
+        frames = register.shift_frames(
             plane_video_torch,
             yoff_torch,
             xoff_torch,
@@ -595,6 +684,7 @@ class RegisterSuite2PImagingEpoch(RegisterImagingEpoch):
             blocks=blocks,
             device=device,
         )
+        return np.clip(frames, 0, None) if self.motion.settings.clip_negative else frames
 
 
 register_motion_class(Suite2PMotion)
